@@ -1,0 +1,2686 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lira · Lector de Idiomas</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23c9a86a'/%3E%3Ctext x='50' y='72' font-size='64' font-family='Georgia' text-anchor='middle' fill='%23241800'%3EL%3C/text%3E%3C/svg%3E" />
+<style>
+  :root{
+    --sidebar:#17181c; --sidebar-2:#1f2126; --side-ink:#e9e7e2;
+    --side-muted:#8d9099; --gold:#c9a86a; --gold-soft:#e4d4ae;
+    --bg:#efe9df; --card:#fffdf9; --line:#e7e0d2; --ink:#2a2723; --muted:#8a8378;
+    --paper:#fbf8f2; --hl:#ffe6a0; --accent:#2f6b5e; --danger:#b4453b;
+    --shadow:0 1px 3px rgba(40,33,20,.06),0 8px 24px rgba(40,33,20,.06);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;overflow:hidden;}
+  .app{display:grid;grid-template-columns:270px 1fr 330px;height:100vh;}
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{background:var(--sidebar);color:var(--side-ink);display:flex;flex-direction:column;
+    padding:22px 16px;gap:18px;overflow:hidden;}
+  .brand{display:flex;align-items:center;gap:11px;padding:2px 6px;}
+  .brand .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(145deg,var(--gold),#9c7c46);
+    display:grid;place-items:center;color:#1b1200;font-weight:800;font-size:18px;font-family:Georgia,serif;}
+  .brand .name{font-size:19px;font-weight:600;letter-spacing:.02em;}
+  .brand .name small{display:block;font-size:11px;color:var(--side-muted);font-weight:500;letter-spacing:.14em;text-transform:uppercase;}
+  .side-h{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--side-muted);
+    margin:6px 6px 2px;font-weight:600;}
+  .side-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px;margin:0 -4px;padding:0 4px;}
+  .bookitem{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:9px;cursor:pointer;
+    color:var(--side-ink);font-size:14px;transition:background .12s;}
+  .bookitem:hover{background:var(--sidebar-2);}
+  .bookitem.active{background:var(--sidebar-2);box-shadow:inset 3px 0 0 var(--gold);}
+  .bookitem .ic{width:26px;height:34px;border-radius:3px;background:linear-gradient(160deg,#3a3d44,#26282d);
+    flex:0 0 auto;box-shadow:inset -3px 0 0 rgba(0,0,0,.25);}
+  .bookitem .bt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .bookitem .ren{border:none;background:transparent;color:var(--side-muted);cursor:pointer;font-size:13px;opacity:0;padding:2px 4px;}
+  .bookitem:hover .ren{opacity:1;}
+  .bookitem .ren.del:hover{color:#e8837a;}
+  .btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);
+    border-radius:10px;padding:9px 13px;cursor:pointer;transition:.12s;display:inline-flex;align-items:center;gap:7px;justify-content:center;}
+  .btn:hover{background:#f3efe7;}
+  .btn.gold{background:var(--gold);border-color:var(--gold);color:#241800;font-weight:600;}
+  .btn.gold:hover{filter:brightness(1.05);}
+  .btn.dark{background:var(--sidebar-2);border-color:#2c2f35;color:var(--side-ink);}
+  .btn.dark:hover{background:#2a2d33;}
+  .btn.sm{padding:6px 10px;font-size:13px;border-radius:8px;}
+  .btn.ghost{background:transparent;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .side-foot{display:flex;align-items:center;gap:10px;color:var(--side-muted);font-size:12px;padding:6px;}
+  .avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(145deg,#4a4d55,#2a2c31);}
+
+  /* ---------- Reader (centro, estilo libro) ---------- */
+  .reader-wrap{display:flex;flex-direction:column;min-width:0;background:var(--bg);}
+  .topbar{position:relative;display:flex;align-items:center;gap:14px;padding:16px 26px;border-bottom:1px solid var(--line);
+    background:rgba(255,253,249,.6);backdrop-filter:blur(6px);}
+  .opts{position:absolute;top:60px;right:26px;background:var(--card);border:1px solid var(--line);
+    border-radius:12px;box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:12px;z-index:30;min-width:250px;}
+  .opts label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+    display:flex;flex-direction:column;gap:5px;font-weight:600;}
+  .opts select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);}
+  .topbar .tt{min-width:0;}
+  .topbar .tt h1{margin:0;font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .topbar .tt .sub{font-size:12.5px;color:var(--muted);margin-top:1px;}
+  .chapnav{display:flex;align-items:center;gap:6px;}
+  .iconbtn{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--card);
+    cursor:pointer;font-size:15px;color:var(--ink);}
+  .iconbtn:hover{background:#f3efe7;}
+  .progress{height:3px;background:var(--line);}
+  .progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#9c7c46);width:0;transition:width .3s;}
+  .pagebar{display:flex;align-items:center;justify-content:center;gap:16px;padding:8px;
+    border-bottom:1px solid var(--line);background:rgba(255,253,249,.5);}
+  .pagebar .iconbtn{width:30px;height:30px;font-size:14px;}
+  .paper-scroll{flex:1;min-height:0;overflow-y:auto;display:flex;justify-content:center;padding:32px 20px 120px;}
+  .paper{max-width:880px;width:100%;background:var(--paper);border-radius:14px;box-shadow:var(--shadow);
+    padding:52px 72px;border:1px solid var(--line);height:max-content;}
+  .paper .chtitle{font-family:Georgia,"Times New Roman",serif;font-size:15px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--gold);text-align:center;margin-bottom:6px;}
+  .paper .chname{font-family:Georgia,serif;font-size:26px;text-align:center;margin:0 0 34px;
+    font-weight:600;color:var(--ink);}
+  #reader{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    font-size:20px;line-height:1.95;color:#3a352e;text-align:justify;hyphens:auto;}
+  #reader .s{cursor:pointer;border-radius:3px;transition:background .12s,color .12s;padding:0 1px;}
+  #reader .s:hover{background:#f2ead6;}
+  #reader .s.cur{background:#fbeecb;color:#2a2115;border-radius:4px;}
+  #reader .wd{border-radius:3px;transition:background .08s;}
+  #reader .wd.reading{background:var(--hl);box-shadow:0 0 0 2px var(--hl);color:#241d0c;}
+  .emptystate{max-width:520px;margin:8vh auto;text-align:center;color:var(--muted);}
+  .emptystate .big{font-family:Georgia,serif;font-size:30px;color:var(--ink);margin-bottom:10px;}
+
+  /* ---------- Toolbar flotante ---------- */
+  .toolbar{position:absolute;left:50%;transform:translateX(-50%);bottom:22px;
+    display:flex;gap:8px;padding:9px;background:var(--card);border:1px solid var(--line);
+    border-radius:16px;box-shadow:var(--shadow);}
+  .center-col{position:relative;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+  .reader-wrap{min-height:0;}
+
+  /* ---------- Right rail (módulos) ---------- */
+  .rail{background:var(--bg);border-left:1px solid var(--line);padding:18px 16px;overflow-y:auto;
+    display:flex;flex-direction:column;gap:16px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+    padding:15px 15px 14px;}
+  .card h3{margin:0 0 10px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+    display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:700;}
+  .card h3 .tag{font-size:10px;background:var(--gold-soft);color:#6b5220;padding:2px 7px;border-radius:20px;letter-spacing:.04em;}
+  /* --- evaluación de nivel del writing --- */
+  .lvlrow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .lvlbig{flex:0 0 auto;min-width:62px;text-align:center;background:var(--accent);color:#fff;
+    border-radius:12px;padding:10px 12px;font-family:Georgia,serif;font-weight:700;font-size:26px;line-height:1;}
+  .lvlbig small{display:block;font-family:inherit;font-size:9px;letter-spacing:.14em;
+    text-transform:uppercase;opacity:.8;margin-top:4px;font-weight:400;}
+  .lvlbig.unknown{background:var(--muted);}
+  .lvltext{flex:1 1 260px;font-size:13.5px;line-height:1.5;color:var(--ink);}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .chip{font-size:12px;padding:3px 9px;border-radius:20px;border:1px solid var(--line);background:#fff;}
+  .chip.good{border-color:var(--accent);color:var(--accent);}
+  .chip.work{border-color:var(--gold);color:#6b5220;background:#fdf8ee;}
+  /* --- evolución del nivel escrito --- */
+  .errrow.done{opacity:.55;}
+  .errrow.done::after{content:"";}
+  .lsremember{margin-top:9px;font-size:13px;color:#6b5220;background:#fdf8ee;
+    border-radius:8px;padding:8px 11px;font-weight:600;}
+  .lsdrill{margin-top:8px;font-size:13.5px;}
+  .legalbox{margin-top:14px;padding:11px 13px;border-radius:10px;background:#f3efe7;
+    border:1px solid var(--line);font-size:12px;line-height:1.5;color:var(--muted);}
+  .legalbox b{color:var(--ink);}
+  .side-note{margin-top:8px;font-size:10.5px;line-height:1.45;color:var(--side-muted);
+    padding:0 2px;}
+  .lspot{background:#fdf8ee;border-left:3px solid var(--gold);padding:10px 12px;
+    border-radius:0 8px 8px 0;margin-bottom:12px;font-size:13.5px;line-height:1.5;}
+  .lspot b{display:block;margin-bottom:4px;color:#6b5220;}
+  .lspara{font-size:14px;line-height:1.6;margin:0 0 10px;color:var(--ink);}
+  .lsrule{background:var(--accent);color:#fff;border-radius:10px;padding:10px 13px;
+    font-size:13.5px;line-height:1.6;}
+  .modebar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:14px;}
+  .mbtn{border:1px solid var(--line);background:#fff;color:var(--muted);border-radius:20px;
+    padding:5px 13px;font-size:12.5px;cursor:pointer;font-weight:600;}
+  .mbtn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .mhint{font-size:12px;color:var(--muted);margin-left:4px;}
+  .rc-prompt{font-size:17px;line-height:1.5;color:var(--ink);margin:4px 0 2px;}
+  .rc-prompt b{color:var(--accent);}
+  .typein{width:100%;max-width:420px;padding:11px 13px;border:2px solid var(--line);
+    border-radius:10px;font-size:16px;font-family:inherit;background:#fff;color:var(--ink);}
+  .typein:focus{outline:none;border-color:var(--gold);}
+  .typein.ok{border-color:var(--accent);} .typein.bad{border-color:var(--danger);}
+  .verdict{margin-top:7px;font-size:13.5px;font-weight:600;min-height:19px;}
+  .verdict.ok{color:var(--accent);} .verdict.bad{color:var(--danger);}
+  .booklvl{margin-top:3px;font-size:11.5px;font-weight:600;color:var(--side-muted);}
+  .booklvl.hard{color:#e8837a;}
+  .booklvl.easy{color:#8fbf7f;}
+  .catrow{display:flex;gap:12px;align-items:flex-start;padding:11px 12px;border:1px solid var(--line);
+    border-radius:11px;background:#fff;margin-bottom:8px;}
+  .catrow .lvl{flex:0 0 40px;text-align:center;font-family:Georgia,serif;font-weight:700;
+    background:var(--accent);color:#fff;border-radius:8px;padding:6px 0;font-size:14px;}
+  .catrow .lvl.b1{background:#5b7f52;} .catrow .lvl.b2{background:#8a6a3b;}
+  .catrow .ci{flex:1;min-width:0;}
+  .catrow .ct{font-weight:600;font-size:14.5px;color:var(--ink);}
+  .catrow .ca{font-size:12.5px;color:var(--muted);margin-bottom:3px;}
+  .catrow .cn{font-size:12.5px;color:var(--ink);line-height:1.45;}
+  .catgroup{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+    font-weight:700;margin:16px 0 8px;}
+  .dcap{margin-top:4px;font-size:11.5px;color:var(--gold);font-weight:600;}
+  .rc-src{margin-top:6px;font-size:12px;color:var(--muted);line-height:1.45;font-style:italic;}
+  .lvltrack{display:flex;align-items:flex-end;gap:6px;height:86px;padding-top:4px;}
+  .lvlpt{flex:1;min-width:16px;display:flex;flex-direction:column;justify-content:flex-end;
+    align-items:center;height:100%;gap:4px;}
+  .lvlpt > i{display:block;width:100%;max-width:34px;background:linear-gradient(180deg,var(--gold),var(--accent));
+    border-radius:5px 5px 0 0;min-height:5px;}
+  .lvlpt > b{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.04em;}
+  /* --- patrones de error (pestaña Errors) --- */
+  .errbar{display:flex;align-items:center;gap:10px;padding:5px 6px;border-radius:8px;cursor:pointer;}
+  .errbar:hover{background:#f3efe7;}
+  .errbar.on{background:#efe7d4;}
+  .errbar .lbl{flex:0 0 42%;font-size:13px;color:var(--ink);}
+  .errbar .bar{flex:1;height:8px;background:var(--line);border-radius:20px;overflow:hidden;}
+  .errbar .bar > i{display:block;height:100%;background:var(--danger);border-radius:20px;}
+  .errbar .cnt{flex:0 0 26px;text-align:right;font-size:12.5px;color:var(--muted);font-weight:600;}
+  /* --- comparación lado a lado (tuyo vs upgrade) --- */
+  .cmp{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media (max-width:820px){.cmp{grid-template-columns:1fr;}}
+  .cmp .col{min-width:0;border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:#fff;}
+  .cmp .col.up{border-color:var(--gold);background:#fffdf7;}
+  .cmp .col h4{margin:0 0 8px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--muted);font-weight:700;display:flex;align-items:center;gap:6px;}
+  .cmp .col h4 .tag{font-size:10px;background:var(--gold-soft);color:#6b5220;padding:2px 7px;border-radius:20px;}
+  #study{white-space:pre-wrap;font-size:14.5px;line-height:1.55;color:var(--ink);min-height:44px;}
+  #study .term{font-family:Georgia,serif;font-size:17px;color:var(--accent);font-weight:600;margin-bottom:4px;}
+  .toclist{max-height:30vh;overflow-y:auto;margin:-4px -6px 0;}
+  .tocrow{padding:7px 8px;border-radius:8px;cursor:pointer;font-size:13.5px;color:var(--ink);
+    display:flex;gap:8px;align-items:baseline;}
+  .tocrow:hover{background:#f3efe7;}
+  .tocrow.active{background:#efe7d4;font-weight:600;}
+  .tocrow .n{color:var(--gold);font-weight:700;font-size:12px;flex:0 0 auto;}
+  .tocrow .chk{cursor:pointer;color:var(--muted);width:15px;flex:0 0 auto;font-size:13px;}
+  .tocrow .chk.done{color:var(--accent);}
+  .tocrow.donerow .name,.tocrow.donerow span{color:var(--muted);}
+  .vocabrow{padding:8px;border-radius:8px;border:1px solid var(--line);margin-bottom:6px;font-size:13.5px;
+    display:flex;justify-content:space-between;gap:8px;cursor:pointer;background:var(--card);}
+  .vocabrow:hover{border-color:var(--gold);}
+  .vocabrow .w{font-weight:600;}
+  .vocabrow .t{color:var(--muted);}
+  #vocabWrap{max-height:26vh;overflow-y:auto;}
+  .muted{color:var(--muted);font-size:12.5px;}
+  .row-gap{display:flex;gap:8px;}
+  .grow{flex:1;}
+  input[type=file]{display:none;}
+  .count-pill{font-size:11px;background:#efe7d4;color:#6b5220;border-radius:20px;padding:2px 8px;font-weight:600;}
+  /* ---------- Overlay Aprender ---------- */
+  /* Secciones: cubren el área a la DERECHA del sidebar (el panel izquierdo queda visible) */
+  .overlay{position:fixed;top:0;right:0;bottom:0;left:270px;background:var(--bg);
+    z-index:100;display:flex;align-items:center;justify-content:center;padding:24px;}
+  .nav{display:flex;flex-direction:column;gap:2px;margin:2px 0;}
+  .navbtn{text-align:left;padding:10px 12px;border-radius:9px;border:none;background:transparent;
+    color:var(--side-ink);cursor:pointer;font:inherit;font-size:14.5px;display:flex;align-items:center;gap:10px;}
+  .navbtn:hover{background:var(--sidebar-2);}
+  .navbtn.active{background:var(--sidebar-2);box-shadow:inset 3px 0 0 var(--gold);font-weight:600;}
+  #readingNav{display:flex;flex-direction:column;gap:8px;flex:1;min-height:0;margin-top:6px;}
+  .learn-panel{background:var(--bg);width:100%;max-width:920px;height:88vh;border-radius:18px;
+    box-shadow:0 20px 60px rgba(0,0,0,.35);display:flex;flex-direction:column;overflow:hidden;}
+  .learn-head{display:flex;align-items:center;gap:16px;padding:16px 20px;border-bottom:1px solid var(--line);background:var(--card);}
+  .learn-head .name{font-family:Georgia,serif;font-size:19px;font-weight:600;}
+  .tabs{display:flex;gap:6px;flex:1;flex-wrap:wrap;}
+  .tab{border:none;background:transparent;padding:8px 13px;border-radius:9px;cursor:pointer;font:inherit;color:var(--muted);}
+  .tab:hover{background:#efe7d4;}
+  .tab.active{background:var(--sidebar);color:#fff;}
+  .learn-body{flex:1;overflow-y:auto;padding:26px;}
+  .tabpanel{max-width:640px;margin:0 auto;}
+  /* Stat tiles */
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;text-align:center;box-shadow:var(--shadow);}
+  .tile .n{font-family:Georgia,serif;font-size:34px;font-weight:700;color:var(--ink);}
+  .tile .l{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:4px;}
+  /* Review card */
+  .revcard{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);
+    padding:36px;text-align:center;min-height:260px;display:flex;flex-direction:column;justify-content:center;gap:14px;}
+  .rc-term{font-family:Georgia,serif;font-size:40px;color:var(--ink);}
+  .rc-trans{font-size:24px;color:var(--accent);font-weight:600;}
+  .rc-ex{font-size:16px;color:var(--muted);font-style:italic;margin-top:4px;}
+  .rc-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px;}
+  .rc-actions .btn small{display:block;font-size:11px;color:var(--muted);font-weight:400;margin-top:2px;}
+  .rc-actions .btn.gold small{color:#6b5220;}
+  .rc-top{display:flex;justify-content:space-between;align-items:center;width:100%;}
+  .rc-top .badge{font-size:11px;border-radius:20px;padding:2px 9px;}
+  .rc-top .badge.new{background:#dbe4ff;color:#2a3f7a;}
+  .rc-top .badge.review{background:var(--gold-soft);color:#6b5220;}
+  .vlist .vrow{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);
+    border-radius:10px;margin-bottom:8px;background:var(--card);}
+  .vlist .vrow .w{font-weight:600;}
+  .vlist .vrow .t{color:var(--muted);flex:1;}
+  .vlist .vrow .badge{font-size:11px;color:#6b5220;background:var(--gold-soft);border-radius:20px;padding:2px 8px;}
+  .vlist .vrow .del{border:none;background:transparent;cursor:pointer;color:var(--danger);opacity:.6;}
+  .vlist .vrow .del:hover{opacity:1;}
+  .soon{text-align:center;color:var(--muted);padding:40px;}
+  .soon .big{font-family:Georgia,serif;font-size:26px;color:var(--ink);margin-bottom:8px;}
+  .level-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow);margin-bottom:16px;text-align:center;}
+  .level-name{font-family:Georgia,serif;font-size:28px;color:var(--ink);margin-top:2px;}
+  .meter{height:10px;background:var(--line);border-radius:20px;overflow:hidden;margin:12px 0 6px;}
+  .meter>i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#9c7c46);transition:width .4s;}
+  .stack{display:flex;height:26px;border-radius:8px;overflow:hidden;border:1px solid var(--line);margin:4px 0;}
+  .legend{display:flex;gap:16px;justify-content:center;font-size:12.5px;color:var(--muted);flex-wrap:wrap;margin-top:10px;}
+  .legend .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle;}
+  .daychart{display:flex;align-items:flex-end;gap:4px;height:80px;margin-top:6px;}
+  .daychart .bar{flex:1;background:var(--gold-soft);border-radius:3px 3px 0 0;min-height:2px;}
+  .daychart .bar.today{background:var(--gold);}
+  .deckcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow);margin-bottom:14px;display:flex;align-items:center;gap:14px;}
+  .deckcard .di{width:46px;height:46px;border-radius:11px;background:linear-gradient(145deg,var(--gold),#9c7c46);display:grid;place-items:center;font-size:22px;flex:0 0 auto;}
+  .deckcard .dn{font-weight:600;font-size:16px;}
+  .deckcard .dd{color:var(--muted);font-size:13px;}
+  .deckcard .dinfo{flex:1;min-width:0;}
+  .readable{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:18px;line-height:1.85;color:#3a352e;}
+  .readable .ww{cursor:pointer;border-radius:3px;padding:0 1px;}
+  .readable .ww:hover{background:#f2ead6;}
+  textarea{font:inherit;}
+  .wtoolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+  .wbtn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 11px;cursor:pointer;font:inherit;min-width:36px;}
+  .wbtn:hover{background:#f2f4f7;}
+  .wtoolbar select{padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;font:inherit;}
+  .editor{min-height:55vh;background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:19px;line-height:1.7;
+    color:var(--ink);overflow-y:auto;box-shadow:var(--shadow);}
+  .editor:focus{outline:2px solid var(--gold-soft);}
+  .editor:empty:before{content:attr(data-ph);color:var(--muted);}
+  .wbtn.active{background:var(--sidebar);color:#fff;border-color:var(--sidebar);}
+  .mdwrap{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media(max-width:860px){.mdwrap{grid-template-columns:1fr;}}
+  .mdsrc{min-height:55vh;font-family:"Courier New",monospace;font-size:15px;line-height:1.6;
+    padding:20px 22px;border:1px solid var(--line);border-radius:14px;resize:vertical;background:var(--card);width:100%;}
+  #wPreview{min-height:55vh;}
+  #wPreview h1,#wPreview h2,#wPreview h3{font-family:Georgia,serif;margin:.4em 0 .3em;}
+  #wPreview blockquote{border-left:3px solid var(--gold);margin:8px 0;padding-left:12px;color:var(--muted);}
+  #wPreview code{background:#efece2;padding:1px 5px;border-radius:4px;font-family:monospace;font-size:.92em;}
+  #wPreview ul,#wPreview ol{padding-left:22px;}
+  #wPreview a{color:var(--accent);}
+  .fullpanel{width:100%;height:100%;background:var(--bg);overflow-y:auto;display:flex;flex-direction:column;}
+  .statshead{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:16px;padding:16px 26px;
+    border-bottom:1px solid var(--line);background:var(--card);}
+  .statshead .name{font-family:Georgia,serif;font-size:19px;font-weight:600;}
+  .rangetoggle{display:flex;gap:4px;}
+  .statsbody{padding:24px;max-width:1120px;margin:0 auto;width:100%;display:flex;flex-direction:column;gap:16px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:820px){.grid2{grid-template-columns:1fr;}}
+  .modbar{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:13.5px;}
+  .modbar .lbl{width:90px;color:var(--muted);}
+  .modbar .track{flex:1;height:14px;background:var(--line);border-radius:8px;overflow:hidden;}
+  .modbar .track>i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#9c7c46);}
+  .modbar .val{width:52px;text-align:right;}
+  .oppbanner{background:linear-gradient(135deg,#2f6b5e,#255449);color:#eafff7;border-radius:14px;
+    padding:16px 18px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow);}
+  .oppbanner .big{font-size:26px;}
+  .areabar{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:14px;}
+  .areabar .lbl{width:140px;}
+  .areabar .track{flex:1;height:12px;background:var(--line);border-radius:8px;overflow:hidden;}
+  .areabar .track>i{display:block;height:100%;background:var(--accent);}
+  .areabar .val{width:70px;text-align:right;color:var(--muted);}
+  .heat{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,13px);gap:3px;overflow-x:auto;padding-bottom:4px;}
+  .heat .c{width:13px;height:13px;border-radius:3px;background:var(--line);}
+  .heat .c.l1{background:#e7d9b4;} .heat .c.l2{background:#d3b878;}
+  .heat .c.l3{background:#c9a86a;} .heat .c.l4{background:#9c7c46;}
+  .heatlegend{display:flex;align-items:center;gap:5px;justify-content:flex-end;color:var(--muted);font-size:12px;margin-top:8px;}
+  .heatlegend .c{width:12px;height:12px;border-radius:3px;display:inline-block;}
+  .navbtn.alert{position:relative;}
+  .navbtn.alert::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--gold);margin-left:auto;box-shadow:0 0 0 2px var(--sidebar);}
+  @media(max-width:1100px){ .app{grid-template-columns:230px 1fr;} .rail{display:none;} }
+  /* ---- Lessons (método contrastivo) ---- */
+  .lessoncard{cursor:pointer;transition:transform .08s,box-shadow .15s;margin-bottom:12px;}
+  .lessoncard:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.06);}
+  .lcheck{width:26px;height:26px;flex:none;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--gold);font-weight:700;}
+  .lcheck.on{border-color:var(--gold);background:var(--gold);color:#241800;}
+  .ltitle{font-family:Georgia,serif;font-size:17px;font-weight:600;}
+  .ltitle.big{font-size:24px;}
+  .lhero{margin:6px 0 18px;}
+  .lsect{margin:16px 0;}
+  .lsecth{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:9px;}
+  .lpair{display:grid;grid-template-columns:38px 1fr auto;align-items:center;gap:10px 12px;padding:11px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);margin-bottom:9px;}
+  .lpair .len{font-size:17px;grid-column:2;}
+  .lpair .les{grid-column:2;font-size:14px;}
+  .lpair .sayb{grid-row:1/3;}
+  .sayb,.deckb,.revealb{border:1px solid var(--line);background:var(--card);border-radius:9px;padding:6px 9px;cursor:pointer;font:inherit;font-size:14px;}
+  .sayb:hover,.deckb:hover,.revealb:hover{background:#f3efe7;}
+  .lexp{font-size:15.5px;line-height:1.6;margin:0 0 11px;color:var(--ink);max-width:760px;}
+  .lformula{margin:14px 0;border:1px dashed var(--line);border-radius:12px;padding:12px 16px;background:#faf6ee;}
+  .lformula .flabel{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);font-weight:700;margin-bottom:6px;}
+  .lformula .fline{font-family:'SF Mono',Menlo,monospace;font-size:14.5px;padding:4px 0;color:#3a2f18;}
+  .lform{display:grid;grid-template-columns:104px 38px 1fr;align-items:center;gap:5px 12px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:var(--card);}
+  .lform .flabelchip{grid-row:1/3;font-size:12.5px;font-weight:700;}
+  .lform .sayb{grid-row:1/3;}
+  .lform .fen{grid-column:3;font-size:16px;}
+  .lform .fes{grid-column:3;font-size:13.5px;}
+  .lform.f-aff{border-left:3px solid #4a9d5b;} .lform.f-aff .flabelchip{color:#3a7d44;}
+  .lform.f-neg{border-left:3px solid #c85a5a;} .lform.f-neg .flabelchip{color:#b23b3b;}
+  .lform.f-q{border-left:3px solid #5a7fc8;}   .lform.f-q .flabelchip{color:#3a5fa8;}
+  .lprac{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 14px;border:1px solid var(--line);border-radius:12px;margin-bottom:9px;}
+  .lprac .pes{font-size:15.5px;flex:1;min-width:180px;}
+  .lprac .pans{display:flex;align-items:center;gap:9px;}
+  .lprac .pen{font-size:16px;font-weight:600;}
+  .backb{border:none;background:transparent;color:var(--muted);cursor:pointer;font:inherit;padding:4px 0;margin-bottom:8px;}
+  .backb:hover{color:var(--ink);}
+  #liraToast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(20px);background:#241f17;color:#f3ead4;padding:11px 20px;border-radius:11px;font-size:14px;opacity:0;transition:.2s;z-index:99;pointer-events:none;}
+  #liraToast.on{opacity:1;transform:translateX(-50%) translateY(0);}
+  #liraToast.err{background:var(--danger);color:#fff;font-weight:600;max-width:min(92vw,520px);text-align:center;}
+  /* ---- Settings modal ---- */
+  .modal-back{position:fixed;inset:0;background:rgba(20,18,14,.45);display:flex;align-items:center;justify-content:center;z-index:100;}
+  .modal{background:var(--bg);border:1px solid var(--line);border-radius:16px;width:min(480px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.25);}
+  .modal-h{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line);font-size:17px;}
+  .modal-b{padding:18px;}
+  .setsect .setlabel{font-family:Georgia,serif;font-size:17px;font-weight:600;margin-bottom:8px;}
+  .setinput{width:100%;font:inherit;font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);box-sizing:border-box;}
+  .aistatus{font-size:13.5px;font-weight:600;padding:8px 12px;border-radius:9px;margin-bottom:10px;}
+  .aistatus.on{background:#e3f0e5;color:#2f6b3a;}
+  .aistatus.off{background:#f3e6df;color:#9a4a2f;}
+  /* ---- Lessons: mapa/ruta ---- */
+  .maphero{margin:2px 0 22px;max-width:820px;}
+  .mapprog{height:9px;background:var(--line);border-radius:6px;overflow:hidden;margin:14px 0 6px;max-width:520px;}
+  .mapprogbar{height:100%;background:var(--gold);border-radius:6px;transition:width .4s;}
+  .maproad{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;align-items:start;}
+  @media(max-width:980px){ .maproad{grid-template-columns:1fr;} }
+  .mapcol{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;}
+  .mapcolh{border-radius:12px;padding:12px 14px;margin-bottom:12px;cursor:pointer;color:#241800;}
+  .mapcolh-beginner{background:linear-gradient(135deg,#bfe3c2,#8fce9a);}
+  .mapcolh-mid{background:linear-gradient(135deg,#f3e2a6,#e9c766);}
+  .mapcolh-advanced{background:linear-gradient(135deg,#bcd6f2,#8fb6e6);}
+  .mapcolt{font-family:Georgia,serif;font-size:19px;font-weight:700;}
+  .mapcoltag{font-size:12.5px;opacity:.75;font-weight:600;}
+  .mapblock{margin:0 0 12px;}
+  .mapblockh{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin:10px 4px 6px;}
+  .mapstep{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;cursor:pointer;transition:background .12s;}
+  .mapstep:hover{background:#f3efe7;}
+  .mapnum{flex:none;width:24px;height:24px;border-radius:50%;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;color:var(--muted);}
+  .mapstep.done .mapnum{background:var(--gold);border-color:var(--gold);color:#241800;}
+  .mapdesc{font-size:13.5px;line-height:1.35;}
+  /* ---- Checkpoints (mini-test) ---- */
+  .cpcard{border-left:3px solid var(--gold);background:#fbf7ee;}
+  .cpcard.done{border-left-color:#4a9d5b;background:#f0f6f0;}
+  .cpq{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin:8px 0 6px;}
+  .cpprompt{font-family:Georgia,serif;font-size:24px;margin-bottom:18px;}
+  .cpopt{display:block;width:100%;text-align:left;font:inherit;font-size:16px;padding:13px 16px;margin-bottom:10px;border:1px solid var(--line);border-radius:12px;background:var(--card);cursor:pointer;transition:.1s;}
+  .cpopt:hover:not(:disabled){background:#f3efe7;}
+  .cpopt:disabled{cursor:default;}
+  .cpopt.right{background:#e3f0e5;border-color:#4a9d5b;color:#2f6b3a;font-weight:600;}
+  .cpopt.wrong{background:#f6e4e0;border-color:#c85a5a;color:#b23b3b;}
+  .cpfb{display:flex;align-items:center;gap:12px;margin-top:8px;min-height:40px;}
+  .cpok{color:#2f6b3a;font-weight:600;} .cpno{color:#b23b3b;}
+  .cpresult{text-align:center;padding:40px 20px;}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">L</div>
+      <div class="name">Lira<small>Language reader</small></div>
+    </div>
+    <nav class="nav">
+      <button class="navbtn active" data-sec="reading" onclick="showSection('reading')">📖 Reading</button>
+      <button class="navbtn" data-sec="decks" onclick="showSection('decks')">🃏 Decks</button>
+      <button class="navbtn" data-sec="writing" onclick="showSection('writing')">✍️ Writing</button>
+      <button class="navbtn" data-sec="stats" onclick="showSection('stats')">📊 Statistics</button>
+      <button class="navbtn" data-sec="lessons" onclick="showSection('lessons')">📚 Lessons</button>
+      <button class="navbtn" data-sec="test" onclick="showSection('test')">🧪 Test</button>
+    </nav>
+    <div id="readingNav">
+      <div class="side-h">Library</div>
+      <div id="library" class="side-list"></div>
+      <label>
+        <input type="file" id="fileInput" accept=".pdf,.epub" />
+        <button class="btn gold" style="width:100%" onclick="document.getElementById('fileInput').click()">＋ Add book</button>
+      </label>
+      <button class="btn" style="width:100%;margin-top:6px" onclick="openCatalog()">🔎 Find books by level</button>
+      <div class="side-note">Tus archivos se quedan en tu ordenador. Eres responsable
+        de tener derecho a usarlos.</div>
+      <div id="uploadMsg" class="muted"></div>
+      <button class="btn" style="width:100%;justify-content:flex-start;gap:9px" onclick="openLearn('repaso')">
+        🎴 Flashcards <span class="count-pill" id="dueBadge" style="display:none;margin-left:auto">0</span>
+      </button>
+    </div>
+    <div id="streakBox" title="Study streak" style="display:flex;align-items:center;gap:8px;padding:8px 10px;color:var(--side-ink);font-size:14px">
+      <span id="streakFlame" style="font-size:18px;filter:grayscale(1);opacity:.5">🔥</span>
+      <b id="streakNum">0</b><span style="color:var(--side-muted)">day streak</span>
+    </div>
+    <div id="goalBox" onclick="setDailyGoal()" title="Daily goal (click to change)" style="cursor:pointer;padding:0 10px;font-size:12.5px;color:var(--side-muted)"></div>
+    <div class="side-foot" onclick="openSettings()" title="Settings" style="cursor:pointer">
+      <div class="avatar"></div>
+      <div style="flex:1">Marco Antonio<br><span style="color:#6c6f77">Local session</span></div>
+      <span id="aiDot" title="AI status" style="font-size:11px;color:#6c6f77">●</span>
+      <span style="color:#6c6f77;font-size:15px">⚙</span>
+    </div>
+  </aside>
+
+  <!-- ============ LECTOR ============ -->
+  <div class="center-col">
+    <div class="reader-wrap" style="flex:1;">
+      <div class="topbar">
+        <div class="tt grow">
+          <h1 id="bookTitle">Lira</h1>
+          <div class="sub" id="bookSub">Choose or add a book to begin</div>
+          <div id="bookLevel" class="booklvl" style="display:none"></div>
+        </div>
+        <span class="count-pill" id="bookPct" style="display:none">0%</span>
+        <div class="chapnav">
+          <button class="iconbtn" id="optBtn" onclick="toggleOpts()" title="Reading options">⚙</button>
+          <button class="iconbtn" id="prevCh" onclick="changeChapter(-1)" title="Previous section">‹</button>
+          <button class="iconbtn" id="nextCh" onclick="changeChapter(1)" title="Next section">›</button>
+        </div>
+        <div id="optsPanel" class="opts" style="display:none">
+          <div id="practiceLang" style="font-size:12.5px;color:var(--ink)">Practicing: —</div>
+          <label>Reading voice
+            <select id="voiceSel" onchange="setVoice(this.value)"></select>
+          </label>
+          <label>Speed
+            <select id="rateSel" onchange="setRate(this.value)">
+              <option value="115">Very slow</option>
+              <option value="130">Slow</option>
+              <option value="145" selected>Normal</option>
+              <option value="160">Fast</option>
+              <option value="175">Very fast</option>
+            </select>
+          </label>
+          <label>Reading mode
+            <select id="modeSel" onchange="setReadMode(this.value)">
+              <option value="continuous">Continuous (scroll)</option>
+              <option value="paged">Paged (Kindle)</option>
+            </select>
+          </label>
+          <button class="btn sm" onclick="testVoice()">🔊 Test voice</button>
+        </div>
+      </div>
+      <div class="progress"><i id="progbar"></i></div>
+      <div class="pagebar" id="pageBar" style="display:none">
+        <button class="iconbtn" onclick="prevPage()" title="Previous page">‹</button>
+        <span id="pageLabel" class="muted">Page 1 / 1</span>
+        <button class="iconbtn" onclick="nextPage()" title="Next page">›</button>
+      </div>
+      <div class="paper-scroll" id="paperScroll">
+        <div class="emptystate" id="empty">
+          <div class="big">Welcome to Lira</div>
+          <p>Add a PDF or EPUB from the sidebar. PDFs are converted to EPUB automatically.
+          Then read aloud, translate, and build flashcards for your decks.</p>
+        </div>
+        <div class="paper" id="paper" style="display:none">
+          <div class="chtitle" id="chLabel"></div>
+          <div class="chname" id="chName"></div>
+          <div id="reader"></div>
+        </div>
+      </div>
+    </div>
+    <div class="toolbar" id="toolbar" style="display:none">
+      <button class="btn gold" id="playBtn" onclick="togglePlay()">▶ Read</button>
+      <button class="btn" onclick="askLLM('translation')">Translate</button>
+      <button class="btn" onclick="askLLM('grammar')">Grammar</button>
+      <button class="btn" onclick="askLLM('example')">Examples</button>
+      <button class="btn dark" onclick="addVocab()">＋ Vocabulary</button>
+    </div>
+  </div>
+
+  <!-- ============ MÓDULOS ============ -->
+  <aside class="rail">
+    <div class="card">
+      <h3>Study <span class="tag">AI</span></h3>
+      <div id="study" class="muted">Select a word in the text to see its translation, an example and a grammar note. Or use the buttons on the current sentence.</div>
+    </div>
+    <div class="card">
+      <h3>Contents
+        <button class="btn sm" id="btnIdx" onclick="improveIndex()"
+          title="Let the AI name the sections of this book">✨ Improve</button></h3>
+      <div id="toc" class="toclist"><div class="muted">Open a book.</div></div>
+    </div>
+    <div class="card">
+      <h3>Vocabulary <span class="count-pill" id="vocabCount">0</span></h3>
+      <div class="muted" id="vocabHint">Select a word and press ＋ Vocabulary to save and review it.</div>
+      <div class="row-gap" style="margin-top:10px">
+        <button class="btn gold grow" onclick="openLearn('repaso')">🎴 Review</button>
+        <button class="btn sm" onclick="exportAnki()">⬇ Anki</button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- ============ APRENDER (overlay) ============ -->
+<div id="learnOverlay" class="overlay" style="display:none">
+  <div class="learn-panel">
+    <div class="learn-head">
+      <div class="brand"><div class="logo">L</div><div class="name">Flashcards</div></div>
+      <div class="tabs">
+        <button class="tab active" data-t="repaso" onclick="learnTab('repaso')">Review</button>
+        <button class="tab" data-t="palabras" onclick="learnTab('palabras')">Words</button>
+      </div>
+      <button class="iconbtn" onclick="showSection('reading')" title="Close">✕</button>
+    </div>
+    <div class="learn-body">
+      <div id="tab-repaso" class="tabpanel">
+        <div class="modebar" id="modeBar">
+          <button class="mbtn active" data-mode="recall">👁 Recognise</button>
+          <button class="mbtn" data-mode="produce">✍️ Produce</button>
+          <button class="mbtn" data-mode="cloze">␣ Fill the gap</button>
+          <span class="mhint" id="modeHint">See the English, recall the meaning.</span>
+        </div>
+        <div id="reviewEmpty" class="soon"><div class="big" id="reviewEmptyTitle">All caught up 🎉</div>
+          <div id="reviewEmptyMsg">No words due today.</div>
+          <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+            <button class="btn gold" id="btnNewWords" style="display:none" onclick="loadReview('new')">＋ Study new words</button>
+            <button class="btn" onclick="loadReview(true)">⏩ Study ahead anyway</button></div></div>
+        <div id="reviewCard" class="revcard" style="display:none">
+          <div class="rc-top"><span class="badge new" id="rcBadge">New</span><span class="muted" id="rcCounter"></span></div>
+          <div class="rc-term" id="rcTerm"></div>
+          <div class="rc-prompt" id="rcPrompt" style="display:none"></div>
+          <div><button class="btn sm" id="rcListen" onclick="speakText(S.review.listenText||document.getElementById('rcTerm').textContent)">🔊 Listen</button></div>
+          <div id="rcTypeWrap" style="display:none;margin-top:10px">
+            <input id="rcInput" class="typein" autocomplete="off" autocapitalize="off"
+              spellcheck="false" placeholder="Type it in English…"
+              onkeydown="if(event.key==='Enter')submitTyped()"/>
+            <div id="rcVerdict" class="verdict"></div>
+          </div>
+          <div id="rcBack" style="display:none">
+            <div class="rc-trans" id="rcTrans"></div>
+            <div class="rc-ex" id="rcEx"></div>
+            <div class="rc-src" id="rcSrc"></div>
+          </div>
+          <div class="rc-actions" id="rcReveal">
+            <button class="btn gold" id="rcRevealBtn" onclick="revealCard()">Show answer</button>
+          </div>
+          <div class="rc-actions" id="rcGrades" style="display:none">
+            <button class="btn" onclick="gradeCard('again')">Again<small id="ivAgain"></small></button>
+            <button class="btn" onclick="gradeCard('hard')">Hard<small id="ivHard"></small></button>
+            <button class="btn" onclick="gradeCard('good')">Good<small id="ivGood"></small></button>
+            <button class="btn gold" onclick="gradeCard('easy')">Easy<small id="ivEasy"></small></button>
+          </div>
+          <div class="muted" id="rcCount"></div>
+        </div>
+      </div>
+      <div id="tab-palabras" class="tabpanel" style="display:none">
+        <div class="card" style="margin-bottom:14px">
+          <h3>Add a word</h3>
+          <div class="muted" style="margin-bottom:9px">From anywhere — a video, a song, a
+            conversation. The translation and a short example at your level are generated for you.</div>
+          <div class="row-gap">
+            <input id="newWordInput" class="typein" style="flex:1;min-width:180px;max-width:none"
+              placeholder="e.g. overwhelmed" autocomplete="off" spellcheck="false"
+              onkeydown="if(event.key==='Enter')addWordManually()"/>
+            <button class="btn gold" id="newWordBtn" onclick="addWordManually()">＋ Add</button>
+          </div>
+          <div class="muted" id="newWordMsg" style="margin-top:8px"></div>
+        </div>
+        <div class="row-gap" style="justify-content:flex-end;margin-bottom:12px">
+          <button class="btn gold" onclick="exportAnki()">⬇ Export all to Anki</button>
+        </div>
+        <div id="vocabFull" class="vlist"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ STATISTICS (full-width section) ============ -->
+<div id="statsOverlay" class="overlay" style="display:none;padding:0">
+  <div class="fullpanel">
+    <div class="statshead">
+      <div class="brand"><div class="logo">L</div><div class="name">Statistics</div></div>
+      <div class="rangetoggle">
+        <button id="rgWeek" class="tab active" onclick="setStatsRange('week')">Week</button>
+        <button id="rgMonth" class="tab" onclick="setStatsRange('month')">Month</button>
+      </div>
+      <span class="grow" style="flex:1"></span>
+      <button class="iconbtn" onclick="showSection('reading')" title="Close">✕</button>
+    </div>
+    <div class="statsbody">
+      <div id="oppBox"></div>
+      <div class="card"><h3>Daily goal 🎯 <button class="btn sm ghost" style="margin-left:auto" onclick="setDailyGoal()">Change</button></h3>
+        <div class="meter"><i id="goalMeter" style="width:0"></i></div>
+        <div class="muted" id="goalText"></div>
+      </div>
+      <div class="level-card">
+        <div class="l" style="text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-size:11px">Estimated level</div>
+        <div class="level-name" id="lvlName">—</div>
+        <div class="meter"><i id="lvlMeter" style="width:0"></i></div>
+        <div class="muted" id="lvlNext"></div>
+        <div class="muted" id="streakLine" style="margin-top:8px"></div>
+      </div>
+      <div class="tiles" style="grid-template-columns:repeat(4,1fr)">
+        <div class="tile"><div class="n" id="stActive">0</div><div class="l">Active min</div></div>
+        <div class="tile"><div class="n" id="stProcrast">0</div><div class="l">Idle min</div></div>
+        <div class="tile"><div class="n" id="stTotal">0</div><div class="l">Words</div></div>
+        <div class="tile"><div class="n" id="stLearned">0</div><div class="l">Learned</div></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><h3>Active time · <span id="rangeLabel">week</span></h3><div class="daychart" id="timeChart"></div></div>
+        <div class="card"><h3>Time by area</h3><div id="modChart"></div></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><h3>Focus vs idle</h3>
+          <div class="stack" id="focusStack"></div><div class="legend" id="focusLegend"></div>
+          <div class="muted" id="focusNote" style="margin-top:8px"></div>
+        </div>
+        <div class="card"><h3>Vocabulary mastery</h3>
+          <div class="stack" id="stStack"></div><div class="legend" id="stLegend"></div>
+          <div class="daychart" id="dayChart" style="margin-top:12px;height:60px"></div>
+        </div>
+      </div>
+      <div class="card"><h3>Consistency · last ~14 weeks</h3>
+        <div class="heat" id="heatmap"></div>
+        <div class="heatlegend">Less <span class="c"></span><span class="c l1"></span><span class="c l2"></span><span class="c l3"></span><span class="c l4"></span> More</div>
+      </div>
+      <div class="card"><h3>Areas completed</h3><div id="areasBox"></div></div>
+      <div class="tile" style="display:none"><div class="n" id="stDue">0</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DECKS (overlay) ============ -->
+<div id="decksOverlay" class="overlay" style="display:none;padding:0">
+  <div class="fullpanel" style="position:relative">
+    <div class="statshead">
+      <div class="brand"><div class="logo">L</div><div class="name">Decks</div></div>
+      <span id="deckBack" style="display:none"><button class="tab" onclick="deckList()">‹ Decks</button></span>
+      <span class="grow" style="flex:1"></span>
+      <span class="muted" id="deckBudget" style="font-size:12px"></span>
+      <button class="iconbtn" onclick="openLimits()" title="Daily limits">🎚</button>
+      <button class="iconbtn" onclick="toggleDeckOpts()" title="Voice & speed">⚙</button>
+      <button class="iconbtn" onclick="showSection('reading')" title="Close">✕</button>
+    </div>
+    <div id="deckOpts" class="opts" style="display:none;top:64px;right:20px">
+      <label>Reading voice
+        <select id="deckVoiceSel" onchange="setVoice(this.value)"></select>
+      </label>
+      <label>Speed
+        <select id="deckRateSel" onchange="setRate(this.value)">
+          <option value="115">Very slow</option>
+          <option value="130">Slow</option>
+          <option value="145">Normal</option>
+          <option value="160">Fast</option>
+          <option value="175">Very fast</option>
+        </select>
+      </label>
+      <button class="btn sm" onclick="playDeckAudio()">🔊 Test</button>
+    </div>
+    <div class="statsbody">
+      <div id="deckHome" class="tabpanel"></div>
+      <div id="deckReview" class="tabpanel" style="display:none">
+        <div id="deckRevEmpty" class="soon"><div class="big" id="deckEmptyTitle">Deck complete 🎉</div>
+          <div id="deckEmptyMsg">No cards due today in this deck.</div>
+          <button class="btn" style="margin-top:12px" onclick="openDeck(S.deck.id,'ahead')">⏩ Study ahead anyway</button></div>
+        <div id="deckRevCard" class="revcard" style="display:none">
+          <div class="rc-top"><span class="badge new" id="dBadge">New</span><span class="tag" id="dCat" style="display:none"></span><span class="muted" id="dCounter"></span></div>
+          <div class="rc-term" id="dTerm"></div>
+          <div><button class="btn sm" onclick="playDeckAudio()">🔊 Listen</button></div>
+          <div id="dBack" style="display:none">
+            <div class="rc-trans" id="dTrans"></div>
+            <div class="rc-ex" id="dNote"></div>
+            <div id="dExBtn" style="display:none;margin-top:6px"><button class="btn sm" onclick="playDeckExample()">🔊 Listen to sentence</button></div>
+          </div>
+          <div class="rc-actions" id="dReveal"><button class="btn gold" onclick="deckReveal()">Show answer</button></div>
+          <div class="rc-actions" id="dGrades" style="display:none">
+            <button class="btn" onclick="deckGrade('again')">Again<small id="dIvAgain"></small></button>
+            <button class="btn" onclick="deckGrade('hard')">Hard<small id="dIvHard"></small></button>
+            <button class="btn" onclick="deckGrade('good')">Good<small id="dIvGood"></small></button>
+            <button class="btn gold" onclick="deckGrade('easy')">Easy<small id="dIvEasy"></small></button>
+          </div>
+          <div class="muted" id="dCount"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- ============ WRITING (overlay) ============ -->
+<div id="catalogOverlay" class="overlay" style="display:none;padding:0">
+  <div class="fullpanel" style="position:relative">
+    <div class="statshead">
+      <div class="brand"><div class="logo">L</div><div class="name">Free reading by level</div></div>
+      <span class="grow" style="flex:1"></span>
+      <button class="iconbtn" onclick="showSection('reading')" title="Close">✕</button>
+    </div>
+    <div class="learn-body">
+      <div class="muted" style="margin-bottom:14px">
+        Public domain, free and legal, from Project Gutenberg. Short pieces first:
+        finishing something is what keeps the habit alive.
+      </div>
+      <div id="catalogList"></div>
+      <div class="card" style="margin-top:18px">
+        <h3>Better to avoid for now</h3>
+        <div id="catalogAvoid" class="vlist"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="writingOverlay" class="overlay" style="display:none;padding:0">
+  <div class="fullpanel">
+    <div class="statshead">
+      <div class="brand"><div class="logo">L</div><div class="name">Writing</div></div>
+      <div class="tabs">
+        <button class="tab active" data-w="new" onclick="writingTab('new')">New</button>
+        <button class="tab" data-w="mine" onclick="writingTab('mine')">My writings</button>
+        <button class="tab" data-w="errors" onclick="writingTab('errors')">Errors journal</button>
+      </div>
+      <button class="iconbtn" onclick="showSection('reading')" title="Close">✕</button>
+    </div>
+    <div class="statsbody">
+      <div id="wtab-new" class="tabpanel" style="max-width:none;width:100%;margin:0;align-self:stretch">
+        <div class="wtoolbar">
+          <button class="wbtn active" id="modeRich" onclick="setWMode('rich')" title="Rich text">Aa Rich</button>
+          <button class="wbtn" id="modeMd" onclick="setWMode('md')" title="Markdown with live preview"># Markdown</button>
+          <span style="width:1px;height:22px;background:var(--line);margin:0 4px"></span>
+          <span id="richTools" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select id="wFont" onchange="setWFont(this.value)" title="Font">
+              <option value="'Iowan Old Style',Palatino,Georgia,serif">Serif</option>
+              <option value="-apple-system,'Segoe UI',Roboto,sans-serif">Sans-serif</option>
+              <option value="Georgia,'Times New Roman',serif">Georgia</option>
+              <option value="'Courier New',monospace">Monospace</option>
+            </select>
+            <button class="wbtn" onmousedown="event.preventDefault()" onclick="fmt('bold')" title="Bold"><b>B</b></button>
+            <button class="wbtn" onmousedown="event.preventDefault()" onclick="fmt('italic')" title="Italic"><i>I</i></button>
+            <button class="wbtn" onmousedown="event.preventDefault()" onclick="fmt('underline')" title="Underline"><u>U</u></button>
+            <button class="wbtn" onmousedown="event.preventDefault()" onclick="fmt('insertUnorderedList')" title="Bullet list">•&nbsp;List</button>
+            <select id="wSize" onchange="fmtSize(this.value);this.selectedIndex=0" title="Text size">
+              <option value="">Size</option><option value="3">Normal</option><option value="5">Large</option><option value="6">Extra large</option>
+            </select>
+          </span>
+          <span id="mdHint" class="muted" style="display:none">Markdown: **bold** · *italic* · # heading · - list · [text](link)</span>
+        </div>
+        <div id="wEditor" contenteditable="true" class="editor"
+          data-ph="Write something here — a topic, a diary entry, anything…"></div>
+        <div id="wMdWrap" class="mdwrap" style="display:none">
+          <textarea id="wMd" class="mdsrc" oninput="renderMdPreview()"
+            placeholder="# Write in Markdown&#10;&#10;**bold**, *italic*, `code`&#10;- a list item&#10;> a quote"></textarea>
+          <div id="wPreview" class="editor readable"></div>
+        </div>
+        <div class="row-gap" style="margin-top:12px;align-items:center;flex-wrap:wrap">
+          <label><input type="file" id="wFile" accept=".txt,.pdf,.docx,image/*" style="display:none"/>
+            <button class="btn" onclick="document.getElementById('wFile').click()">📎 Upload file / photo</button></label>
+          <span class="muted" id="wFileMsg"></span>
+          <span class="grow" style="flex:1"></span>
+          <button class="btn gold" onclick="checkWriting()">Check my writing</button>
+        </div>
+        <div id="wResult" style="display:none;margin-top:18px">
+          <div class="card">
+            <h3>Your level</h3>
+            <div class="lvlrow">
+              <div class="lvlbig unknown" id="wLevelBig">?<small>CEFR</small></div>
+              <div class="lvltext">
+                <div id="wAssessment">—</div>
+                <div class="chips" id="wChips"></div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:14px">
+            <h3>Corrected
+              <span style="margin-left:auto;display:flex;gap:6px">
+                <button class="btn sm" onclick="copyText(S.writing.corrected,this)">⧉ Copy</button>
+                <button class="btn sm" onclick="readWriting('corrected')">🔊 Read</button></span></h3>
+            <div id="wCorrected" class="readable"></div>
+            <div class="muted" style="margin-top:6px">Tip: click any word to save it to your vocabulary.</div>
+          </div>
+          <div class="card" style="margin-top:14px">
+            <h3>Mistakes explained</h3>
+            <div id="wErrors" class="vlist"></div>
+          </div>
+          <div class="card" style="margin-top:14px">
+            <h3>Level up ✨</h3>
+            <div class="muted" id="wUpgradeHint">Rewrite your text at a higher level, then read it as your next practice.</div>
+            <div class="row-gap" id="wUpgradeBtns" style="margin-top:10px"></div>
+            <div id="wCompare" style="display:none;margin-top:14px">
+              <div class="cmp">
+                <div class="col">
+                  <h4>Yours <span class="tag" id="wCmpMineLvl">?</span></h4>
+                  <div id="wCmpMine" class="readable"></div>
+                  <div class="row-gap" style="margin-top:8px">
+                    <button class="btn sm" onclick="copyText(S.writing.corrected,this)">⧉ Copy</button>
+                    <button class="btn sm" onclick="readWriting('corrected')">🔊 Read</button></div>
+                </div>
+                <div class="col up">
+                  <h4>Upgraded <span class="tag" id="wCmpUpLvl">?</span></h4>
+                  <div id="wUpgraded" class="readable"></div>
+                  <div class="row-gap" style="margin-top:8px">
+                    <button class="btn sm" onclick="copyText(S.writing.upgraded,this)">⧉ Copy</button>
+                    <button class="btn sm" onclick="readWriting('upgraded')">🔊 Read</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="wStatus" class="muted" style="margin-top:10px"></div>
+      </div>
+      <div id="wtab-mine" class="tabpanel" style="display:none">
+        <div id="wProgress" style="display:none"></div>
+        <div id="writingsList" class="vlist"></div></div>
+      <div id="wtab-errors" class="tabpanel" style="display:none">
+        <div id="errorsList" class="vlist"></div>
+        <div class="card" style="margin-top:14px">
+          <h3>Lessons from your mistakes
+            <button class="btn sm gold" id="genLessonBtn" onclick="generateErrorLesson()">📘 Generate</button></h3>
+          <div class="muted" id="genLessonMsg">A lesson built from the mistakes you actually
+            make — why they happen in Spanish, the rule, your errors corrected one by one,
+            and practice so they stop.</div>
+          <div id="customLessons" class="vlist" style="margin-top:10px"></div>
+        </div>
+        <div id="lessonView2" style="display:none;margin-top:14px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ LESSONS (full-width section) ============ -->
+<div id="lessonsOverlay" class="overlay" style="display:none;padding:0">
+  <div class="fullpanel">
+    <div class="statshead">
+      <div class="brand"><div class="logo">L</div><div class="name">Lessons</div></div>
+      <div id="lessonTabs" style="display:flex;gap:6px;margin-left:20px">
+        <button class="tab active" data-lv="map" onclick="lessonLevel('map')">🗺 Ruta</button>
+        <button class="tab" data-lv="beginner" onclick="lessonLevel('beginner')">🟢 Beginner</button>
+        <button class="tab" data-lv="mid" onclick="lessonLevel('mid')">🟡 Mid</button>
+        <button class="tab" data-lv="advanced" onclick="lessonLevel('advanced')">🔵 Advanced</button>
+      </div>
+      <span class="grow" style="flex:1"></span>
+      <button class="iconbtn" onclick="showSection('reading')" title="Close">✕</button>
+    </div>
+    <div class="statsbody">
+      <div id="lessonMap"></div>
+      <div id="lessonList" style="display:none"></div>
+      <div id="lessonView" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TEST (full-width section) ============ -->
+<div id="testOverlay" class="overlay" style="display:none;padding:0">
+  <div class="fullpanel">
+    <div class="statshead">
+      <div class="brand"><div class="logo">L</div><div class="name">Level Test</div></div>
+      <span class="grow" style="flex:1"></span>
+      <button class="iconbtn" onclick="showSection('reading')" title="Close">✕</button>
+    </div>
+    <div class="statsbody">
+      <div id="testIntro" class="card" style="text-align:center;padding:34px">
+        <div style="font-family:Georgia,serif;font-size:27px;margin-bottom:8px">Level test 🧪</div>
+        <p class="muted" style="max-width:520px;margin:0 auto">Estimate your CEFR level (A1–C1). <b>Quick</b> = 10 fixed questions (5 equivalent versions). <b>Adaptive</b> = questions adjust to you and it stops when confident (~10–12).</p>
+        <div id="testLast" class="muted" style="margin:12px 0"></div>
+        <div class="row-gap" style="justify-content:center">
+          <button class="btn" onclick="startTest()">Quick test (10)</button>
+          <button class="btn gold" onclick="startAdaptive()">Adaptive test</button>
+        </div>
+      </div>
+      <div id="testQ" class="card" style="display:none;max-width:660px;margin:0 auto;width:100%">
+        <div class="muted" id="testProg"></div>
+        <div id="testQuestion" style="font-family:Georgia,serif;font-size:23px;margin:14px 0 20px"></div>
+        <div id="testOpts" style="display:flex;flex-direction:column;gap:10px"></div>
+      </div>
+      <div id="testResult" class="card" style="display:none;text-align:center;padding:34px">
+        <div class="muted" style="text-transform:uppercase;letter-spacing:.08em;font-size:11px">Your estimated level</div>
+        <div id="testLevel" style="font-family:Georgia,serif;font-size:44px;margin:6px 0"></div>
+        <div class="muted" id="testScore"></div>
+        <div class="row-gap" style="justify-content:center;margin-top:18px">
+          <button class="btn gold" onclick="startTest()">Retake (new version)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<audio id="deckAudio"></audio>
+<audio id="readAudio"></audio>
+
+<!-- ============ SETTINGS (modal) ============ -->
+<div id="settingsModal" class="modal-back" style="display:none" onclick="if(event.target===this)closeSettings()">
+  <div class="modal">
+    <div class="modal-h"><b>Settings</b><button class="iconbtn" onclick="closeSettings()" title="Close">✕</button></div>
+    <div class="modal-b">
+      <div class="setsect">
+        <div class="setlabel">🤖 IA (Gemini)</div>
+        <p class="muted" style="margin:0 0 10px;font-size:13.5px">La app usa Gemini (gratis) para traducir, corregir tu escritura y leer fotos. Pega tu API key para activar la IA. Se guarda <b>solo en tu computadora</b>, nunca se sube.</p>
+        <div id="aiStatusLine" class="aistatus"></div>
+        <input id="apiKeyInput" type="password" class="setinput" placeholder="Pega tu API key aquí (AIza...)" autocomplete="off" />
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn gold" onclick="saveConfig()">Save</button>
+          <button class="btn" onclick="clearConfig()">Clear</button>
+        </div>
+        <p class="muted" style="margin:12px 0 0;font-size:12.5px">¿No tienes una? Consíguela gratis en <b>aistudio.google.com/apikey</b> (Google AI Studio → Create API key). Es tuya; si la compartiste por error, cámbiala desde ahí.</p>
+        <div id="setMsg" class="muted" style="font-size:13px;margin-top:8px"></div>
+        <div class="legalbox">
+          <b>Software libre · AGPL-3.0</b>
+          <div>Se distribuye SIN NINGUNA GARANTÍA. Puedes usarlo, estudiarlo y
+            modificarlo; si distribuyes tu versión, debe seguir siendo libre.</div>
+          <div style="margin-top:6px">Este es un <b>lector de propósito general</b>: no
+            incluye ni distribuye libros. Eres responsable de los archivos que subas y de
+            tener derecho a usarlos. Todo se queda en tu ordenador.</div>
+          <div style="margin-top:6px">El catálogo solo descarga obras de
+            <b>dominio público</b> (Project Gutenberg).</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const S={bookId:null,bookLang:"en",chapterIndex:0,sentenceIndex:0,sentences:[],chapterCount:0,
+  isPlaying:false,selWord:"",selExample:"",lastLookup:"",
+  voice:localStorage.getItem("lira_voice")||"piper:en_US-amy-medium",
+  rate:(()=>{let r=parseInt(localStorage.getItem("lira_rate")||"145");return(isNaN(r)||r<60)?145:r;})(),
+  readMode:localStorage.getItem("lira_mode")||"continuous",
+  pages:[],pageIndex:0,
+  chapterCounts:[],bookTotal:0,chapterOffsets:[],
+  review:{queue:[],pos:0,mode:'recall',typedOk:null,listenText:''},
+  deck:{id:null,queue:[],pos:0},
+  writing:{id:null,corrected:"",upgraded:"",level:"",uploadKind:"",mode:"rich"},
+  currentModule:"reading",statsRange:"week",
+  test:{form_id:0,questions:[],pos:0,answers:[]},
+  adaptive:{answers:[]}};
+
+async function api(url,opts){const r=await fetch(url,opts);if(!r.ok){let m;try{m=(await r.json()).detail;}catch(e){m=r.statusText;}throw new Error(m);}return r.json();}
+
+/* ---------- Biblioteca ---------- */
+async function loadBooks(){
+  const books=await api("/api/books");const el=document.getElementById("library");el.innerHTML="";
+  if(!books.length){ el.innerHTML='<div class="muted" style="padding:8px">Your library is empty.</div>'; }
+  books.forEach(b=>{
+    const d=document.createElement("div");d.className="bookitem"+(b.id===S.bookId?" active":"");d.dataset.id=b.id;
+    d.innerHTML='<div class="ic"></div>';
+    const bt=document.createElement("div");bt.className="bt";bt.textContent=b.title;bt.onclick=()=>openBook(b.id);
+    const ren=document.createElement("button");ren.className="ren";ren.textContent="✎";ren.title="Rename";
+    ren.onclick=(e)=>{e.stopPropagation();renameBook(b.id,b.title);};
+    const del=document.createElement("button");del.className="ren del";del.textContent="🗑";
+    del.title="Delete this book";
+    del.onclick=(e)=>{e.stopPropagation();deleteBook(b.id,b.title);};
+    d.appendChild(bt);d.appendChild(ren);d.appendChild(del);
+    d.onclick=()=>openBook(b.id);el.appendChild(d);
+  });
+}
+async function deleteBook(id,title){
+  // Es la acción más destructiva de la app: se confirma escribiendo, no con un
+  // clic que se pueda dar sin querer. El vocabulario NO se pierde.
+  if(!confirm('Delete "'+title+'"?\n\nThis removes the book, its chapters and your '+
+              'reading position.\nThe words you saved from it are KEPT in your vocabulary.'))return;
+  try{
+    const r=await api("/api/books/"+id,{method:"DELETE"});
+    if(S.bookId===id){   // si borras el libro abierto, hay que cerrar el lector
+      S.bookId=null;S.sentences=[];S.chapterCount=0;S.chapterIndex=0;TOC=[];
+      document.getElementById("bookTitle").textContent="No book open";
+      document.getElementById("bookSub").textContent="Choose or add a book to begin";
+      document.getElementById("study").textContent="Open a book to begin.";
+      document.getElementById("reader").innerHTML='<div class="muted">Open a book to begin.</div>';
+      document.getElementById("toc").innerHTML='<div class="muted">Open a book.</div>';
+      updateChapNav();
+    }
+    await loadBooks();
+    toast('"'+r.title+'" deleted'+(r.kept_words?" · "+r.kept_words+" saved words kept":""));
+  }catch(e){saveError("el borrado del libro",e);}
+}
+async function renameBook(id,cur){
+  const t=prompt("New book name:",cur);if(!t||!t.trim())return;
+  try{await api("/api/books/"+id+"/rename",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:t.trim()})});await loadBooks();if(id===S.bookId)document.getElementById("bookTitle").textContent=t.trim();}
+  catch(e){alert("Couldn't rename: "+e.message);}
+}
+document.getElementById("fileInput").addEventListener("change",async(e)=>{
+  const f=e.target.files[0];if(!f)return;const msg=document.getElementById("uploadMsg");
+  msg.textContent="Processing “"+f.name+"”… (PDFs take a moment)";
+  const fd=new FormData();fd.append("file",f);
+  try{const res=await api("/api/upload",{method:"POST",body:fd});
+    msg.textContent="✓ "+res.title+" · "+res.chapter_count+" sections";
+    await loadBooks();openBook(res.book_id);
+  }catch(err){msg.textContent="Error: "+err.message;}
+  e.target.value="";
+});
+
+/* ---------- Abrir libro ---------- */
+async function openBook(id){
+  stopSpeech();
+  const book=await api("/api/books/"+id);
+  S.bookId=id;S.bookLang=book.language||"en";S.chapterCount=book.chapter_count;
+  loadVoices();  // filtra voces al idioma del libro
+  document.getElementById("bookTitle").textContent=book.title;
+  document.querySelectorAll(".bookitem").forEach(r=>r.classList.toggle("active",r.dataset.id==id));
+  document.getElementById("empty").style.display="none";
+  document.getElementById("paper").style.display="";
+  document.getElementById("toolbar").style.display="";
+  document.getElementById("bookPct").style.display="";
+  // stats para el % del libro
+  const stats=await api("/api/books/"+id+"/stats");
+  S.chapterCounts=stats.counts; S.bookTotal=stats.total||1;
+  S.chapterOffsets=[]; let acc=0;
+  for(const n of S.chapterCounts){S.chapterOffsets.push(acc); acc+=n;}
+  document.getElementById("modeSel").value=S.readMode;
+  document.getElementById("pageBar").style.display = S.readMode==="paged" ? "flex" : "none";
+  await loadTOC();
+  const st=await api("/api/books/"+id+"/state");
+  await loadChapter(st.chapter_index,st.sentence_index);
+  showBookDifficulty(id);   // avisa si el libro se te va del nivel
+}
+
+/* ---------- Índice ---------- */
+let TOC=[];
+async function loadTOC(){
+  try{TOC=await api("/api/books/"+S.bookId+"/toc");}catch(e){TOC=[];}
+  renderTOC();
+}
+function renderTOC(){
+  const el=document.getElementById("toc");if(!el)return;el.innerHTML="";
+  TOC.forEach(c=>{
+    const d=document.createElement("div");d.className="tocrow"+(c.index===S.chapterIndex?" active":"")+(c.done?" donerow":"");d.dataset.idx=c.index;
+    d.innerHTML='<span class="chk'+(c.done?" done":"")+'" title="Mark complete">'+(c.done?"✓":"○")+'</span><span class="n">'+(c.index+1)+'</span><span style="flex:1">'+escapeHtml(c.title||("Section "+(c.index+1)))+'</span>';
+    d.querySelector(".chk").onclick=(e)=>{e.stopPropagation();toggleChapterDone(c.index);};
+    d.onclick=()=>jumpChapter(c.index);
+    el.appendChild(d);
+  });
+  updateBookPct();
+}
+function highlightTOC(){document.querySelectorAll(".tocrow").forEach(r=>r.classList.toggle("active",r.dataset.idx==S.chapterIndex));updateBookPct();}
+async function toggleChapterDone(idx){
+  const c=TOC.find(x=>x.index===idx);const nd=!(c&&c.done);
+  if(c)c.done=nd;renderTOC();   // optimista: se pinta ya
+  try{await api("/api/books/"+S.bookId+"/chapter/"+idx+"/done",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({done:nd})});}
+  catch(e){if(c)c.done=!nd;renderTOC();saveError("el capítulo",e);}  // ...y se deshace si falla
+}
+async function markChapterDone(idx){
+  const c=TOC.find(x=>x.index===idx);if(!c||c.done)return;
+  c.done=true;renderTOC();
+  try{await api("/api/books/"+S.bookId+"/chapter/"+idx+"/done",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({done:true})});}
+  catch(e){c.done=false;renderTOC();saveError("el capítulo terminado",e);}
+}
+function updateBookPct(){
+  const total=TOC.length||S.chapterCount||1;const done=TOC.filter(c=>c.done).length;
+  const pct=Math.round(done/total*100);
+  const pb=document.getElementById("progbar");if(pb)pb.style.width=pct+"%";
+  const bp=document.getElementById("bookPct");if(bp)bp.textContent=pct+"% · "+done+"/"+total+" ch";
+}
+function jumpChapter(idx){
+  if(idx===S.chapterIndex)return;
+  stopSpeech();S.isPlaying=false;document.getElementById("playBtn").textContent="▶ Read";
+  loadChapter(idx,0).then(saveState);
+}
+/* Botones ‹ › de la cabecera: mueven un capítulo relativo al actual. */
+function changeChapter(delta){
+  if(S.bookId===null)return;
+  const idx=S.chapterIndex+delta;
+  if(idx<0||idx>=S.chapterCount)return;
+  jumpChapter(idx);
+}
+/* Apaga ‹ o › cuando ya no hay a dónde ir (o no hay libro abierto). */
+function updateChapNav(){
+  const prev=document.getElementById("prevCh"),next=document.getElementById("nextCh");
+  if(!prev||!next)return;
+  const noBook=S.bookId===null;
+  prev.disabled=noBook||S.chapterIndex<=0;
+  next.disabled=noBook||S.chapterIndex>=S.chapterCount-1;
+}
+async function improveIndex(){
+  const b=document.getElementById("btnIdx");
+  if(S.bookId===null){alert("Open a book first.");return;}
+  b.disabled=true;b.textContent="✨ Reading…";
+  try{const toc=await api("/api/books/"+S.bookId+"/index/improve",{method:"POST"});
+    // conserva qué capítulos estaban marcados como completados: la respuesta
+    // sólo trae los títulos nuevos.
+    const done={};TOC.forEach(c=>{done[c.index]=c.done;});
+    TOC=toc.map(c=>({...c,done:c.done!==undefined?c.done:!!done[c.index]}));
+    renderTOC();
+  }catch(e){alert("Couldn't improve the index: "+e.message);}
+  b.disabled=false;b.textContent="✨ Improve";
+}
+
+async function loadChapter(idx,sentIdx=0){
+  idx=Math.max(0,Math.min(idx,S.chapterCount-1));
+  const ch=await api("/api/books/"+S.bookId+"/chapter/"+idx);
+  S.chapterIndex=idx;S.sentences=ch.sentences;
+  S.sentenceIndex=Math.min(sentIdx,Math.max(S.sentences.length-1,0));
+  computePages();
+  document.getElementById("chLabel").textContent="Section "+(idx+1)+" of "+S.chapterCount;
+  document.getElementById("chName").textContent=ch.title||("Section "+(idx+1));
+  document.getElementById("bookSub").textContent=(ch.title||("Section "+(idx+1)));
+  highlightTOC();updateChapNav();render();
+}
+function wordSpans(text){
+  // Envuelve cada palabra guardando su índice de carácter (para el karaoke).
+  let html=""; const re=/(\S+)(\s*)/g; let m;
+  while((m=re.exec(text))){
+    html+='<span class="wd" data-s="'+m.index+'">'+escapeHtml(m[1])+'</span>'+escapeHtml(m[2]);
+  }
+  return html;
+}
+function computePages(){
+  S.pages=[];
+  if(S.readMode!=="paged"||!S.sentences.length){return;}
+  const target=900; // caracteres aprox por "hoja"
+  let start=0,len=0;
+  for(let i=0;i<S.sentences.length;i++){
+    len+=S.sentences[i].length+1;
+    if(len>=target){S.pages.push({start,end:i});start=i+1;len=0;}
+  }
+  if(start<S.sentences.length)S.pages.push({start,end:S.sentences.length-1});
+  if(!S.pages.length)S.pages.push({start:0,end:Math.max(S.sentences.length-1,0)});
+}
+function pageOf(idx){for(let p=0;p<S.pages.length;p++){if(idx<=S.pages[p].end)return p;}return Math.max(S.pages.length-1,0);}
+function render(){
+  const r=document.getElementById("reader");r.innerHTML="";
+  let lo=0,hi=S.sentences.length-1;
+  const paged=S.readMode==="paged"&&S.pages.length;
+  if(paged){S.pageIndex=pageOf(S.sentenceIndex);lo=S.pages[S.pageIndex].start;hi=S.pages[S.pageIndex].end;}
+  for(let i=lo;i<=hi;i++){
+    const s=S.sentences[i];
+    const span=document.createElement("span");span.className="s"+(i===S.sentenceIndex?" cur":"");span.dataset.i=i;
+    if(i===S.sentenceIndex){span.innerHTML=wordSpans(s)+" ";}else{span.textContent=s+" ";}
+    span.onclick=()=>{if(!window.getSelection().toString().trim())jumpTo(i);};
+    r.appendChild(span);
+  }
+  if(paged){document.getElementById("paperScroll").scrollTop=0;}
+  else{const cur=r.querySelector(".s.cur");if(cur)cur.scrollIntoView({block:"center",behavior:"smooth"});}
+  updatePageLabel();updateProgress();
+}
+function updatePageLabel(){
+  const lbl=document.getElementById("pageLabel");
+  if(lbl&&S.pages.length)lbl.textContent="Page "+(S.pageIndex+1)+" / "+S.pages.length;
+}
+function setReadMode(m){
+  S.readMode=m;localStorage.setItem("lira_mode",m);
+  document.getElementById("pageBar").style.display=(m==="paged")?"flex":"none";
+  computePages();render();
+}
+function nextPage(){
+  if(S.readMode!=="paged")return;
+  if(S.pageIndex+1<S.pages.length){S.sentenceIndex=S.pages[S.pageIndex+1].start;stopSpeech();saveState();S.isPlaying?speakCurrent():render();}
+  else if(S.chapterIndex+1<S.chapterCount){stopSpeech();S.isPlaying=false;document.getElementById("playBtn").textContent="▶ Read";loadChapter(S.chapterIndex+1,0).then(saveState);}
+}
+function prevPage(){
+  if(S.readMode!=="paged")return;
+  if(S.pageIndex>0){S.sentenceIndex=S.pages[S.pageIndex-1].start;stopSpeech();saveState();S.isPlaying?speakCurrent():render();}
+  else if(S.chapterIndex>0){stopSpeech();S.isPlaying=false;document.getElementById("playBtn").textContent="▶ Read";loadChapter(S.chapterIndex-1,0).then(saveState);}
+}
+function highlightWord(charIndex){
+  const cur=document.querySelector(".s.cur"); if(!cur)return;
+  const words=[...cur.querySelectorAll(".wd")]; if(!words.length)return;
+  let target=words[0];
+  for(const w of words){ if(+w.dataset.s<=charIndex) target=w; else break; }
+  words.forEach(w=>w.classList.remove("reading"));
+  target.classList.add("reading");
+}
+function updateProgress(){updateBookPct();}  /* progreso del libro = capítulos completados */
+
+/* ---------- Selección de palabra ---------- */
+function containingSentenceIndex(){
+  const sel=window.getSelection();if(!sel||!sel.anchorNode)return S.sentenceIndex;
+  let n=sel.anchorNode;if(n.nodeType===3)n=n.parentElement;
+  const sp=n&&n.closest?n.closest(".s"):null;return(sp&&sp.dataset.i!=null)?+sp.dataset.i:S.sentenceIndex;
+}
+document.getElementById("reader").addEventListener("mouseup",()=>{
+  const sel=window.getSelection().toString().trim();if(!sel||sel.length>80)return;
+  S.selWord=sel;S.selExample=S.sentences[containingSentenceIndex()]||"";
+  if(sel!==S.lastLookup){S.lastLookup=sel;lookupWord(sel);}
+});
+async function lookupWord(word){
+  const st=document.getElementById("study");st.innerHTML='<div class="term">'+escapeHtml(word)+'</div><span class="muted">Looking up…</span>';
+  try{const res=await api("/api/llm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:word,kind:"lookup"})});
+    st.innerHTML='<div class="term">'+escapeHtml(word)+'</div>'+escapeHtml(res.result);
+  }catch(e){st.textContent="Error: "+e.message;}
+}
+function escapeHtml(s){return s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+
+/* ---------- Estado ---------- */
+function saveState(){if(S.bookId===null)return;
+  fetch("/api/books/"+S.bookId+"/state",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({chapter_index:S.chapterIndex,sentence_index:S.sentenceIndex})});}
+
+/* ---------- Lectura (Web Speech API) ---------- */
+let APP_VOICES=[];
+function langOf(){return (S.bookLang||"en").split("-")[0].toLowerCase();}
+const LANG_NAMES={en:"English",es:"Spanish",fr:"French",de:"German",it:"Italian",pt:"Portuguese"};
+function ttsUrl(text,lang){return "/api/tts?text="+encodeURIComponent(text)+"&voice="+encodeURIComponent(S.voice||"")+"&rate="+(S.rate||145)+"&lang="+(lang||"en");}
+async function loadVoices(){
+  let vs=[];
+  // silencio a propósito: sin voces del servidor se usan las del navegador
+  try{vs=await api("/api/voices");}catch(e){}
+  APP_VOICES=vs;
+  const pl=document.getElementById("practiceLang");
+  if(pl) pl.textContent="Practicing: "+(LANG_NAMES[langOf()]||langOf().toUpperCase());
+  const fill=id=>{const s=document.getElementById(id);if(!s)return;s.innerHTML="";
+    vs.forEach(v=>{const o=document.createElement("option");o.value=v.name;o.textContent=(v.display||v.name)+" — "+v.accent;s.appendChild(o);});};
+  fill("voiceSel");fill("deckVoiceSel");
+  if(!vs.find(v=>v.name===S.voice)) S.voice=(vs[0]&&vs[0].name)||S.voice;
+  ["voiceSel","deckVoiceSel"].forEach(id=>{const s=document.getElementById(id);if(s)s.value=S.voice;});
+  ["rateSel","deckRateSel"].forEach(id=>{const s=document.getElementById(id);if(s)s.value=String(S.rate);});
+}
+
+function toggleOpts(){const p=document.getElementById("optsPanel");p.style.display=p.style.display==="none"?"flex":"none";}
+function setVoice(name){S.voice=name;localStorage.setItem("lira_voice",name);
+  ["voiceSel","deckVoiceSel"].forEach(id=>{const s=document.getElementById(id);if(s)s.value=name;});}
+function setRate(r){S.rate=parseInt(r);localStorage.setItem("lira_rate",String(S.rate));
+  ["rateSel","deckRateSel"].forEach(id=>{const s=document.getElementById(id);if(s)s.value=String(S.rate);});}
+let AUDIO=null;
+function audioEl(){if(!AUDIO)AUDIO=document.getElementById("readAudio");return AUDIO;}
+function speakText(text,lang){if(!text)return;const a=audioEl();a.onended=null;a.src=ttsUrl(text,lang);a.play().catch(e=>{});}
+function testVoice(){speakText("This is how the reading voice sounds.");}
+
+function stopSpeech(){/* cancel() lanza en algunos navegadores si no hay nada sonando */
+  try{window.speechSynthesis.cancel();}catch(e){}const a=audioEl();if(a){a.pause();a.onended=null;}}
+function togglePlay(){
+  if(S.bookId===null||!S.sentences.length)return;
+  if(S.isPlaying){S.isPlaying=false;stopSpeech();document.getElementById("playBtn").textContent="▶ Read";saveState();}
+  else{S.isPlaying=true;document.getElementById("playBtn").textContent="⏸ Pause";speakCurrent();}
+}
+function speakCurrent(){
+  render();const text=S.sentences[S.sentenceIndex];if(!text)return;
+  const a=audioEl();
+  a.onended=()=>{if(S.isPlaying)advance();};
+  a.src=ttsUrl(text,S.bookLang||"en");a.play().catch(e=>{});
+  prefetchNext();  // adelanta el audio de la siguiente oración (se cachea)
+}
+// precarga del audio siguiente: si falla, se generará al llegar. Silencio correcto.
+function prefetchNext(){const n=S.sentenceIndex+1;if(n<S.sentences.length){try{fetch(ttsUrl(S.sentences[n],S.bookLang||"en"));}catch(e){}}}
+function advance(){
+  S.sentenceIndex++;
+  if(S.sentenceIndex>=S.sentences.length){
+    markChapterDone(S.chapterIndex);  // capítulo terminado -> check automático
+    if(S.chapterIndex+1<S.chapterCount){loadChapter(S.chapterIndex+1,0).then(()=>{saveState();speakCurrent();});return;}
+    S.sentenceIndex=S.sentences.length-1;S.isPlaying=false;document.getElementById("playBtn").textContent="▶ Read";saveState();return;
+  }
+  saveState();speakCurrent();
+}
+function jumpTo(i){stopSpeech();S.sentenceIndex=i;saveState();if(S.isPlaying)speakCurrent();else render();}
+
+/* ---------- IA sobre la oración ---------- */
+const LABELS={translation:"Translation",grammar:"Grammar",example:"Examples"};
+async function askLLM(kind){
+  if(!S.sentences.length)return;const text=S.sentences[S.sentenceIndex];
+  const st=document.getElementById("study");st.innerHTML='<div class="term">'+LABELS[kind]+'</div><span class="muted">…</span>';
+  try{const res=await api("/api/llm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,kind})});
+    st.innerHTML='<div class="term">'+LABELS[kind]+'</div>'+escapeHtml(res.result);
+  }catch(e){st.textContent="Error: "+e.message;}
+}
+
+
+
+
+/* Añadir una palabra a mano. El motor de vocabulario (traducción, ejemplo a tu
+   nivel, SRS, export a Anki) estaba atado a "tener un libro abierto": eso no
+   era foco, era un cuello de botella. Ahora cualquier fuente alimenta el SRS. */
+async function addWordManually(){
+  const inp=document.getElementById("newWordInput");
+  const btn=document.getElementById("newWordBtn");
+  const msg=document.getElementById("newWordMsg");
+  const term=inp.value.trim();
+  if(!term){msg.textContent="Write a word or phrase first.";return;}
+  btn.disabled=true;inp.disabled=true;
+  msg.textContent="Translating and building an example at your level…";
+  let tr="";
+  try{const r=await api("/api/llm",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({text:term,kind:"translation"})});tr=r.result;}
+  catch(e){msg.textContent="⚠ AI unavailable — saving without translation. "+(e.message||"");}
+  try{
+    const r=await api("/api/vocab",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({term,translation:tr,lang:"en"})});
+    setDue(r.due);
+    msg.textContent="✓ “"+term+"”"+(tr?" → "+tr:"")+
+      (r.simple_example?"  ·  "+r.simple_example:"")+"   ("+r.total+" words)";
+    inp.value="";
+    loadVocabFull();loadStats&&loadStats();refreshDueBadge();
+  }catch(e){msg.textContent="✗ "+(e.message||"could not save");}
+  btn.disabled=false;inp.disabled=false;inp.focus();
+}
+
+/* ---------- Modos de estudio ----------
+   Reconocer (ver inglés → recordar significado) es la forma MÁS DÉBIL de
+   practicar: genera familiaridad, no lengua usable. Producir y rellenar huecos
+   obligan a recuperar activamente, que es lo que se traslada al hablar y
+   escribir. Por eso hay tres modos y no uno. */
+const MODE_HINTS={
+  recall:"See the English, recall the meaning.",
+  produce:"See the Spanish, write it in English. Harder — and what you need to speak.",
+  cloze:"Fill the gap in a real sentence. Forces the right form, not just the word."
+};
+function setStudyMode(m){
+  S.review.mode=m;
+  document.querySelectorAll("#modeBar .mbtn").forEach(b=>
+    b.classList.toggle("active",b.dataset.mode===m));
+  document.getElementById("modeHint").textContent=MODE_HINTS[m]||"";
+  try{localStorage.setItem("studyMode",m);}catch(e){}
+  showCard();
+}
+/* Qué se puede pedir de ESTA tarjeta: sin cloze no se ofrece rellenar huecos. */
+function modeForCard(c){
+  const m=S.review.mode||"recall";
+  if(m==="cloze"&&!(c&&c.cloze))return "produce";   // sin hueco, al menos produce
+  return m;
+}
+function cardFront(c){return c.term||c.front||"";}
+function cardTrans(c){return c.translation||"";}
+
+async function submitTyped(){
+  const c=S.review.queue[S.review.pos];if(!c)return;
+  const inp=document.getElementById("rcInput"),v=document.getElementById("rcVerdict");
+  const typed=inp.value.trim();if(!typed)return;
+  const modo=modeForCard(c);
+  const validas=(modo==="cloze")?[c.cloze.answer,c.cloze.target]:[cardFront(c)];
+  let ok=false;
+  try{const r=await api("/api/study/check",{method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({typed,accepted:validas})});ok=r.correct;
+  }catch(e){v.className="verdict bad";v.textContent="No se pudo comprobar: "+e.message;return;}
+  inp.className="typein "+(ok?"ok":"bad");
+  inp.disabled=true;
+  v.className="verdict "+(ok?"ok":"bad");
+  v.textContent=ok?"✓ Correct":("✗ It was: "+validas[0]);
+  S.review.typedOk=ok;
+  revealCard();
+}
+
+
+/* El tope diario NO es "ya terminaste": decirlo así esconde que quedan
+   repasos esperando. Se explica y se ofrece seguir bajo tu responsabilidad. */
+async function updateDeckEmpty(){
+  const t=document.getElementById("deckEmptyTitle"),m=document.getElementById("deckEmptyMsg");
+  if(!t||!m)return;
+  let L=null;try{L=await api("/api/study/limits");}catch(e){return;}
+  if(L.review_limit&&L.review_left===0&&L.backlog.due>0){
+    t.textContent="Daily review limit reached";
+    m.textContent="You've done "+L.reviews_today+" reviews today (limit "+L.review_limit+"). "+
+      L.backlog.due+" are still waiting — they'll come first tomorrow.";
+  }else{
+    t.textContent="Deck complete 🎉";
+    m.textContent="No cards due today in this deck.";
+  }
+}
+/* Panel de topes: se puede ajustar sin tocar código. */
+async function openLimits(){
+  let L=null;try{L=await api("/api/study/limits");}catch(e){toast("No se pudo cargar",true);return;}
+  const filas=L.decks.map(d=>"  "+d.name+": "+d.new_limit).join("\n");
+  const v=prompt("Daily review limit (0 = no limit).\n\nToday: "+L.reviews_today+
+    " done · "+L.backlog.due+" waiting\n\nNew cards per deck:\n"+filas, L.review_limit);
+  if(v===null)return;
+  api("/api/study/limits",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({review_limit:parseInt(v,10)||0})})
+    .then(r=>{toast("Review limit: "+(r.review_limit||"no limit"));deckList();})
+    .catch(e=>toast("Error: "+e.message,true));
+}
+
+
+/* ---------- Lecciones generadas desde tus errores ----------
+   El diario de errores decía QUÉ fallas, pero no cómo dejar de fallarlo.
+   Esta lección parte de tus errores reales, no de ejemplos genéricos. */
+async function generateErrorLesson(cat){
+  const b=document.getElementById("genLessonBtn"), m=document.getElementById("genLessonMsg");
+  b.disabled=true;b.textContent="Writing…";
+  m.textContent="Reading your mistakes and building the lesson… (takes a few seconds)";
+  try{
+    const r=await api("/api/lessons/generate",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify(cat?{category:cat}:{})});
+    m.textContent="✓ Lesson ready, based on "+r.based_on+" of your «"+r.label+"» mistakes.";
+    await loadCustomLessons();
+    showCustomLesson(r.id);
+  }catch(e){m.textContent="✗ "+(e.message||"could not generate");}
+  b.disabled=false;b.textContent="📘 Generate";
+}
+async function loadCustomLessons(){
+  const el=document.getElementById("customLessons");if(!el)return;
+  let list=[];try{list=await api("/api/lessons/custom");}catch(e){el.innerHTML="";return;}
+  if(!list.length){el.innerHTML='<div class="muted">No lessons yet.</div>';return;}
+  el.innerHTML="";
+  list.forEach(L=>{
+    const d=document.createElement("div");d.className="vrow";d.style.display="block";
+    d.innerHTML='<div style="cursor:pointer"><b>'+escapeHtml(L.title)+'</b>'+
+      (L.done?' <span class="tag">done</span>':'')+
+      '<div class="muted">'+L.error_count+' mistakes · '+escapeHtml(L.created_at.slice(0,10))+
+      '<span style="float:right">open ▸</span></div></div>';
+    d.querySelector("div").onclick=()=>showCustomLesson(L.id);
+    const del=document.createElement("button");del.className="btn sm";del.textContent="🗑";
+    del.style.cssText="margin-top:6px;color:var(--danger)";
+    del.onclick=async e=>{e.stopPropagation();
+      if(!confirm("Delete this lesson?"))return;
+      try{await api("/api/lessons/custom/"+L.id,{method:"DELETE"});loadCustomLessons();
+        document.getElementById("lessonView2").style.display="none";}
+      catch(err){toast("Couldn't delete",true);}};
+    d.appendChild(del);
+    el.appendChild(d);
+  });
+}
+async function showCustomLesson(id){
+  const box=document.getElementById("lessonView2");
+  box.style.display="";box.innerHTML='<div class="muted">Loading…</div>';
+  let row=null;try{row=await api("/api/lessons/custom/"+id);}catch(e){
+    box.innerHTML='<div class="muted">Couldn\'t load it.</div>';return;}
+  const L=row.payload, esc=escapeHtml;
+  const lista=(arr,f)=>(arr||[]).map(f).join("");
+  box.innerHTML=
+    '<div class="card"><h3>'+esc(L.title||"")+' <span class="tag">'+esc(row.level||"")+'</span></h3>'+
+    '<div class="muted" style="margin-bottom:10px">'+esc(L.desc||"")+'</div>'+
+    '<div class="lspot"><b>Por qué te pasa</b><div>'+esc(L.why_it_happens||"")+'</div></div>'+
+    lista(L.explanation,p=>'<p class="lspara">'+esc(p)+'</p>')+
+    (L.rule&&L.rule.length?'<div class="lsrule">'+lista(L.rule,r=>'<div>▸ '+esc(r)+'</div>')+'</div>':'')+
+    '</div>'+
+    (L.fixes&&L.fixes.length?'<div class="card" style="margin-top:12px"><h3>Tus errores, corregidos</h3>'+
+      lista(L.fixes,f=>'<div class="vrow" style="display:block">'+
+        '<div><span style="color:var(--danger);text-decoration:line-through">'+esc(f.wrong)+
+        '</span> → <span style="color:var(--accent);font-weight:600">'+esc(f.right)+'</span></div>'+
+        '<div class="muted">'+esc(f.why||"")+'</div></div>')+'</div>':'')+
+    (L.examples&&L.examples.length?'<div class="card" style="margin-top:12px"><h3>Así se dice bien</h3>'+
+      lista(L.examples,x=>'<div class="vrow" style="display:block"><div>'+esc(x.en)+'</div>'+
+        '<div class="muted">'+esc(x.es)+'</div></div>')+'</div>':'')+
+    (L.practice&&L.practice.length?'<div class="card" style="margin-top:12px"><h3>Practica</h3>'+
+      '<div id="lsPractice"></div></div>':'')+
+    (L.watch_out&&L.watch_out.length?'<div class="card" style="margin-top:12px"><h3>Ojo con esto</h3>'+
+      lista(L.watch_out,w=>'<div class="vrow" style="display:block">'+esc(w)+'</div>')+'</div>':'')+
+    '<div class="row-gap" style="margin-top:12px">'+
+      '<button class="btn gold" id="lsDoneBtn">✓ Mark as learned</button>'+
+      '<button class="btn" onclick="document.getElementById(\'lessonView2\').style.display=\'none\'">Close</button></div>';
+  // práctica con respuesta oculta: mirarla de golpe no enseña
+  const pw=document.getElementById("lsPractice");
+  if(pw)(L.practice||[]).forEach((p,i)=>{
+    const d=document.createElement("div");d.className="vrow";d.style.display="block";
+    d.innerHTML='<div>'+(i+1)+'. '+esc(p.prompt)+'</div>'+
+      (p.hint?'<div class="muted">💡 '+esc(p.hint)+'</div>':'')+
+      '<div class="muted lsans" style="display:none;color:var(--accent);font-weight:600">'+esc(p.answer)+'</div>';
+    const b=document.createElement("button");b.className="btn sm";b.textContent="Show answer";
+    b.style.marginTop="6px";
+    b.onclick=()=>{const a=d.querySelector(".lsans");a.style.display="";b.remove();};
+    d.appendChild(b);pw.appendChild(d);
+  });
+  const done=document.getElementById("lsDoneBtn");
+  if(done)done.onclick=async()=>{
+    try{await api("/api/lessons/custom/"+id+"/done",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({done:true})});
+      toast("Marked as learned");loadCustomLessons();}
+    catch(e){toast("Error: "+e.message,true);}};
+  box.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+/* ---------- Catálogo de lecturas gratis por nivel ---------- */
+async function openCatalog(){
+  closeAllOverlays();
+  document.getElementById("catalogOverlay").style.display="flex";
+  const el=document.getElementById("catalogList");
+  el.innerHTML='<div class="muted">Loading…</div>';
+  let d=null;try{d=await api("/api/catalog");}catch(e){el.innerHTML=loadFailHtml("catalog");return;}
+  el.innerHTML="";
+  d.levels.forEach(lv=>{
+    Object.entries(d.kinds).forEach(([kind,kindName])=>{
+      const items=d.books.filter(b=>b.level===lv&&b.kind===kind);
+      if(!items.length)return;
+      const h=document.createElement("div");h.className="catgroup";
+      h.textContent=lv+" · "+kindName;el.appendChild(h);
+      items.forEach(b=>el.appendChild(catalogRow(b)));
+    });
+  });
+  const av=document.getElementById("catalogAvoid");av.innerHTML="";
+  d.avoid.forEach(x=>{const r=document.createElement("div");r.className="vrow";r.style.display="block";
+    r.innerHTML='<div><b>'+escapeHtml(x.title)+'</b></div><div class="muted">'+escapeHtml(x.why)+'</div>';
+    av.appendChild(r);});
+}
+function catalogRow(b){
+  const d=document.createElement("div");d.className="catrow";
+  d.innerHTML='<div class="lvl '+b.level.toLowerCase()+'">'+b.level+'</div>'+
+    '<div class="ci"><div class="ct">'+escapeHtml(b.title)+'</div>'+
+    '<div class="ca">'+escapeHtml(b.author)+'</div>'+
+    '<div class="cn">'+escapeHtml(b.note)+'</div></div>'+
+    '<div style="flex:0 0 auto;display:flex;flex-direction:column;gap:5px;align-items:flex-end"></div>';
+  const acts=d.querySelector("div:last-child");
+  if(b.in_library){
+    const tag=document.createElement("span");tag.className="tag";tag.textContent="In library";
+    acts.appendChild(tag);
+  }else{
+    const btn=document.createElement("button");btn.className="btn sm gold";btn.textContent="↓ Add";
+    btn.onclick=()=>addFromCatalog(b,btn,acts);
+    acts.appendChild(btn);
+  }
+  const src=document.createElement("a");src.href=b.source;src.target="_blank";src.rel="noopener";
+  src.className="muted";src.style.fontSize="11px";src.textContent="Gutenberg";
+  acts.appendChild(src);
+  return d;
+}
+async function addFromCatalog(b,btn,acts){
+  btn.disabled=true;btn.textContent="Downloading…";
+  try{
+    const r=await api("/api/catalog/"+encodeURIComponent(b.key)+"/add",{method:"POST"});
+    btn.remove();
+    const tag=document.createElement("span");tag.className="tag";tag.textContent="In library";
+    acts.prepend(tag);
+    // el nivel MEDIDO manda sobre mi etiqueta: es cálculo, no opinión
+    const extra=(r.measured_level&&r.measured_level!==r.catalog_level)
+      ? " (measured "+r.measured_level+")" : "";
+    toast('"'+r.title+'" added'+extra);
+    loadBooks();
+  }catch(e){
+    btn.disabled=false;btn.textContent="↓ Add";
+    toast("Couldn't add it: "+(e.message||"download failed"),true);
+  }
+}
+/* Aviso de dificultad al abrir un libro: mejor saberlo antes de frustrarte. */
+async function showBookDifficulty(bookId){
+  const box=document.getElementById("bookLevel");if(!box)return;
+  box.style.display="none";box.textContent="";
+  let d=null;try{d=await api("/api/books/"+bookId+"/difficulty");}catch(e){return;}
+  if(!d.level)return;
+  box.style.display="";
+  box.className="booklvl"+(d.gap>=2?" hard":d.gap<=0?" easy":"");
+  box.textContent=(d.gap>=2?"⚠ ":"")+d.level+" · "+d.verdict;
+}
+
+/* ---------- Vocabulario (persistente) ---------- */
+async function addVocab(){
+  const sel=(window.getSelection().toString().trim())||S.selWord;
+  if(!sel){document.getElementById("study").textContent="Select a word in the text and press ＋ Vocabulary.";return;}
+  const example=(sel===S.selWord&&S.selExample)?S.selExample:(S.sentences[S.sentenceIndex]||"");
+  const st=document.getElementById("study");st.innerHTML='<div class="term">'+escapeHtml(sel)+'</div><span class="muted">Saving…</span>';
+  let translation="";
+  try{const res=await api("/api/llm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:sel,kind:"translation"})});translation=res.result;}
+  catch(e){translation="(no translation)";}
+  try{const r=await api("/api/vocab",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({term:sel,translation,example,lang:S.bookLang||"en",book_id:S.bookId})});
+    setDue(r.due); document.getElementById("vocabCount").textContent=r.total;
+    st.innerHTML='<div class="term">'+escapeHtml(sel)+'</div>'+escapeHtml(translation)+'<br><span class="muted">Saved ('+r.total+' words). Review it in 🎴 Flashcards.</span>';
+  }catch(e){st.textContent="Error saving: "+e.message;}
+}
+async function exportAnki(){
+  const st=document.getElementById("study");st.innerHTML='<div class="term">Anki</div><span class="muted">Generating audio and cards…</span>';
+  try{const r=await fetch("/api/export/anki",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({deck_name:"Lira — Vocabulary",lang:S.bookLang||"en"})});
+    if(!r.ok)throw new Error((await r.json()).detail||r.statusText);
+    const blob=await r.blob();const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download="lira_vocabulary.apkg";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+    st.innerHTML='<div class="term">Anki</div>Vocabulary exported. Open it in Anki.';
+  }catch(e){st.textContent="Export error: "+e.message;}
+}
+
+/* ---------- Aprender (SRS) ---------- */
+function setDue(n){const b=document.getElementById("dueBadge");if(!b)return;
+  if(n>0){b.style.display="";b.textContent=n;}else{b.style.display="none";}}
+// contador decorativo: si falla se queda con el valor anterior, sin molestar
+async function refreshDueBadge(){try{const s=await api("/api/vocab/stats");setDue(s.due);document.getElementById("vocabCount").textContent=s.total;}catch(e){}}
+function dailyGoal(){return parseInt(localStorage.getItem("lira_goal")||"20");}
+function setDailyGoal(){const g=prompt("Daily goal — reviews per day:",dailyGoal());if(g&&parseInt(g)>0){localStorage.setItem("lira_goal",String(parseInt(g)));updateStreak();}}
+async function updateStreak(){
+  try{const s=await api("/api/streak");
+    document.getElementById("streakNum").textContent=s.current;
+    const fl=document.getElementById("streakFlame");
+    fl.style.filter=s.today?"none":"grayscale(1)";fl.style.opacity=s.today?"1":".5";
+    const sl=document.getElementById("streakLine");
+    if(sl)sl.textContent="🔥 Streak: "+s.current+" days · "+s.total_reviews+" reviews total";
+    // meta diaria
+    const goal=dailyGoal(),tr=s.today_reviews||0,pct=Math.min(100,Math.round(tr/goal*100)),met=tr>=goal;
+    const gb=document.getElementById("goalBox");if(gb)gb.textContent="🎯 "+tr+"/"+goal+" today"+(met?" ✓":"");
+    const gm=document.getElementById("goalMeter");if(gm)gm.style.width=pct+"%";
+    const gt=document.getElementById("goalText");if(gt)gt.textContent=met?("Goal met! 🎉 "+tr+" reviews today ("+(s.today_min||0)+" min active)"):(tr+" / "+goal+" reviews today · "+(s.today_min||0)+" min active");
+  }catch(e){}  // panel de objetivo: informativo, si falla se deja como estaba
+}
+function openLearn(tab){document.getElementById("learnOverlay").style.display="flex";stopSpeech();S.isPlaying=false;
+  const pb=document.getElementById("playBtn");if(pb)pb.textContent="▶ Read";S.currentModule="flashcards";
+  learnTab(tab||"repaso");loadReview();loadVocabFull();}
+function closeLearn(){document.getElementById("learnOverlay").style.display="none";refreshDueBadge();}
+
+/* ---------- Statistics (full-width section) ---------- */
+function openStats(){document.getElementById("statsOverlay").style.display="flex";loadStats();loadFullStats(S.statsRange);}
+function setStatsRange(r){S.statsRange=r;
+  document.getElementById("rgWeek").classList.toggle("active",r==="week");
+  document.getElementById("rgMonth").classList.toggle("active",r==="month");
+  document.getElementById("rangeLabel").textContent=(r==="month")?"this month":"this week";
+  loadFullStats(r);}
+const MOD_NAMES={reading:"Reading",decks:"Decks",writing:"Writing",flashcards:"Flashcards",stats:"Statistics",lessons:"Lessons"};
+async function loadFullStats(range){
+  let s;try{s=await api("/api/stats/full?range="+(range||"week"));}catch(e){return;}
+  document.getElementById("stActive").textContent=s.active_min;
+  document.getElementById("stProcrast").textContent=s.procrastination_min;
+  // opportunity banner
+  document.getElementById("oppBox").innerHTML='<div class="oppbanner"><div class="big">🎯</div><div>'+
+    '<div style="font-weight:600;font-size:16px">Area of opportunity: '+s.opportunity.name+'</div>'+
+    '<div style="opacity:.9;font-size:13.5px">You\'ve spent '+s.opportunity.minutes+' min here recently. Try ~'+s.opportunity.suggest_min+' min to catch up with your other areas.</div></div></div>';
+  // time per day chart
+  const days=[],today=new Date();const n=(range==="month")?today.getDate():7;
+  for(let i=n-1;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i);const k=d.toISOString().slice(0,10);days.push([k,(s.per_day&&s.per_day[k])||0]);}
+  const mx=Math.max(1,...days.map(d=>d[1]));
+  document.getElementById("timeChart").innerHTML=days.map((d,i)=>'<div class="bar'+(i===days.length-1?" today":"")+'" style="height:'+(d[1]/mx*100)+'%" title="'+d[0]+": "+d[1]+' min"></div>').join("");
+  // modules breakdown
+  const mods=["reading","decks","writing","flashcards"];const mmax=Math.max(1,...mods.map(m=>s.modules[m]||0));
+  document.getElementById("modChart").innerHTML=mods.map(m=>{const v=s.modules[m]||0;
+    return '<div class="modbar"><span class="lbl">'+MOD_NAMES[m]+'</span><span class="track"><i style="width:'+(v/mmax*100)+'%"></i></span><span class="val">'+v+'m</span></div>';}).join("");
+  // focus vs idle
+  const foc=[["Focus",s.active_min,"#3f8f6f"],["Idle",s.procrastination_min,"#b8b2a6"]];const ftot=Math.max(1,s.open_min);
+  document.getElementById("focusStack").innerHTML=foc.map(p=>'<span style="width:'+(p[1]/ftot*100)+'%;background:'+p[2]+'"></span>').join("");
+  document.getElementById("focusLegend").innerHTML=foc.map(p=>'<span><span class="dot" style="background:'+p[2]+'"></span>'+p[0]+" ("+p[1]+"m)</span>").join("");
+  document.getElementById("focusNote").textContent="Idle = app open but no interaction. "+s.open_min+" min open · "+s.active_min+" min focused.";
+  // areas completed
+  let a='<div class="areabar"><span class="lbl">Decks learned</span><span class="track"><i style="width:'+(s.deck_total?s.deck_learned/s.deck_total*100:0)+'%"></i></span><span class="val">'+s.deck_learned+"/"+s.deck_total+'</span></div>';
+  (s.reading||[]).forEach(b=>{a+='<div class="areabar"><span class="lbl">📖 '+escapeHtml(b.title.slice(0,16))+'</span><span class="track"><i style="width:'+b.pct+'%"></i></span><span class="val">'+b.pct+'%</span></div>';});
+  a+='<div class="areabar"><span class="lbl">✍️ Writings</span><span class="track"><i style="width:'+Math.min(100,s.writings*10)+'%"></i></span><span class="val">'+s.writings+'</span></div>';
+  document.getElementById("areasBox").innerHTML=a;
+  renderHeatmap(s.heatmap);
+}
+function renderHeatmap(data){
+  const el=document.getElementById("heatmap");if(!el)return;
+  const today=new Date();today.setHours(0,0,0,0);
+  const start=new Date(today);start.setDate(today.getDate()-(14*7-1));
+  while(start.getDay()!==0)start.setDate(start.getDate()-1);
+  let html="";
+  for(let d=new Date(start);d<=today;d.setDate(d.getDate()+1)){
+    const k=d.toISOString().slice(0,10);const m=(data&&data[k])||0;
+    const lvl=m<=0?"":m<10?"l1":m<30?"l2":m<60?"l3":"l4";
+    html+='<div class="c '+lvl+'" title="'+k+': '+m+' min"></div>';
+  }
+  el.innerHTML=html;
+}
+async function loadNavAlerts(){
+  let a;try{a=await api("/api/nav-alerts");}catch(e){return;}
+  ["reading","decks","writing"].forEach(m=>{
+    const btn=document.querySelector('.navbtn[data-sec="'+m+'"]');if(!btn)return;
+    btn.classList.toggle("alert", a.has_activity && (a.stale[m]===undefined||a.stale[m]>=3));
+  });
+}
+
+/* ---------- Section navigation (left panel) ---------- */
+function closeAllOverlays(){["learnOverlay","decksOverlay","writingOverlay","lessonsOverlay","statsOverlay","testOverlay","catalogOverlay"].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display="none";});stopSpeech();}
+function openWriting(){closeAllOverlays();document.getElementById("writingOverlay").style.display="flex";writingTab("new");}
+/* ---------- Lessons (método contrastivo estilo Ghio) ---------- */
+let LCUR=null;
+function toast(msg,isError){let t=document.getElementById("liraToast");
+  if(!t){t=document.createElement("div");t.id="liraToast";document.body.appendChild(t);}
+  t.textContent=msg;t.classList.toggle("err",!!isError);t.classList.add("on");
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("on"),isError?5000:1600);}
+/* Un fallo al GUARDAR no puede pasar desapercibido: si se pierde en silencio,
+   crees que has estudiado y no se ha registrado nada. */
+function saveError(what,e){
+  toast("⚠ No se pudo guardar "+what+": "+(e&&e.message?e.message:"sin conexión"),true);
+}
+/* Distingue "no tienes nada" de "no se pudo cargar": el estado vacío mentía
+   cuando en realidad la petición había fallado. */
+function loadFailHtml(what){
+  return '<div class="soon"><div class="big">Couldn\'t load your '+what+'</div>'+
+         '<div>The app couldn\'t reach the server. Reload the page to try again.</div></div>';
+}
+
+/* ---------- Settings / API key (Gemini) ---------- */
+async function refreshAiDot(){
+  try{const c=await api("/api/config");
+    const d=document.getElementById("aiDot");
+    if(d){d.style.color=c.enabled?"#5fbf6f":"#b46a4a";d.title="AI: "+(c.enabled?"active":"off — click to set up");}
+    return c;
+  }catch(e){return null;}
+}
+async function openSettings(){
+  document.getElementById("settingsModal").style.display="flex";
+  document.getElementById("setMsg").textContent="";
+  document.getElementById("apiKeyInput").value="";
+  const c=await refreshAiDot();
+  const sl=document.getElementById("aiStatusLine");
+  if(c&&c.enabled){sl.className="aistatus on";
+    sl.textContent="✓ IA activa"+(c.from_env?" (desde variable de entorno)":" · key "+c.key_masked)+" · modelo "+c.model;}
+  else{sl.className="aistatus off";sl.textContent="✗ IA sin configurar — pega tu API key abajo para activarla.";}
+}
+function closeSettings(){document.getElementById("settingsModal").style.display="none";}
+async function saveConfig(){
+  const key=document.getElementById("apiKeyInput").value.trim();
+  if(!key){document.getElementById("setMsg").textContent="Pega tu API key primero.";return;}
+  const m=document.getElementById("setMsg");m.textContent="Guardando…";
+  try{const c=await api("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({gemini_api_key:key})});
+    m.textContent=c.enabled?"✓ Guardada. La IA ya está activa.":"No se pudo activar.";
+    document.getElementById("apiKeyInput").value="";
+    openSettings();  // refresca estado (enmascarado)
+    toast("IA activada 🤖");
+  }catch(e){m.textContent="Error: "+e.message;}
+}
+async function clearConfig(){
+  try{await api("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({gemini_api_key:""})});}
+  catch(e){saveError("el borrado de la API key",e);return;}
+  document.getElementById("apiKeyInput").value="";openSettings();toast("API key eliminada");
+}
+const LV_META={beginner:{icon:"🟢",name:"Beginner",tag:"A1–A2 · empezar a hablar"},
+  mid:{icon:"🟡",name:"Mid",tag:"A2–B1 · afianzar"},
+  advanced:{icon:"🔵",name:"Advanced",tag:"B2–C1 · dominar"}};
+function openLessons(){closeAllOverlays();document.getElementById("lessonsOverlay").style.display="flex";lessonLevel(S.lessonLevel||"map");}
+function lessonLevel(lv){S.lessonLevel=lv;
+  document.querySelectorAll('#lessonTabs .tab').forEach(b=>b.classList.toggle("active",b.dataset.lv===lv));
+  document.getElementById("lessonView").style.display="none";
+  if(lv==="map"){document.getElementById("lessonList").style.display="none";
+    document.getElementById("lessonMap").style.display="";loadLessonMap();return;}
+  document.getElementById("lessonMap").style.display="none";
+  document.getElementById("lessonList").style.display="";
+  loadLessonList(lv);}
+function lessonCard(l){
+  return '<div class="card lessoncard" onclick="openLesson(\''+l.id+'\')">'+
+      '<div style="display:flex;align-items:center;gap:12px">'+
+        '<div class="lcheck'+(l.done?" on":"")+'">'+(l.done?"✓":"")+'</div>'+
+        '<div><div class="ltitle">'+escapeHtml(l.title)+'</div>'+
+          '<div class="muted" style="font-size:13.5px">'+escapeHtml(l.desc||"")+'</div></div>'+
+      '</div></div>';}
+function checkpointCard(c){
+  return '<div class="card cpcard'+(c.done?" done":"")+'" onclick="openCheckpoint(\''+c.id+'\')">'+
+      '<div style="display:flex;align-items:center;gap:12px">'+
+        '<div class="lcheck'+(c.done?" on":"")+'">'+(c.done?"✓":"🎯")+'</div>'+
+        '<div><div class="ltitle">'+escapeHtml(c.title)+(c.done?" · aprobado":"")+'</div>'+
+          '<div class="muted" style="font-size:13.5px">'+escapeHtml(c.desc||"")+'</div></div>'+
+      '</div></div>';}
+async function loadLessonList(lv){
+  const wrap=document.getElementById("lessonList");wrap.innerHTML='<div class="muted">Loading…</div>';
+  let d;try{d=await api("/api/lessons?level="+lv);}catch(e){wrap.innerHTML='<div class="muted">Error loading lessons.</div>';return;}
+  if(!d.lessons.length){wrap.innerHTML='<div class="muted">No lessons yet in this level.</div>';return;}
+  const cps=(d.checkpoints||[]);
+  let html="";
+  d.lessons.sort((a,b)=>a.n-b.n).forEach(l=>{
+    html+=lessonCard(l);
+    cps.filter(c=>c.after===l.n).forEach(c=>{html+=checkpointCard(c);});  // mini-test tras cada 3
+  });
+  wrap.innerHTML=html;
+}
+async function loadLessonMap(){
+  const wrap=document.getElementById("lessonMap");wrap.innerHTML='<div class="muted">Loading…</div>';
+  let d;try{d=await api("/api/lessons");}catch(e){wrap.innerHTML='<div class="muted">Error loading map.</div>';return;}
+  const all=d.lessons, total=all.length, done=all.filter(l=>l.done).length;
+  const cols=(d.levels||["beginner","mid","advanced"]).map(lv=>{
+    const ls=all.filter(l=>l.level===lv).sort((a,b)=>a.n-b.n);
+    const m=LV_META[lv]||{icon:"",name:lv,tag:""};
+    const dn=ls.filter(l=>l.done).length;
+    // agrupar por bloque preservando el orden
+    const blocks=[]; const seen={};
+    ls.forEach(l=>{const b=l.block||"—"; if(!(b in seen)){seen[b]=blocks.length;blocks.push([b,[]]);} blocks[seen[b]][1].push(l);});
+    const blocksHtml=blocks.map(([bname,items])=>
+      '<div class="mapblock"><div class="mapblockh">'+escapeHtml(bname)+'</div>'+
+        items.map(l=>'<div class="mapstep'+(l.done?" done":"")+'" onclick="openLesson(\''+l.id+'\')">'+
+          '<span class="mapnum">'+(l.done?"✓":l.n)+'</span>'+
+          '<span class="mapdesc">'+escapeHtml(l.desc||l.title)+'</span></div>').join("")+
+      '</div>').join("");
+    return '<div class="mapcol">'+
+      '<div class="mapcolh mapcolh-'+lv+'" onclick="lessonLevel(\''+lv+'\')">'+
+        '<div class="mapcolt">'+m.icon+' '+m.name+'</div>'+
+        '<div class="mapcoltag">'+m.tag+' · '+dn+'/'+ls.length+'</div></div>'+
+      blocksHtml+'</div>';
+  }).join("");
+  wrap.innerHTML=
+    '<div class="maphero"><div class="ltitle big">Tu ruta de inglés</div>'+
+      '<div class="muted">Un curso completo de '+total+' lecciones, del principio al nivel avanzado, con el método contrastivo (explicación clara + ejemplos con 🔊). Toca cualquier lección para empezar — no tienes que ir en orden.</div>'+
+      '<div class="mapprog"><div class="mapprogbar" style="width:'+(total?Math.round(done/total*100):0)+'%"></div></div>'+
+      '<div class="muted" style="font-size:13px">'+done+' de '+total+' lecciones completadas</div>'+
+    '</div>'+
+    '<div class="maproad">'+cols+'</div>';
+}
+async function openLesson(id){
+  let ls;try{ls=await api("/api/lessons/"+id);}catch(e){return;}
+  LCUR=ls;stopSpeech();
+  document.getElementById("lessonList").style.display="none";
+  document.getElementById("lessonMap").style.display="none";
+  const v=document.getElementById("lessonView");v.style.display="";
+  const pairs=ls.pairs.map((p,i)=>
+    '<div class="lpair">'+
+      '<button class="sayb" onclick="speakText(LCUR.pairs['+i+'][0],\'en\')" title="Listen">🔊</button>'+
+      '<div class="len">'+escapeHtml(p[0])+'</div>'+
+      '<div class="les muted">'+escapeHtml(p[1])+'</div>'+
+      '<button class="deckb" onclick="addLessonToDeck('+i+')" title="Send to deck">＋</button>'+
+    '</div>').join("");
+  const explanation=(ls.explanation&&ls.explanation.length)?
+    '<div class="lsect"><div class="lsecth">Explicación</div>'+
+      ls.explanation.map(p=>'<p class="lexp">'+escapeHtml(p)+'</p>').join("")+'</div>':"";
+  const formula=(ls.formula&&ls.formula.length)?
+    '<div class="lformula"><div class="flabel">El patrón</div>'+
+      ls.formula.map(f=>'<div class="fline">'+escapeHtml(f)+'</div>').join("")+'</div>':"";
+  const FCLS=["f-aff","f-neg","f-q"];
+  const forms=(ls.forms&&ls.forms.length)?
+    '<div class="lsect"><div class="lsecth">Afirmativo · Negativo · Pregunta</div>'+
+      ls.forms.map((f,i)=>'<div class="lform '+(FCLS[i]||"")+'">'+
+        '<span class="flabelchip">'+escapeHtml(f[0])+'</span>'+
+        '<button class="sayb" onclick="speakText(LCUR.forms['+i+'][1],\'en\')" title="Listen">🔊</button>'+
+        '<span class="fen">'+escapeHtml(f[1])+'</span>'+
+        '<span class="fes muted">'+escapeHtml(f[2])+'</span>'+
+      '</div>').join("")+'</div>':"";
+  const practice=ls.practice.map((p,i)=>
+    '<div class="lprac" id="lprac'+i+'">'+
+      '<div class="pes">'+escapeHtml(p[0])+'</div>'+
+      '<div class="pans" id="pans'+i+'" style="display:none">'+
+        '<button class="sayb" onclick="speakText(LCUR.practice['+i+'][1],\'en\')" title="Listen">🔊</button>'+
+        '<span class="pen">'+escapeHtml(p[1])+'</span>'+
+        '<button class="deckb" onclick="addPracToDeck('+i+')" title="Send to deck">＋</button>'+
+      '</div>'+
+      '<button class="revealb" onclick="revealPrac('+i+')">Reveal</button>'+
+    '</div>').join("");
+  v.innerHTML=
+    '<button class="backb" onclick="lessonLevel(S.lessonLevel)">← Lessons</button>'+
+    '<div class="lhero"><div class="ltitle big">'+escapeHtml(ls.title)+'</div>'+
+      '<div class="muted">'+escapeHtml(ls.desc||"")+'</div></div>'+
+    explanation+
+    formula+
+    forms+
+    '<div class="lsect"><div class="lsecth">Ejemplos</div>'+pairs+'</div>'+
+    '<div class="lsect"><div class="lsecth">Practica — traduce, luego revela</div>'+practice+'</div>'+
+    '<div style="text-align:center;margin:24px 0 8px">'+
+      '<button class="btn gold" id="doneBtn" onclick="toggleLessonDone(\''+ls.id+'\')">'+
+      (ls.done?"✓ Completed — mark as not done":"Mark complete")+'</button></div>';
+  v.scrollTop=0;
+}
+function revealPrac(i){const a=document.getElementById("pans"+i);if(a)a.style.display="flex";
+  const b=document.querySelector("#lprac"+i+" .revealb");if(b)b.style.display="none";}
+function addLessonToDeck(i){const p=LCUR.pairs[i];sendToDeck(p[0],p[1]);}
+function addPracToDeck(i){const p=LCUR.practice[i];sendToDeck(p[1],p[0]);}
+async function sendToDeck(en,es){
+  try{const r=await api("/api/vocab",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({term:en,translation:es,example:en,lang:"en"})});
+    setDue(r.due);toast("Sent to deck 🎴 ("+r.total+")");}catch(e){toast("Error saving");}
+}
+async function toggleLessonDone(id){
+  const done=!(LCUR&&LCUR.done);
+  try{await api("/api/lessons/"+id+"/done",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({done})});}catch(e){return;}
+  LCUR.done=done;
+  document.getElementById("doneBtn").textContent=done?"✓ Completed — mark as not done":"Mark complete";
+  toast(done?"Lesson completed ✓":"Marked as not done");}
+
+/* ---------- Checkpoints (mini-test cada 3 lecciones) ---------- */
+let CP=null;
+async function openCheckpoint(id){
+  let cp;try{cp=await api("/api/checkpoint/"+id);}catch(e){return;}
+  CP={...cp,pos:0,correct:0,chosen:null};
+  stopSpeech();
+  document.getElementById("lessonList").style.display="none";
+  document.getElementById("lessonMap").style.display="none";
+  document.getElementById("lessonView").style.display="";
+  cpRender();
+}
+function cpRender(){
+  const v=document.getElementById("lessonView"), q=CP.questions[CP.pos], n=CP.questions.length;
+  v.innerHTML=
+    '<button class="backb" onclick="lessonLevel(S.lessonLevel)">← Lessons</button>'+
+    '<div class="lhero"><div class="ltitle big">'+escapeHtml(CP.title)+'</div>'+
+      '<div class="muted">'+escapeHtml(CP.desc)+' · pregunta '+(CP.pos+1)+' de '+n+'</div></div>'+
+    '<div class="cpq">¿Cómo se dice en inglés?</div>'+
+    '<div class="cpprompt">"'+escapeHtml(q.prompt)+'"</div>'+
+    '<div id="cpopts">'+q.options.map((o,i)=>
+      '<button class="cpopt" onclick="cpChoose('+i+')">'+escapeHtml(o)+'</button>').join("")+'</div>'+
+    '<div id="cpfb" class="cpfb"></div>';
+  v.scrollTop=0;
+}
+function cpChoose(i){
+  if(CP.chosen!==null)return;
+  const q=CP.questions[CP.pos], ok=(q.options[i]===q.answer);
+  CP.chosen=i; if(ok)CP.correct++;
+  document.querySelectorAll("#cpopts .cpopt").forEach((b,j)=>{
+    b.disabled=true;
+    if(q.options[j]===q.answer)b.classList.add("right");
+    else if(j===i)b.classList.add("wrong");
+  });
+  speakText(q.answer,"en");
+  const fb=document.getElementById("cpfb");
+  const last=(CP.pos===CP.questions.length-1);
+  fb.innerHTML=(ok?'<span class="cpok">✓ ¡Correcto!</span>':'<span class="cpno">✗ La correcta es: <b>'+escapeHtml(q.answer)+'</b></span>')+
+    '<button class="btn gold" style="margin-left:auto" onclick="cpNext()">'+(last?"Ver resultado":"Siguiente")+'</button>';
+}
+function cpNext(){
+  CP.pos++; CP.chosen=null;
+  if(CP.pos<CP.questions.length){cpRender();return;}
+  cpResult();
+}
+async function cpResult(){
+  const v=document.getElementById("lessonView"), n=CP.questions.length, passed=CP.correct>=CP.pass;
+  // aprobar un checkpoint es progreso del curso: si no se guarda, hay que decirlo
+  if(passed){try{await api("/api/checkpoint/"+CP.id+"/done",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({done:true})});}
+    catch(e){saveError("el checkpoint aprobado",e);}}
+  v.innerHTML=
+    '<button class="backb" onclick="lessonLevel(S.lessonLevel)">← Lessons</button>'+
+    '<div class="cpresult">'+
+      '<div style="font-size:44px">'+(passed?"🎉":"💪")+'</div>'+
+      '<div class="ltitle big">'+CP.correct+' / '+n+'</div>'+
+      '<div class="muted" style="margin:6px 0 18px">'+(passed?"¡Aprobado! Repaso completado.":"Casi. Repasa las lecciones y vuelve a intentarlo (necesitas "+CP.pass+"/"+n+").")+'</div>'+
+      '<button class="btn gold" onclick="openCheckpoint(\''+CP.id+'\')">Reintentar</button> '+
+      '<button class="btn" onclick="lessonLevel(S.lessonLevel)">Volver</button>'+
+    '</div>';
+  v.scrollTop=0;
+}
+
+/* ---------- Writing ---------- */
+function writingTab(t){
+  document.querySelectorAll('#writingOverlay .tab').forEach(b=>b.classList.toggle("active",b.dataset.w===t));
+  ["new","mine","errors"].forEach(x=>{const el=document.getElementById("wtab-"+x);if(el)el.style.display=(x===t)?"":"none";});
+  if(t==="mine")loadWritings();
+  if(t==="errors"){loadWritingErrors();loadCustomLessons();}
+}
+function fmt(cmd){document.execCommand(cmd,false,null);document.getElementById("wEditor").focus();}
+function fmtSize(v){if(v)document.execCommand("fontSize",false,v);document.getElementById("wEditor").focus();}
+function setWFont(v){document.getElementById("wEditor").style.fontFamily=v;document.getElementById("wEditor").focus();}
+function setWMode(m){
+  S.writing.mode=m;
+  document.getElementById("modeRich").classList.toggle("active",m==="rich");
+  document.getElementById("modeMd").classList.toggle("active",m==="md");
+  document.getElementById("richTools").style.display=(m==="rich")?"flex":"none";
+  document.getElementById("mdHint").style.display=(m==="md")?"":"none";
+  document.getElementById("wEditor").style.display=(m==="rich")?"":"none";
+  document.getElementById("wMdWrap").style.display=(m==="md")?"grid":"none";
+  const md=document.getElementById("wMd"),ed=document.getElementById("wEditor");
+  if(m==="md"){ if(!md.value.trim()&&ed.innerText.trim())md.value=ed.innerText; renderMdPreview(); md.focus(); }
+  else{ if(md.value.trim()&&!ed.innerText.trim())ed.innerText=md.value; ed.focus(); }
+}
+function renderMdPreview(){document.getElementById("wPreview").innerHTML=mdToHtml(document.getElementById("wMd").value||"");}
+function writingSourceText(){return (S.writing.mode==="md"?document.getElementById("wMd").value:document.getElementById("wEditor").innerText)||"";}
+function mdToHtml(md){
+  const esc=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const inline=s=>esc(s)
+    .replace(/\*\*(.+?)\*\*/g,"<b>$1</b>")
+    .replace(/(^|[^*])\*([^*]+?)\*/g,"$1<i>$2</i>")
+    .replace(/`(.+?)`/g,"<code>$1</code>")
+    .replace(/\[(.+?)\]\((.+?)\)/g,'<a href="$2" target="_blank">$1</a>');
+  let html="",list=null;const close=()=>{if(list){html+="</"+list+">";list=null;}};
+  (md||"").split(/\r?\n/).forEach(raw=>{
+    const line=raw.replace(/\s+$/,"");let m;
+    if(/^\s*$/.test(line)){close();return;}
+    if((m=line.match(/^(#{1,6})\s+(.*)$/))){close();const n=m[1].length;html+="<h"+n+">"+inline(m[2])+"</h"+n+">";return;}
+    if(/^(-{3,}|\*{3,})$/.test(line)){close();html+="<hr>";return;}
+    if(/^>\s?/.test(line)){close();html+="<blockquote>"+inline(line.replace(/^>\s?/,""))+"</blockquote>";return;}
+    if((m=line.match(/^\s*[-*]\s+(.*)$/))){if(list!=="ul"){close();html+="<ul>";list="ul";}html+="<li>"+inline(m[1])+"</li>";return;}
+    if((m=line.match(/^\s*\d+\.\s+(.*)$/))){if(list!=="ol"){close();html+="<ol>";list="ol";}html+="<li>"+inline(m[1])+"</li>";return;}
+    close();html+="<p>"+inline(line)+"</p>";
+  });
+  close();return html;
+}
+document.addEventListener("change",async(e)=>{
+  if(e.target&&e.target.id==="wFile"){
+    const f=e.target.files[0];if(!f)return;
+    S.writing.uploadKind=(f.type||"").startsWith("image/")?"image":"doc";
+    const msg=document.getElementById("wFileMsg");msg.textContent="Extracting text from “"+f.name+"”…";
+    const fd=new FormData();fd.append("file",f);
+    try{const res=await api("/api/writing/extract",{method:"POST",body:fd});
+      if(S.writing.mode==="md"){document.getElementById("wMd").value=res.text||"";renderMdPreview();}
+      else{document.getElementById("wEditor").innerText=res.text||"";}
+      msg.textContent="✓ Text extracted — the file was discarded. Review and press Check.";
+    }catch(err){msg.textContent="Error: "+err.message;}
+    e.target.value="";
+  }
+});
+function readableHtml(text){
+  return text.split(/(\s+)/).map(tok=>/\S/.test(tok)?'<span class="ww">'+escapeHtml(tok)+'</span>':escapeHtml(tok)).join("");
+}
+function wireReadable(elId){
+  document.getElementById(elId).querySelectorAll(".ww").forEach(w=>{
+    w.onclick=()=>saveWritingWord(w.textContent.replace(/[^A-Za-z'’-]/g,""));});
+}
+/* Copia al portapapeles y confirma en el propio botón. */
+async function copyText(text,btn){
+  if(!text){return;}
+  const done=()=>{if(!btn)return;const old=btn.textContent;btn.textContent="✓ Copied";
+    setTimeout(()=>{btn.textContent=old;},1400);};
+  try{await navigator.clipboard.writeText(text);done();}
+  catch(e){ // sin permiso de portapapeles: copia por selección temporal
+    const ta=document.createElement("textarea");ta.value=text;
+    ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);
+    ta.select();try{document.execCommand("copy");done();}catch(_){alert("Couldn't copy.");}
+    document.body.removeChild(ta);
+  }
+}
+/* Vuelca un texto guardado en el editor para volver a trabajarlo. */
+function reuseInEditor(text){
+  if(S.writing.mode==="md"){document.getElementById("wMd").value=text;renderMdPreview();}
+  else{document.getElementById("wEditor").innerText=text;}
+  writingTab("new");
+  document.getElementById("wStatus").textContent="Loaded into the editor — edit it and press Check.";
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+async function deleteWriting(id,rowEl){
+  if(!confirm("Delete this writing? This also removes its mistakes from the error log."))return;
+  try{await api("/api/writings/"+id,{method:"DELETE"});
+    if(rowEl)rowEl.remove();
+    if(S.writing.id===id){S.writing.id=null;document.getElementById("wResult").style.display="none";}
+    if(!document.querySelectorAll("#writingsList .vrow").length)loadWritings();
+  }catch(e){alert("Couldn't delete: "+e.message);}
+}
+/* Botones de upgrade: sólo a niveles POR ENCIMA del tuyo, y sólo cuando ya
+   sabemos cuál es el tuyo. Sin evaluación no hay upgrade. */
+function renderUpgradeButtons(level,nextLevels){
+  const box=document.getElementById("wUpgradeBtns"),hint=document.getElementById("wUpgradeHint");
+  box.innerHTML="";
+  if(!level||!nextLevels||!nextLevels.length){
+    hint.textContent=level
+      ? "You're already at the top level — nothing to upgrade to."
+      : "I couldn't assess your level, so there's nothing to upgrade from. Run the check again.";
+    return;
+  }
+  hint.textContent="Your text is "+level+" → rewrite it at "+nextLevels[0]+
+    " and compare the two. One step up is what you can actually copy.";
+  nextLevels.forEach((lv,i)=>{
+    const b=document.createElement("button");
+    b.className="btn"+(i===0?" gold":"");
+    b.textContent="Upgrade to "+lv;
+    b.onclick=()=>upgradeWriting(lv);
+    box.appendChild(b);
+  });
+}
+function renderAssessment(r){
+  const big=document.getElementById("wLevelBig");
+  big.innerHTML=(r.level||"?")+"<small>CEFR</small>";
+  big.classList.toggle("unknown",!r.level);
+  document.getElementById("wAssessment").textContent=
+    r.assessment||"No assessment available for this text.";
+  const chips=document.getElementById("wChips");chips.innerHTML="";
+  (r.strengths||[]).forEach(s=>{const c=document.createElement("span");
+    c.className="chip good";c.textContent="✓ "+s;chips.appendChild(c);});
+  (r.to_improve||[]).forEach(s=>{const c=document.createElement("span");
+    c.className="chip work";c.textContent="↑ "+s;chips.appendChild(c);});
+}
+async function checkWriting(){
+  const text=writingSourceText().trim();
+  if(!text){document.getElementById("wStatus").textContent="Write or upload something first.";return;}
+  document.getElementById("wStatus").textContent="Assessing your level and checking your writing…";
+  try{const r=await api("/api/writing/check",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})});
+    S.writing.id=r.writing_id;S.writing.corrected=r.corrected||text;S.writing.upgraded="";
+    S.writing.level=r.level||"";
+    renderAssessment(r);
+    renderUpgradeButtons(r.level,r.next_levels);
+    document.getElementById("wCorrected").innerHTML=readableHtml(S.writing.corrected);wireReadable("wCorrected");
+    const el=document.getElementById("wErrors");
+    if(!r.errors||!r.errors.length){el.innerHTML='<div class="muted">No major mistakes found. Great job!</div>';}
+    else{el.innerHTML="";r.errors.forEach(x=>{const d=document.createElement("div");d.className="vrow";
+      d.style.display="block";
+      d.innerHTML='<div><span style="color:var(--danger);text-decoration:line-through">'+escapeHtml(x.original||"")+'</span> → <span style="color:var(--accent);font-weight:600">'+escapeHtml(x.correction||"")+'</span></div><div class="muted" style="margin-top:2px">'+escapeHtml(x.explanation||"")+'</div>';
+      el.appendChild(d);});}
+    document.getElementById("wCompare").style.display="none";
+    document.getElementById("wResult").style.display="";
+    document.getElementById("wStatus").textContent="";
+    // Escritura por SUBIDA: no sabemos cuánto escribió → estimamos (tu regla).
+    if(S.writing.uploadKind){const secs=S.writing.uploadKind==="image"?1200:900;
+      fetch("/api/activity",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({module:"writing",active:secs,open:0})});
+      S.writing.uploadKind="";}
+  }catch(e){document.getElementById("wStatus").textContent="Error: "+e.message;}
+}
+async function upgradeWriting(level){
+  const base=S.writing.corrected||writingSourceText().trim();
+  const btns=document.getElementById("wUpgradeBtns").querySelectorAll("button");
+  btns.forEach(b=>b.disabled=true);
+  document.getElementById("wStatus").textContent="Upgrading to "+level+"… (if the model is busy I'll retry a few times)";
+  try{const r=await api("/api/writing/upgrade",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:base,level,writing_id:S.writing.id})});
+    S.writing.upgraded=r.upgraded||"";
+    // lado a lado: tu versión corregida vs la reescritura, para comparar
+    document.getElementById("wCmpMineLvl").textContent=r.from_level||S.writing.level||"?";
+    document.getElementById("wCmpUpLvl").textContent=level;
+    document.getElementById("wCmpMine").innerHTML=readableHtml(S.writing.corrected);wireReadable("wCmpMine");
+    document.getElementById("wUpgraded").innerHTML=readableHtml(S.writing.upgraded);wireReadable("wUpgraded");
+    document.getElementById("wCompare").style.display="";
+    document.getElementById("wStatus").textContent="";
+  }catch(e){document.getElementById("wStatus").textContent="Error: "+e.message;}
+  finally{btns.forEach(b=>b.disabled=false);}
+}
+function readWriting(which){speakText(which==="upgraded"?S.writing.upgraded:S.writing.corrected,"en");}
+async function saveWritingWord(word){
+  if(!word)return;const st=document.getElementById("wStatus");st.textContent="Saving “"+word+"”…";
+  let tr="";
+  // la palabra se guarda igualmente aunque la IA falle, pero hay que avisar:
+  // si no, acabas con tarjetas sin traducción sin saber por qué
+  try{const res=await api("/api/llm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:word,kind:"translation"})});tr=res.result;}
+  catch(e){toast("Guardada sin traducción: "+(e.message||"la IA no respondió"),true);}
+  try{const r=await api("/api/vocab",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({term:word,translation:tr,example:S.writing.corrected.slice(0,120),lang:"en"})});
+    setDue(r.due);st.textContent="Saved “"+word+"” → "+tr+" ("+r.total+" words).";}catch(e){st.textContent="Error: "+e.message;}
+}
+/* Evolución de tu nivel escrito: sin esto, cada evaluación se ve aislada y no
+   se aprecia si estás mejorando. */
+async function loadWritingProgress(){
+  const box=document.getElementById("wProgress");
+  // widget opcional: si falla simplemente no se muestra
+  let p=null;try{p=await api("/api/writing/progress");}catch(e){}
+  if(!p||!p.count){box.style.display="none";return;}
+  const LV=["A1","A2","B1","B2","C1","C2"];
+  const pts=p.points.slice(-12);
+  box.style.display="";
+  box.innerHTML='<div class="card" style="margin-bottom:12px">'+
+    '<h3>Your writing level <span class="tag">now: '+escapeHtml(p.current)+'</span></h3>'+
+    '<div class="lvltrack">'+pts.map(pt=>
+      '<span class="lvlpt" title="'+escapeHtml(pt.date+" · "+pt.title)+'">'+
+      '<i style="height:'+Math.round(pt.value/LV.length*100)+'%"></i>'+
+      '<b>'+escapeHtml(pt.level)+'</b></span>').join("")+'</div>'+
+    '<div class="muted" style="margin-top:8px">'+
+      (p.count<2?"Write more and you'll see whether your level is moving.":
+       "Best so far: <b>"+escapeHtml(p.best)+"</b> across "+p.count+" assessed writings.")+
+    '</div></div>';
+}
+async function loadWritings(){
+  const el=document.getElementById("writingsList");el.innerHTML='<div class="muted">Loading…</div>';
+  loadWritingProgress();
+  let list=[];
+  try{list=await api("/api/writings");}
+  catch(e){el.innerHTML=loadFailHtml("writings");return;}
+  if(!list.length){el.innerHTML='<div class="soon"><div class="big">No writings yet</div><div>Write or upload something in the New tab.</div></div>';return;}
+  el.innerHTML="";list.forEach(w=>{const d=document.createElement("div");d.className="vrow";d.style.display="block";
+    const up=w.upgrade_level?' <span class="tag">→ '+escapeHtml(w.upgrade_level)+'</span>':"";
+    d.innerHTML='<div class="whead" style="cursor:pointer">'+
+        '<div><b>'+escapeHtml(w.title||"(untitled)")+'</b> <span class="tag">'+escapeHtml(w.level||"not assessed")+'</span>'+up+'</div>'+
+        '<div class="muted">'+escapeHtml(w.preview||"")+'… <span style="float:right">click to compare ▾</span></div></div>'+
+      '<div class="row-gap wacts" style="margin-top:8px">'+
+        '<button class="btn sm" data-a="copy">⧉ Copy</button>'+
+        '<button class="btn sm" data-a="reuse">✎ Edit again</button>'+
+        '<button class="btn sm" data-a="del" style="margin-left:auto;color:var(--danger)">🗑 Delete</button></div>'+
+      '<div class="wdetail" style="display:none;margin-top:10px"></div>';
+    const det=d.querySelector(".wdetail");
+    d.querySelector('[data-a="copy"]').onclick=e=>{e.stopPropagation();
+      copyWriting(w.id,e.target);};
+    d.querySelector('[data-a="reuse"]').onclick=async e=>{e.stopPropagation();
+      const f=await fetchWriting(w.id);if(f)reuseInEditor(f.original||"");};
+    d.querySelector('[data-a="del"]').onclick=e=>{e.stopPropagation();deleteWriting(w.id,d);};
+    d.querySelector(".whead").onclick=async()=>{
+      if(det.style.display!==""){det.style.display="";}
+      else{det.style.display="none";return;}
+      if(det.dataset.loaded)return;
+      det.innerHTML='<div class="muted">Loading…</div>';
+      const f=await fetchWriting(w.id);
+      if(f){renderWritingDetail(det,f);det.dataset.loaded="1";}
+      else{det.innerHTML='<div class="muted">Couldn\'t load this writing.</div>';}
+    };
+    el.appendChild(d);});
+}
+async function fetchWriting(id){
+  try{return await api("/api/writings/"+id);}catch(e){alert("Error: "+e.message);return null;}
+}
+async function copyWriting(id,btn){
+  const f=await fetchWriting(id);if(f)copyText(f.original||"",btn);
+}
+/* Detalle de un escrito guardado. Dos comparaciones distintas y con propósito:
+   1) tu original vs la corrección — MISMO nivel, sólo sin errores;
+   2) la corrección vs el upgrade — nivel siguiente, que es la que enseña.
+   Por eso la etiqueta CEFR sólo aparece en la segunda: comparar A2 con A2 no
+   dice nada. */
+function renderWritingDetail(host,w){
+  const esc=escapeHtml;
+  const col=(cls,title,tag,body)=>'<div class="col'+cls+'"><h4>'+title+
+    (tag?' <span class="tag">'+esc(tag)+'</span>':"")+'</h4><div class="readable">'+
+    esc(body||"")+'</div></div>';
+  let html="";
+  if(w.assessment){html+='<div class="muted" style="margin-bottom:10px"><b>Level '+
+    esc(w.level||"?")+'</b> — '+esc(w.assessment)+'</div>';}
+  html+='<div class="muted" style="margin-bottom:6px">Same level, mistakes fixed</div>';
+  html+='<div class="cmp">'+col("","Your original","",w.original)+
+    col("","Corrected","",w.corrected||"(not corrected — run the check again)")+'</div>';
+  if(w.upgraded){
+    html+='<div class="muted" style="margin:12px 0 6px">One level up — this is the comparison to study</div>';
+    html+='<div class="cmp">'+col("","Corrected",w.level||"",w.corrected||w.original)+
+      col(" up","Upgraded",w.upgrade_level||"",w.upgraded)+'</div>';
+  }else if(w.level){
+    html+='<div class="muted" style="margin-top:12px">No upgrade yet — open it in the editor and '+
+      'run the check to rewrite it one level up.</div>';
+  }
+  host.innerHTML=html;
+  // botón de copiar en cada columna, sobre el texto que muestra
+  const texts=[w.original,w.corrected||"",w.corrected||w.original,w.upgraded||""];
+  host.querySelectorAll(".cmp .col").forEach((c,i)=>{
+    const b=document.createElement("button");b.className="btn sm";b.style.marginTop="8px";
+    b.textContent="⧉ Copy";b.onclick=e=>{e.stopPropagation();copyText(texts[i]||"",b);};
+    c.appendChild(b);
+  });
+}
+let ERRFILTER="";
+async function loadWritingErrors(){
+  const el=document.getElementById("errorsList");el.innerHTML='<div class="muted">Loading…</div>';
+  let list=[],summary=[];
+  try{[summary,list]=await Promise.all([
+    api("/api/writing/errors/summary"),
+    api("/api/writing/errors"+(ERRFILTER?"?category="+encodeURIComponent(ERRFILTER):""))]);
+  }catch(e){el.innerHTML=loadFailHtml("mistakes");return;}
+  if(!summary.length){el.innerHTML='<div class="soon"><div class="big">No errors logged yet</div><div>Your recurring mistakes will appear here to review.</div></div>';return;}
+  el.innerHTML="";
+  // Resumen por tipo: el patrón es lo que se estudia, no el error suelto.
+  const top=document.createElement("div");top.className="card";top.style.marginBottom="12px";
+  // el diagnóstico ignora los errores sin clasificar: son de antes y no dicen nada
+  const worst=summary.find(s=>s.category!=="unclassified");
+  top.innerHTML='<h3>Your patterns <span class="tag">'+summary.reduce((a,s)=>a+s.n,0)+' mistakes</span></h3>'+
+    (worst?'<div class="muted" style="margin-bottom:10px">Where you lose most points: <b>'+
+      escapeHtml(worst.label)+'</b> ('+worst.n+', '+worst.pct+'% of your classified mistakes).</div>'
+     :'<div class="muted" style="margin-bottom:10px">Check a new text to start classifying your mistakes.</div>');
+  summary.forEach(s=>{
+    const r=document.createElement("div");r.className="errbar"+(ERRFILTER===s.category?" on":"");
+    r.innerHTML='<span class="lbl">'+escapeHtml(s.label)+'</span>'+
+      '<span class="bar"><i style="width:'+Math.max(s.pct,3)+'%"></i></span>'+
+      '<span class="cnt">'+s.n+'</span>';
+    r.onclick=()=>{ERRFILTER=(ERRFILTER===s.category)?"":s.category;loadWritingErrors();};
+    top.appendChild(r);
+  });
+  if(ERRFILTER){const c=document.createElement("div");c.className="muted";c.style.marginTop="10px";
+    c.innerHTML='Filtering by <b>'+escapeHtml((summary.find(s=>s.category===ERRFILTER)||{}).label||"")+
+      '</b> — <a href="#" style="color:var(--accent)">show all</a>';
+    c.querySelector("a").onclick=e=>{e.preventDefault();ERRFILTER="";loadWritingErrors();};
+    top.appendChild(c);}
+  el.appendChild(top);
+  list.forEach(x=>{el.appendChild(errorRow(x,summary));});
+}
+/* Cada error con su propia mini-lección. La lección general cubre 12 errores de
+   UNA categoría; el resto se quedaba sin explicación de cómo no repetirlo. */
+function errorRow(x,summary){
+  const d=document.createElement("div");d.className="vrow errrow";d.style.display="block";
+  if(x.reviewed)d.classList.add("done");
+  const cat=x.category?'<span class="tag" style="float:right">'+escapeHtml(catLabel(x.category,summary))+'</span>':"";
+  d.innerHTML='<div>'+cat+'<span style="color:var(--danger);text-decoration:line-through">'+
+    escapeHtml(x.original||"")+'</span> → <span style="color:var(--accent);font-weight:600">'+
+    escapeHtml(x.correction||"")+'</span></div>'+
+    '<div class="muted">'+escapeHtml(x.explanation||"")+'</div>'+
+    '<div class="row-gap" style="margin-top:7px"></div>'+
+    '<div class="minilesson" style="display:none;margin-top:9px"></div>';
+  const acts=d.querySelector(".row-gap"), box=d.querySelector(".minilesson");
+  const bx=document.createElement("button");bx.className="btn sm";
+  bx.textContent=x.has_lesson?"📘 Explanation":"📘 Explain this";
+  bx.onclick=()=>toggleErrorLesson(x.id,bx,box);
+  acts.appendChild(bx);
+  const br=document.createElement("button");br.className="btn sm";
+  br.style.marginLeft="auto";
+  br.textContent=x.reviewed?"✓ Reviewed":"Mark reviewed";
+  br.onclick=async()=>{
+    const nuevo=!d.classList.contains("done");
+    try{await api("/api/writing/errors/"+x.id+"/reviewed",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({reviewed:nuevo})});
+      d.classList.toggle("done",nuevo);br.textContent=nuevo?"✓ Reviewed":"Mark reviewed";
+    }catch(e){toast("No se pudo guardar: "+e.message,true);}
+  };
+  acts.appendChild(br);
+  return d;
+}
+async function toggleErrorLesson(id,btn,box){
+  if(box.style.display===""){box.style.display="none";return;}
+  box.style.display="";
+  if(box.dataset.loaded)return;
+  box.innerHTML='<div class="muted">Writing a short lesson…</div>';
+  btn.disabled=true;
+  let r=null;
+  try{r=await api("/api/writing/errors/"+id+"/explain",{method:"POST"});}
+  catch(e){box.innerHTML='<div class="muted">✗ '+escapeHtml(e.message||"error")+'</div>';
+    btn.disabled=false;return;}
+  const L=r.lesson, esc=escapeHtml;
+  box.innerHTML='<div class="lsrule">▸ '+esc(L.rule||"")+'</div>'+
+    '<div class="lspot" style="margin-top:9px"><b>Por qué te pasa</b><div>'+esc(L.why||"")+'</div></div>'+
+    '<div style="margin-top:8px">'+(L.examples||[]).map(x=>
+      '<div style="margin-bottom:5px">'+esc(x.en)+'<div class="muted">'+esc(x.es)+'</div></div>').join("")+'</div>'+
+    '<div class="lsdrill" id="drill'+id+'"></div>'+
+    (L.remember?'<div class="lsremember">💡 '+esc(L.remember)+'</div>':'');
+  const dw=box.querySelector(".lsdrill");
+  (L.drill||[]).forEach(p=>{
+    const row=document.createElement("div");row.style.marginTop="7px";
+    row.innerHTML='<div>'+esc(p.prompt)+'</div>'+
+      '<div class="muted lsans" style="display:none;color:var(--accent);font-weight:600">'+esc(p.answer)+'</div>';
+    const b=document.createElement("button");b.className="btn sm";b.textContent="Show";
+    b.style.marginTop="4px";
+    b.onclick=()=>{row.querySelector(".lsans").style.display="";b.remove();};
+    row.appendChild(b);dw.appendChild(row);
+  });
+  box.dataset.loaded="1";btn.disabled=false;btn.textContent="📘 Explanation";
+}
+function catLabel(cat,summary){
+  const s=(summary||[]).find(x=>x.category===cat);return s?s.label:cat;
+}
+function showSection(sec){
+  document.querySelectorAll(".navbtn").forEach(b=>b.classList.toggle("active",b.dataset.sec===sec));
+  document.getElementById("readingNav").style.display=(sec==="reading")?"flex":"none";
+  closeAllOverlays();
+  S.currentModule=sec;
+  if(sec==="decks")openDecks();
+  else if(sec==="writing")openWriting();
+  else if(sec==="stats")openStats();
+  else if(sec==="lessons")openLessons();
+  else if(sec==="test")openTest();
+  else {refreshDueBadge();updateStreak();}  // 'reading' = base view
+}
+/* ---------- Level test ---------- */
+async function openTest(){
+  document.getElementById("testOverlay").style.display="flex";
+  document.getElementById("testIntro").style.display="";
+  document.getElementById("testQ").style.display="none";
+  document.getElementById("testResult").style.display="none";
+  // "último resultado" es un recordatorio: sin él la sección funciona igual
+  try{const l=await api("/api/test/last");
+    document.getElementById("testLast").textContent=(l&&l.level)?("Last result: "+l.level+" ("+l.correct+"/"+l.total+")"):"";
+  }catch(e){}
+}
+async function startTest(){
+  let f;try{f=await api("/api/test/form");}catch(e){return;}
+  S.test={form_id:f.form_id,questions:f.questions,pos:0,answers:[]};
+  document.getElementById("testIntro").style.display="none";
+  document.getElementById("testResult").style.display="none";
+  document.getElementById("testQ").style.display="";
+  showQuestion();
+}
+function showQuestion(){
+  const t=S.test,q=t.questions[t.pos];
+  document.getElementById("testProg").textContent="Question "+(t.pos+1)+" of "+t.questions.length;
+  document.getElementById("testQuestion").textContent=q.q;
+  const box=document.getElementById("testOpts");box.innerHTML="";
+  q.opts.forEach((o,i)=>{const b=document.createElement("button");b.className="btn";b.style.textAlign="left";
+    b.textContent=o;b.onclick=()=>answerQuestion(i);box.appendChild(b);});
+}
+function answerQuestion(i){
+  S.test.answers[S.test.pos]=i;S.test.pos++;
+  if(S.test.pos<S.test.questions.length)showQuestion();else finishTest();
+}
+async function finishTest(){
+  let r;try{r=await api("/api/test/score",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({form_id:S.test.form_id,answers:S.test.answers})});}catch(e){return;}
+  document.getElementById("testQ").style.display="none";
+  document.getElementById("testResult").style.display="";
+  document.getElementById("testLevel").textContent=r.level;
+  document.getElementById("testScore").textContent=r.correct+" / "+r.total+" correct";
+}
+/* --- Adaptive test --- */
+function startAdaptive(){
+  S.adaptive={answers:[]};
+  document.getElementById("testIntro").style.display="none";
+  document.getElementById("testResult").style.display="none";
+  document.getElementById("testQ").style.display="";
+  nextAdaptive();
+}
+async function nextAdaptive(){
+  let r;try{r=await api("/api/test/adaptive",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({answers:S.adaptive.answers})});}catch(e){return;}
+  if(r.done){
+    document.getElementById("testQ").style.display="none";
+    document.getElementById("testResult").style.display="";
+    document.getElementById("testLevel").textContent=r.level;
+    document.getElementById("testScore").textContent="Adaptive · "+r.asked+" questions";
+    return;
+  }
+  const q=r.question;
+  document.getElementById("testProg").textContent="Question "+r.asked+" · adaptive ("+q.level+")";
+  document.getElementById("testQuestion").textContent=q.q;
+  const box=document.getElementById("testOpts");box.innerHTML="";
+  q.opts.forEach((o,i)=>{const b=document.createElement("button");b.className="btn";b.style.textAlign="left";
+    b.textContent=o;b.onclick=()=>{S.adaptive.answers.push({qid:q.id,choice:i});nextAdaptive();};box.appendChild(b);});
+}
+function learnTab(t){
+  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.t===t));
+  ["repaso","palabras","stats"].forEach(x=>{
+    const el=document.getElementById("tab-"+x);if(el)el.style.display=(x===t)?"":"none";});
+}
+async function loadReview(mode){
+  const url=(mode==="new")?"/api/vocab/new?limit=10"
+    :"/api/vocab/due"+(mode?"?ahead=true":"");
+  try{S.review.queue=await api(url);}catch(e){S.review.queue=[];}
+  S.review.pos=0;
+  if(mode&&!S.review.queue.length)toast("Nothing left to study right now.");
+  showCard();
+}
+/* La pantalla de "no hay nada" mentía: decía "no words due today" aunque
+   acabaras de guardar palabras que el candado diario dejaba fuera. Ahora
+   dice qué pasa y da el botón para estudiarlas igualmente. */
+async function updateReviewEmpty(){
+  let s=null;try{s=await api("/api/vocab/stats");}catch(e){}
+  const t=document.getElementById("reviewEmptyTitle");
+  const m=document.getElementById("reviewEmptyMsg");
+  const b=document.getElementById("btnNewWords");
+  if(!s){m.textContent="No words due today.";b.style.display="none";return;}
+  const bloqueadas=(s.new||0)>0&&(s.new_today||0)>=(s.new_limit||20);
+  b.style.display=(s.new||0)>0?"":"none";
+  if(bloqueadas){
+    t.textContent="Daily new-word limit reached";
+    m.textContent="You've started "+s.new_today+" new words today (limit "+s.new_limit+"). "+
+      s.new+" you saved are still waiting — study them now if you want.";
+  }else if((s.new||0)>0){
+    t.textContent="Nothing due right now";
+    m.textContent=s.new+" saved words haven't been studied yet.";
+  }else{
+    t.textContent="All caught up 🎉";
+    m.textContent="No words due today. Add more while you read, or come back tomorrow.";
+  }
+}
+/* SM-2 espejo: previsualiza en los botones lo que hará el servidor.
+   DEBE seguir a core._sm2 — si se desincroniza, el botón promete "3 d" y el
+   servidor programa otra cosa. */
+const STEPS_GOOD=[0,1,2,4,7], STEPS_EASY=[2,4,7,12], EASE_MAX=3.0, INTERVAL_MAX=365;
+function sm2(ease,interval,reps,grade){
+  ease=ease||2.5;interval=interval||0;reps=reps||0;
+  if(grade==="again")return[Math.max(1.3,ease-0.2),0,0];
+  if(grade==="hard")return[Math.max(1.3,ease-0.15),
+    reps<2?0:(reps<STEPS_GOOD.length?1:Math.max(1,Math.round(interval*1.2))),reps+1];
+  if(grade==="easy")ease=Math.min(EASE_MAX,ease+0.15);
+  reps+=1;
+  const steps=(grade==="easy")?STEPS_EASY:STEPS_GOOD;
+  const iv=(reps<=steps.length)?steps[reps-1]
+    :Math.round(interval*ease*(grade==="easy"?1.15:1));
+  return[ease,Math.max(0,Math.min(INTERVAL_MAX,iv)),reps];
+}
+function ivLabel(d){return d<=0?"hoy":d===1?"1 d":d<30?d+" d":Math.round(d/30)+" mo";}
+function gradeLabels(c,ids){["again","hard","good","easy"].forEach((g,k)=>{const el=document.getElementById(ids[k]);if(el)el.textContent=ivLabel(sm2(c.ease,c.interval_days,c.reps,g)[1]);});}
+function setBadge(elId,reps){const el=document.getElementById(elId);if(!el)return;const nw=(reps||0)<1;el.className="badge "+(nw?"new":"review");el.textContent=nw?"New":"Review";}
+function queueCounts(q,pos){let nw=0,rv=0;for(let i=pos;i<q.length;i++)((q[i].reps||0)>=1?rv++:nw++);return"New: "+nw+" · Review: "+rv;}
+function showCard(){
+  const q=S.review.queue,i=S.review.pos;
+  const empty=document.getElementById("reviewEmpty"),card=document.getElementById("reviewCard");
+  if(i>=q.length){empty.style.display="";card.style.display="none";updateReviewEmpty();return;}
+  empty.style.display="none";card.style.display="flex";
+  const c=q[i];
+  setBadge("rcBadge",c.reps);document.getElementById("rcCounter").textContent=queueCounts(q,i);
+  gradeLabels(c,["ivAgain","ivHard","ivGood","ivEasy"]);
+  document.getElementById("rcBack").style.display="none";
+  document.getElementById("rcReveal").style.display="flex";
+  document.getElementById("rcGrades").style.display="none";
+  document.getElementById("rcCount").textContent="Card "+(i+1)+" of "+q.length;
+  S.review.typedOk=null;
+  renderCardFront(c);
+}
+/* Cara frontal según el modo. Clave: en producir y rellenar NO se muestra ni se
+   pronuncia el inglés — sería cantarte la respuesta. */
+function renderCardFront(c){
+  const modo=modeForCard(c);
+  const term=document.getElementById("rcTerm"), prompt=document.getElementById("rcPrompt");
+  const typeWrap=document.getElementById("rcTypeWrap"), inp=document.getElementById("rcInput");
+  const verdict=document.getElementById("rcVerdict"), listen=document.getElementById("rcListen");
+  const reveal=document.getElementById("rcRevealBtn");
+  inp.value="";inp.disabled=false;inp.className="typein";
+  verdict.textContent="";verdict.className="verdict";
+  if(modo==="recall"){
+    term.style.display="";term.textContent=cardFront(c);
+    prompt.style.display="none";typeWrap.style.display="none";
+    listen.style.display="";reveal.textContent="Show answer";
+    S.review.listenText=cardFront(c);
+    speakText(cardFront(c));
+    return;
+  }
+  term.style.display="none";
+  typeWrap.style.display="";
+  listen.style.display="none";          // escuchar el inglés sería la respuesta
+  reveal.textContent="I don't know";
+  if(modo==="cloze"){
+    prompt.style.display="";
+    prompt.innerHTML=escapeHtml(c.cloze.sentence).replace("_____","<b>_____</b>")+
+      '<div class="muted" style="margin-top:5px">'+escapeHtml(c.cloze.translation||"")+'</div>';
+  }else{
+    prompt.style.display="";
+    prompt.innerHTML='<b>'+escapeHtml(cardTrans(c)||"(sin traducción)")+'</b>'+
+      '<div class="muted" style="margin-top:5px">Write it in English</div>';
+  }
+  setTimeout(()=>inp.focus(),60);
+}
+function revealCard(){
+  document.getElementById("rcBack").style.display="";
+  document.getElementById("rcReveal").style.display="none";
+  document.getElementById("rcGrades").style.display="flex";
+  const c=S.review.queue[S.review.pos];if(!c)return;
+  document.getElementById("rcTerm").style.display="";
+  document.getElementById("rcTerm").textContent=cardFront(c);
+  document.getElementById("rcTrans").textContent=cardTrans(c)||"(no translation)";
+  document.getElementById("rcEx").textContent=c.simple_example||c.note||c.example||"";
+  const src=document.getElementById("rcSrc");
+  const hayCorto=!!(c.simple_example||c.note);
+  src.textContent=(hayCorto&&c.example)?("Del libro: "+c.example):"";
+  src.style.display=src.textContent?"":"none";
+  document.getElementById("rcListen").style.display="";
+  S.review.listenText=cardFront(c);
+  speakText(c.simple_example||c.note||cardFront(c));
+}
+async function gradeCard(grade){
+  const c=S.review.queue[S.review.pos];if(!c)return;
+  // si no se guarda, NO se avanza: perder repasos en silencio te hace creer
+  // que has estudiado cuando no se ha registrado nada
+  try{await api("/api/vocab/"+c.id+"/grade",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({grade})});}
+  catch(e){saveError("tu repaso",e);return;}
+  // intervalo 0 = "vuelve hoy": se reencola al final de la sesión. Antes solo
+  // pasaba con 'again', así que una palabra nueva nunca se repetía el mismo día.
+  const iv=sm2(c.ease,c.interval_days,c.reps,grade)[1];
+  if(iv===0){S.review.queue.push({...c,reps:(c.reps||0)+(grade==="again"?0:1),
+    ease:sm2(c.ease,c.interval_days,c.reps,grade)[0],interval_days:0});}
+  S.review.pos++;showCard();loadStats();updateStreak();
+}
+async function loadVocabFull(){
+  let list=[];
+  try{list=await api("/api/vocab");}
+  catch(e){document.getElementById("vocabFull").innerHTML=loadFailHtml("words");return;}
+  const wrap=document.getElementById("vocabFull");
+  document.getElementById("vocabCount").textContent=list.length;
+  if(!list.length){wrap.innerHTML='<div class="soon"><div class="big">No words yet</div><div>While reading, select a word and press ＋ Vocabulary.</div></div>';return;}
+  wrap.innerHTML="";
+  list.forEach(v=>{
+    const d=document.createElement("div");d.className="vrow";
+    const due=v.is_due?'<span class="badge">hoy</span>':'';
+    d.innerHTML='<span class="w">'+escapeHtml(v.term)+'</span><span class="t">'+escapeHtml(v.translation||"")+'</span>'+due+
+      '<button class="del" title="Eliminar">✕</button>';
+    d.querySelector(".del").onclick=()=>deleteWord(v.id);
+    wrap.appendChild(d);
+  });
+}
+async function deleteWord(id){
+  // sin aviso, la palabra reaparecía al recargar y parecía cosa de magia
+  try{await api("/api/vocab/"+id,{method:"DELETE"});}
+  catch(e){saveError("el borrado de la palabra",e);return;}
+  loadVocabFull();loadStats();
+}
+const LEVELS=[[0,"Seed 🌱"],[20,"A1 · Beginner"],[75,"A2 · Elementary"],[200,"B1 · Intermediate"],[500,"B2 · Upper"],[1200,"C1 · Advanced"],[3000,"C2 · Mastery"]];
+async function loadStats(){
+  let s;try{s=await api("/api/vocab/stats");}catch(e){return;}
+  setDue(s.due);
+  document.getElementById("stTotal").textContent=s.total;
+  document.getElementById("stDue").textContent=s.due;
+  document.getElementById("stLearned").textContent=s.learned;
+  // nivel según total de palabras trabajadas
+  let idx=0;for(let i=0;i<LEVELS.length;i++){if(s.total>=LEVELS[i][0])idx=i;}
+  document.getElementById("lvlName").textContent=LEVELS[idx][1];
+  const cur=LEVELS[idx][0],nx=LEVELS[idx+1];
+  document.getElementById("lvlMeter").style.width=(nx?Math.min(100,((s.total-cur)/(nx[0]-cur))*100):100)+"%";
+  document.getElementById("lvlNext").textContent=nx?((nx[0]-s.total)+" words to "+nx[1]):"Max level!";
+  // barra apilada de dominio
+  const parts=[["New",s.new,"#b8b2a6"],["Learning",s.learning,"#c9a86a"],["Learned",s.learned,"#3f8f6f"]];
+  const tot=Math.max(1,s.total);
+  document.getElementById("stStack").innerHTML=parts.map(p=>'<span style="width:'+(p[1]/tot*100)+'%;background:'+p[2]+'"></span>').join("");
+  document.getElementById("stLegend").innerHTML=parts.map(p=>'<span><span class="dot" style="background:'+p[2]+'"></span>'+p[0]+" ("+p[1]+")</span>").join("");
+  // gráfica de 14 días
+  const days=[],today=new Date();
+  for(let i=13;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i);const k=d.toISOString().slice(0,10);days.push([k,(s.history&&s.history[k])||0]);}
+  const max=Math.max(1,...days.map(d=>d[1]));
+  document.getElementById("dayChart").innerHTML=days.map((d,i)=>'<div class="bar'+(i===13?" today":"")+'" style="height:'+(d[1]/max*100)+'%" title="'+d[0]+": "+d[1]+' palabras"></div>').join("");
+}
+
+/* ---------- Decks (Refold) ---------- */
+const DECK_ICON={words:"🔤",phrases:"💬",phrasal:"🔗",verbs:"⚡",irregular:"⚡",connectors:"🔀"};
+function toggleDeckOpts(){const p=document.getElementById("deckOpts");p.style.display=p.style.display==="none"?"flex":"none";}
+function noteEnglish(note){if(!note)return "";return note.split("—")[0].trim();}
+function openDecks(){
+  document.getElementById("decksOverlay").style.display="flex";stopSpeech();S.isPlaying=false;
+  const pb=document.getElementById("playBtn");if(pb)pb.textContent="▶ Read";
+  loadVoices();deckList();  // misma voz global (Piper) en decks
+}
+function closeDecks(){document.getElementById("decksOverlay").style.display="none";stopSpeech();}
+async function deckList(){
+  document.getElementById("deckBack").style.display="none";
+  document.getElementById("deckReview").style.display="none";
+  const home=document.getElementById("deckHome");home.style.display="";
+  home.innerHTML='<div class="muted">Loading…</div>';
+  api("/api/study/limits").then(L=>{
+    const el=document.getElementById("deckBudget");if(!el)return;
+    el.textContent=L.review_limit
+      ? (L.reviews_today+"/"+L.review_limit+" reviews today"+
+         (L.backlog.due?" · "+L.backlog.due+" waiting":""))
+      : "no review limit";
+  }).catch(()=>{});
+  let decks=[];
+  try{decks=await api("/api/decks");}
+  catch(e){home.innerHTML=loadFailHtml("decks");return;}
+  if(!decks.length){home.innerHTML='<div class="soon"><div class="big">No decks yet</div><div>Decks are generated on the server.</div></div>';return;}
+  home.innerHTML="";
+  decks.forEach(d=>{
+    const el=document.createElement("div");el.className="deckcard";
+    const NEW_PER_DAY=10;
+    const capped=(d.new_today||0)>=NEW_PER_DAY&&(d.unseen||0)>0;
+    let sub=escapeHtml(d.description||"")+' · '+d.total+' cards'+(d.due?(' · '+d.due+' due'):'');
+    if(d.unseen)sub+=' · '+d.unseen+' never seen';
+    // Sin esto, "Review" dejaba de ofrecer tarjetas nuevas y no había forma de
+    // saber que era el límite diario y no un fallo.
+    const aviso=capped?'<div class="dcap">Daily new-card limit reached ('+d.new_today+
+      ' today). '+d.unseen+' still unseen.</div>':'';
+    el.innerHTML='<div class="di">'+(DECK_ICON[d.key]||"🃏")+'</div>'+
+      '<div class="dinfo"><div class="dn">'+escapeHtml(d.name)+'</div><div class="dd">'+sub+'</div>'+aviso+'</div>'+
+      '<div style="display:flex;gap:6px;flex:0 0 auto;flex-wrap:wrap;justify-content:flex-end">'+
+      '<button class="btn gold" data-m="smart">Review</button>'+
+      (d.unseen?'<button class="btn sm" data-m="new">＋ New</button>':'')+
+      '<button class="btn sm" data-m="all">All</button></div>';
+    el.querySelector('[data-m="smart"]').onclick=()=>openDeck(d.id,"smart");
+    el.querySelector('[data-m="all"]').onclick=()=>openDeck(d.id,"all");
+    const bn=el.querySelector('[data-m="new"]');if(bn)bn.onclick=()=>openDeck(d.id,"new");
+    home.appendChild(el);
+  });
+}
+async function openDeck(id,mode){
+  S.deck.id=id;S.deck.pos=0;
+  const url=(mode==="all")?"/api/decks/"+id+"/study"
+    :(mode==="new")?"/api/decks/"+id+"/new?limit=10"
+    // sin new_limit: el tope lo decide el mazo (se ajusta en 🎚), no el cliente
+    :"/api/decks/"+id+"/due"+(mode==="ahead"?"?ahead=true":"");
+  try{S.deck.queue=await api(url);}catch(e){S.deck.queue=[];}
+  document.getElementById("deckHome").style.display="none";
+  document.getElementById("deckReview").style.display="";
+  document.getElementById("deckBack").style.display="";
+  if(mode==="ahead"&&!S.deck.queue.length)toast("Nothing left to bring forward.");
+  if(mode==="new"&&!S.deck.queue.length)toast("No unseen cards left in this deck.");
+  showDeckCard();
+}
+function showDeckCard(){
+  const q=S.deck.queue,i=S.deck.pos;
+  const empty=document.getElementById("deckRevEmpty"),card=document.getElementById("deckRevCard");
+  if(i>=q.length){empty.style.display="";card.style.display="none";updateDeckEmpty();return;}
+  empty.style.display="none";card.style.display="flex";
+  const c=q[i];
+  setBadge("dBadge",c.reps);document.getElementById("dCounter").textContent=queueCounts(q,i);
+  // la situación de uso ("Tiendas") es contexto útil: va como etiqueta, no
+  // colada en el campo del ejemplo
+  const dc=document.getElementById("dCat");
+  dc.textContent=c.category||"";dc.style.display=c.category?"":"none";
+  gradeLabels(c,["dIvAgain","dIvHard","dIvGood","dIvEasy"]);
+  document.getElementById("dTerm").textContent=c.front;
+  document.getElementById("dTrans").textContent=c.translation||"";
+  document.getElementById("dNote").textContent=c.note||"";
+  document.getElementById("dBack").style.display="none";
+  document.getElementById("dReveal").style.display="flex";
+  document.getElementById("dGrades").style.display="none";
+  document.getElementById("dExBtn").style.display="none";
+  document.getElementById("dCount").textContent="Card "+(i+1)+" of "+q.length;
+  playDeckAudio();
+}
+function playDeckAudio(){
+  const c=S.deck.queue[S.deck.pos];if(!c)return;
+  const a=audioEl();a.onended=null;a.src=ttsUrl(c.front,"en");a.play().catch(e=>{});
+}
+function playDeckExample(){
+  const c=S.deck.queue[S.deck.pos];if(!c)return;const en=noteEnglish(c.note);
+  if(en){const a=audioEl();a.onended=null;a.src=ttsUrl(en,"en");a.play().catch(e=>{});}
+}
+function deckReveal(){
+  document.getElementById("dBack").style.display="";
+  document.getElementById("dReveal").style.display="none";
+  document.getElementById("dGrades").style.display="flex";
+  const c=S.deck.queue[S.deck.pos];const en=noteEnglish(c&&c.note);
+  document.getElementById("dExBtn").style.display=en?"":"none";
+  if(en)playDeckExample();  // lee también la frase de ejemplo
+}
+async function deckGrade(grade){
+  const c=S.deck.queue[S.deck.pos];if(!c)return;
+  // igual que en gradeCard: sin guardado confirmado no se pasa de tarjeta
+  try{await api("/api/decks/cards/"+c.id+"/grade",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({grade})});}
+  catch(e){saveError("tu repaso",e);return;}
+  const iv=sm2(c.ease,c.interval_days,c.reps,grade)[1];
+  if(iv===0){S.deck.queue.push({...c,reps:(c.reps||0)+(grade==="again"?0:1),
+    ease:sm2(c.ease,c.interval_days,c.reps,grade)[0],interval_days:0});}
+  S.deck.pos++;showDeckCard();updateStreak();
+}
+
+/* ---------- Time tracking (active vs idle, per module) ---------- */
+let lastInteraction=Date.now();
+["mousedown","keydown","scroll","mousemove","touchstart"].forEach(ev=>
+  document.addEventListener(ev,()=>{lastInteraction=Date.now();},{passive:true}));
+setInterval(()=>{
+  if(document.visibilityState!=="visible")return;         // pestaña oculta = no cuenta
+  const active=(Date.now()-lastInteraction<60000)?15:0;    // activo si hubo interacción <60s
+  fetch("/api/activity",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({module:S.currentModule,active,open:15})});
+},15000);
+
+document.querySelectorAll("#modeBar .mbtn").forEach(b=>
+  b.onclick=()=>setStudyMode(b.dataset.mode));
+try{S.review.mode=localStorage.getItem("studyMode")||"recall";}catch(e){S.review.mode="recall";}
+document.querySelectorAll("#modeBar .mbtn").forEach(b=>
+  b.classList.toggle("active",b.dataset.mode===S.review.mode));
+document.getElementById("modeHint").textContent=MODE_HINTS[S.review.mode]||"";
+loadBooks();
+updateChapNav();   // sin libro abierto, ‹ › y ✨ arrancan apagados
+loadVoices();
+refreshDueBadge();
+updateStreak();
+loadNavAlerts();
+refreshAiDot();
+window.addEventListener("beforeunload",saveState);
+</script>
+</body>
+</html>

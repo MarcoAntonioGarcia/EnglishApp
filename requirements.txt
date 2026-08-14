@@ -1,0 +1,13 @@
+# --- App web (versión activa) ---
+fastapi
+uvicorn[standard]
+python-multipart
+pdfminer.six
+ebooklib
+beautifulsoup4
+google-genai
+genanki
+pyttsx3
+
+# --- App de escritorio (versión previa, main.py) ---
+PyQt6

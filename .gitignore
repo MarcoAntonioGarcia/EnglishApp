@@ -1,0 +1,29 @@
+# Secretos / config local — NUNCA subir (contiene tu API key)
+config.local.json
+.env
+
+# Datos locales y generados
+database.db
+database.db-journal
+webapp.log
+*.log
+assets/tts_cache/
+assets/converted/
+# Modelos de voz Piper: ~175 MB. GitHub rechaza archivos de más de 100 MB y
+# además se descargan aparte. No van en el repo.
+assets/piper/
+# Tus libros. Los EPUB comerciales (Atomic Habits, Deep Work) tienen derechos
+# de autor: subirlos sería distribuirlos. Los del catálogo se bajan solos.
+library/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# macOS / herramientas
+.DS_Store
+.playwright-cli/
+.vscode/
+.idea/
