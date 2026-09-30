@@ -51,7 +51,7 @@ PIPER_DIR = os.path.join(ASSETS_DIR, "piper")             # modelos de voz neura
 # Cuenta del administrador. Mientras no exista login (Fase 1) TODO el contenido
 # personal pertenece a este usuario: es el unico que hay.
 ADMIN_USER_ID = 1
-ADMIN_USERNAME = "marco"
+ADMIN_USERNAME = "marco.garcia"
 
 # Voces neurales Piper (más humanas). value 'piper:<modelo>'. Solo se listan las
 # que tengan su .onnx descargado en assets/piper/.
