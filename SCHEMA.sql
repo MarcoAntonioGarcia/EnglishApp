@@ -18,8 +18,14 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT    NOT NULL DEFAULT '',       -- vacio hasta la Fase 2
     role          TEXT    NOT NULL DEFAULT 'user',   -- 'admin' | 'user'
     status        TEXT    NOT NULL DEFAULT 'pending',-- 'pending' | 'active' | 'blocked'
+    email         TEXT    COLLATE NOCASE,          -- alta por correo (Fase 2)
+    -- Key de Gemini PROPIA de cada usuario: la cuota del free tier es por
+    -- cuenta, asi que cada uno pone la suya. Es SU credencial: no se escribe
+    -- en logs y al mostrarla de vuelta solo se enseñan los ultimos 4 caracteres.
+    gemini_api_key TEXT   NOT NULL DEFAULT '',
     created_at    TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
     UNIQUE (username),
+    UNIQUE (email),
     CHECK (role   IN ('admin', 'user')),
     CHECK (status IN ('pending', 'active', 'blocked'))
 );
@@ -71,10 +77,12 @@ CREATE INDEX IF NOT EXISTS idx_sentences_chapter
 -- Un solo registro por libro → última posición conocida.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS reading_state (
-    book_id         INTEGER PRIMARY KEY,      -- 1:1 con books
+    user_id         INTEGER NOT NULL DEFAULT 1,
+    book_id         INTEGER NOT NULL,         -- 1:1 con books POR usuario
     chapter_index   INTEGER NOT NULL DEFAULT 0,
     sentence_index  INTEGER NOT NULL DEFAULT 0,
     updated_at      TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    PRIMARY KEY (user_id, book_id),
     FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
 );
 
@@ -83,6 +91,7 @@ CREATE TABLE IF NOT EXISTS reading_state (
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS vocabulary (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id       INTEGER NOT NULL DEFAULT 1,
     book_id       INTEGER,                    -- de qué libro salió (opcional)
     sentence_id   INTEGER,                    -- contexto: la oración origen (opcional)
     term          TEXT    NOT NULL,           -- palabra o frase seleccionada
@@ -157,8 +166,10 @@ CREATE INDEX IF NOT EXISTS idx_deckcards_due ON deck_cards (deck_id, due);
 -- study_log: un registro por día con cuántos repasos se hicieron -> rachas.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS study_log (
-    day      TEXT    PRIMARY KEY,           -- 'YYYY-MM-DD'
-    reviews  INTEGER NOT NULL DEFAULT 0
+    user_id  INTEGER NOT NULL DEFAULT 1,
+    day      TEXT    NOT NULL,              -- 'YYYY-MM-DD'
+    reviews  INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, day)
 );
 
 -- ---------------------------------------------------------------------------
@@ -166,15 +177,18 @@ CREATE TABLE IF NOT EXISTS study_log (
 -- session_log: segundos con la app ABIERTA/visible por día (para procrastinación).
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS activity_log (
+    user_id INTEGER NOT NULL DEFAULT 1,
     day     TEXT    NOT NULL,
     module  TEXT    NOT NULL,               -- reading | decks | writing | flashcards | stats | lessons
     seconds INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (day, module)
+    PRIMARY KEY (user_id, day, module)
 );
 
 CREATE TABLE IF NOT EXISTS session_log (
-    day          TEXT    PRIMARY KEY,
-    open_seconds INTEGER NOT NULL DEFAULT 0
+    user_id      INTEGER NOT NULL DEFAULT 1,
+    day          TEXT    NOT NULL,
+    open_seconds INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, day)
 );
 
 -- ---------------------------------------------------------------------------
@@ -182,10 +196,11 @@ CREATE TABLE IF NOT EXISTS session_log (
 -- scope: 'vocab' | 'deck:<id>'
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS new_intro (
-    day    TEXT    NOT NULL,
-    scope  TEXT    NOT NULL,
-    count  INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (day, scope)
+    user_id INTEGER NOT NULL DEFAULT 1,
+    day     TEXT    NOT NULL,
+    scope   TEXT    NOT NULL,
+    count   INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, day, scope)
 );
 
 -- ---------------------------------------------------------------------------
@@ -193,6 +208,7 @@ CREATE TABLE IF NOT EXISTS new_intro (
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS test_results (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL DEFAULT 1,
     level      TEXT,
     correct    INTEGER,
     total      INTEGER,
@@ -203,8 +219,10 @@ CREATE TABLE IF NOT EXISTS test_results (
 -- lesson_done: lecciones completadas (progreso de la ruta).
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS lesson_done (
-    lesson_id  TEXT PRIMARY KEY,
-    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+    user_id    INTEGER NOT NULL DEFAULT 1,
+    lesson_id  TEXT    NOT NULL,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    PRIMARY KEY (user_id, lesson_id)
 );
 
 -- ---------------------------------------------------------------------------
@@ -213,6 +231,7 @@ CREATE TABLE IF NOT EXISTS lesson_done (
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS writings (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id       INTEGER NOT NULL DEFAULT 1,
     title         TEXT,
     original      TEXT    NOT NULL,
     corrected     TEXT,
@@ -225,6 +244,7 @@ CREATE TABLE IF NOT EXISTS writings (
 
 CREATE TABLE IF NOT EXISTS writing_errors (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL DEFAULT 1,
     writing_id  INTEGER,
     original    TEXT,
     correction  TEXT,
@@ -232,3 +252,36 @@ CREATE TABLE IF NOT EXISTS writing_errors (
     created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
     FOREIGN KEY (writing_id) REFERENCES writings(id) ON DELETE CASCADE
 );
+
+-- ---------------------------------------------------------------------------
+-- custom_lessons: lecciones generadas a partir de los errores de UN usuario.
+-- Vivia en core._migrate(); se trae aqui para que el esquema este en un solo
+-- sitio. Cuesta una llamada a la IA, por eso se guarda.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS custom_lessons (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL DEFAULT 1,
+    category    TEXT    NOT NULL,
+    title       TEXT    NOT NULL,
+    level       TEXT,
+    payload     TEXT    NOT NULL,              -- la leccion completa en JSON
+    error_count INTEGER NOT NULL DEFAULT 0,
+    done        INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+-- ---------------------------------------------------------------------------
+-- user_settings: preferencias de estudio POR usuario (review_limit,
+-- vocab_new_limit...). Sustituye a la tabla global app_settings: un tope de
+-- repasos es una decision personal, no de la plataforma.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_settings (
+    user_id INTEGER NOT NULL DEFAULT 1,
+    key     TEXT    NOT NULL,
+    value   TEXT    NOT NULL,
+    PRIMARY KEY (user_id, key)
+);
+
+-- Los indices sobre user_id se crean en la migracion (core._migrate_multiuser),
+-- no aqui: este fichero se ejecuta ANTES que las migraciones y en una base
+-- antigua la columna todavia no existe. Mismo motivo que idx_vocab_due.

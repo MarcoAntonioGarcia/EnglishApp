@@ -158,6 +158,7 @@ class DatabaseManager:
             self.conn.executescript(script)
             self.conn.commit()
         self._migrate()
+        self._migrate_multiuser()
 
     def _migrate(self) -> None:
         """Añade columnas nuevas a DBs ya existentes (SQLite no tiene ADD COLUMN IF NOT EXISTS)."""
@@ -231,19 +232,6 @@ class DatabaseManager:
                                               (candidato, row["id"]))
                         except sqlite3.IntegrityError:
                             pass          # ya había otra fila con esa ruta
-            # Lecciones generadas a partir de TUS errores. Se guardan porque
-            # cuestan una llamada a la IA y porque el valor está en volver a
-            # ellas: una lección que no puedes releer no corrige nada.
-            self.conn.execute(
-                "CREATE TABLE IF NOT EXISTS custom_lessons ("
-                "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-                "category TEXT NOT NULL,"
-                "title TEXT NOT NULL,"
-                "level TEXT,"
-                "payload TEXT NOT NULL,"          # la lección completa en JSON
-                "error_count INTEGER NOT NULL DEFAULT 0,"
-                "done INTEGER NOT NULL DEFAULT 0,"
-                "created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')))")
             # Tope de tarjetas NUEVAS por mazo. No todos los mazos merecen el
             # mismo ritmo: 10 nuevas al día en un mazo de 34 tarjetas lo agota
             # en tres días y luego solo genera repasos.
@@ -254,9 +242,6 @@ class DatabaseManager:
                         "ALTER TABLE decks ADD COLUMN new_limit INTEGER NOT NULL DEFAULT 10")
                 except sqlite3.OperationalError:
                     pass
-            self.conn.execute(
-                "CREATE TABLE IF NOT EXISTS app_settings ("
-                "key TEXT PRIMARY KEY, value TEXT NOT NULL)")
             # 'category' en deck_cards: la situación de uso ("Tiendas",
             # "Restaurante"). Estaba metida en 'note', que es el campo del
             # EJEMPLO, así que la tarjeta mostraba "Tiendas" donde debía ir una
@@ -306,6 +291,126 @@ class DatabaseManager:
                 "UPDATE writings SET corrected=NULL, level=NULL "
                 "WHERE corrected LIKE '[error de IA:%' OR corrected LIKE '[define GEMINI_API_KEY%'"
             )
+            self.conn.commit()
+
+    # Tablas con id propio: basta con añadir la columna. Todo lo que ya hay
+    # dentro es del admin, que hasta ahora era el único usuario.
+    # ALTER deja user_id en la ÚLTIMA posición, mientras que en una base recién
+    # creada va en la segunda. Da igual: no hay ni un INSERT posicional ni un
+    # acceso row[0] en el código — todo va por nombre con sqlite3.Row.
+    _MU_ALTER = ("vocabulary", "test_results", "writings", "writing_errors",
+                 "custom_lessons")
+
+    # Tablas cuya PRIMARY KEY tiene que pasar a incluir user_id: "una fila por
+    # día" o "una fila por lección" deja de ser único en cuanto hay dos
+    # usuarios, y el segundo pisaría las filas del primero. SQLite no permite
+    # cambiar una PK con ALTER, así que hay que reconstruirlas.
+    _MU_REBUILD = {
+        "reading_state": ("book_id", "chapter_index", "sentence_index", "updated_at"),
+        "study_log":     ("day", "reviews"),
+        "activity_log":  ("day", "module", "seconds"),
+        "session_log":   ("day", "open_seconds"),
+        "new_intro":     ("day", "scope", "count"),
+        "lesson_done":   ("lesson_id", "created_at"),
+    }
+
+    _MU_INDICES = (
+        "CREATE INDEX IF NOT EXISTS idx_vocab_user     ON vocabulary     (user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_writings_user  ON writings       (user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_werrors_user   ON writing_errors (user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_tests_user     ON test_results   (user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_customles_user ON custom_lessons (user_id)",
+    )
+
+    def _ddl_de(self, tabla: str) -> str:
+        """El CREATE TABLE de una tabla, leído de SCHEMA.sql.
+
+        El esquema vive en un solo sitio: copiarlo aquí sería garantizar que un
+        día deje de coincidir con el de una base recién creada."""
+        with open(SCHEMA_PATH, "r", encoding="utf-8") as fh:
+            m = re.search(
+                r"CREATE TABLE IF NOT EXISTS %s\s*\(.*?\n\);" % re.escape(tabla),
+                fh.read(), re.S)
+        if not m:
+            raise RuntimeError(f"SCHEMA.sql no define la tabla {tabla}")
+        return m.group(0)
+
+    def _rebuild(self, tabla: str, columnas: tuple, con_user_id: bool = True) -> None:
+        """Recrea la tabla con la forma que dicta SCHEMA.sql y le pasa los datos.
+
+        Procedimiento estándar de SQLite para cambiar una PRIMARY KEY: renombrar
+        la vieja, crear la nueva, copiar, borrar."""
+        viejo = f"{tabla}__pre_mu"
+        cols = ", ".join(columnas)
+        self.conn.execute(f"ALTER TABLE {tabla} RENAME TO {viejo}")
+        self.conn.execute(self._ddl_de(tabla))
+        if con_user_id:
+            self.conn.execute(
+                f"INSERT INTO {tabla} (user_id, {cols}) SELECT ?, {cols} FROM {viejo}",
+                (ADMIN_USER_ID,))
+        else:
+            self.conn.execute(
+                f"INSERT INTO {tabla} ({cols}) SELECT {cols} FROM {viejo}")
+        self.conn.execute(f"DROP TABLE {viejo}")
+
+    def _migrate_multiuser(self) -> None:
+        """Fase 1 del paso a multiusuario: user_id en las tablas personales.
+
+        Todo lo ya guardado pasa a ser del admin, que hasta ahora era el único
+        usuario. El CONTENIDO (books, chapters, sentences, decks y el texto de
+        deck_cards) no lleva user_id: lo cura el admin y lo comparten todos.
+
+        Todavía no hay login. user_id va con DEFAULT 1, así que las consultas
+        que aún no filtran siguen dando lo mismo mientras se migra el código.
+        """
+        with self._lock:
+            hecho = "user_id" in {
+                r["name"] for r in self.conn.execute("PRAGMA table_info(vocabulary)")}
+            if not hecho:
+                # foreign_keys no se puede cambiar dentro de una transacción:
+                # hay que apagarlo antes del BEGIN y encenderlo tras el COMMIT.
+                self.conn.execute("PRAGMA foreign_keys = OFF")
+                previo = self.conn.isolation_level
+                self.conn.isolation_level = None
+                try:
+                    self.conn.execute("BEGIN")
+                    for tabla in self._MU_ALTER:
+                        self.conn.execute(
+                            f"ALTER TABLE {tabla} ADD COLUMN "
+                            f"user_id INTEGER NOT NULL DEFAULT {ADMIN_USER_ID}")
+                    for tabla, columnas in self._MU_REBUILD.items():
+                        self._rebuild(tabla, columnas)
+                    # app_settings era global, pero un tope de repasos es una
+                    # decisión personal: se convierte en user_settings.
+                    if self.conn.execute(
+                            "SELECT 1 FROM sqlite_master "
+                            "WHERE type='table' AND name='app_settings'").fetchone():
+                        self.conn.execute(
+                            "INSERT INTO user_settings (user_id, key, value) "
+                            "SELECT ?, key, value FROM app_settings", (ADMIN_USER_ID,))
+                        self.conn.execute("DROP TABLE app_settings")
+                    # users gana email y gemini_api_key. Se reconstruye en vez de
+                    # un ALTER porque UNIQUE(email) es restricción de tabla y
+                    # ALTER no puede añadirla: una base migrada tiene que quedar
+                    # idéntica a una recién creada, o acabarán divergiendo.
+                    self._rebuild("users",
+                                  ("id", "username", "password_hash", "role",
+                                   "status", "created_at"), con_user_id=False)
+                    self.conn.execute("COMMIT")
+                except Exception:
+                    self.conn.execute("ROLLBACK")
+                    raise
+                finally:
+                    self.conn.isolation_level = previo
+                    self.conn.execute("PRAGMA foreign_keys = ON")
+                rotas = self.conn.execute("PRAGMA foreign_key_check").fetchall()
+                if rotas:
+                    raise RuntimeError(
+                        f"la migración multiusuario dejó {len(rotas)} referencias rotas")
+            # Baratos e idempotentes, se aseguran en cada arranque: en una base
+            # recién creada el bloque de arriba no llega a ejecutarse.
+            for sql in self._MU_INDICES:
+                self.conn.execute(sql)
             self.conn.commit()
 
     # --- libros -------------------------------------------------------- #
@@ -498,26 +603,28 @@ class DatabaseManager:
         }
 
     # --- estado de lectura -------------------------------------------- #
-    def save_reading_state(self, book_id: int, chapter_index: int, sentence_index: int) -> None:
+    def save_reading_state(self, book_id: int, chapter_index: int, sentence_index: int,
+                           user_id: int = ADMIN_USER_ID) -> None:
         with self._lock:
             self.conn.execute(
                 """
-                INSERT INTO reading_state (book_id, chapter_index, sentence_index, updated_at)
-                VALUES (?, ?, ?, datetime('now'))
-                ON CONFLICT(book_id) DO UPDATE SET
+                INSERT INTO reading_state (user_id, book_id, chapter_index, sentence_index, updated_at)
+                VALUES (?, ?, ?, ?, datetime('now','localtime'))
+                ON CONFLICT(user_id, book_id) DO UPDATE SET
                     chapter_index  = excluded.chapter_index,
                     sentence_index = excluded.sentence_index,
                     updated_at     = excluded.updated_at
                 """,
-                (book_id, chapter_index, sentence_index),
+                (user_id, book_id, chapter_index, sentence_index),
             )
             self.conn.commit()
 
-    def load_reading_state(self, book_id: int) -> dict:
+    def load_reading_state(self, book_id: int, user_id: int = ADMIN_USER_ID) -> dict:
         with self._lock:
             row = self.conn.execute(
-                "SELECT chapter_index, sentence_index FROM reading_state WHERE book_id = ?",
-                (book_id,),
+                "SELECT chapter_index, sentence_index FROM reading_state "
+                "WHERE user_id = ? AND book_id = ?",
+                (user_id, book_id),
             ).fetchone()
         if row is None:
             return {"chapter_index": 0, "sentence_index": 0}
@@ -618,28 +725,34 @@ class DatabaseManager:
             self._log_review_locked()
             self.conn.commit()
 
-    def _bump_new_intro_locked(self, scope) -> None:
+    def _bump_new_intro_locked(self, scope, user_id: int = ADMIN_USER_ID) -> None:
         self.conn.execute(
-            "INSERT INTO new_intro (day, scope, count) VALUES (date('now','localtime'), ?, 1) "
-            "ON CONFLICT(day, scope) DO UPDATE SET count = count + 1", (scope,))
+            "INSERT INTO new_intro (user_id, day, scope, count) "
+            "VALUES (?, date('now','localtime'), ?, 1) "
+            "ON CONFLICT(user_id, day, scope) DO UPDATE SET count = count + 1",
+            (user_id, scope))
 
-    def _new_intro_today_locked(self, scope) -> int:
+    def _new_intro_today_locked(self, scope, user_id: int = ADMIN_USER_ID) -> int:
         r = self.conn.execute(
-            "SELECT count FROM new_intro WHERE day = date('now','localtime') AND scope = ?", (scope,)
+            "SELECT count FROM new_intro "
+            "WHERE user_id = ? AND day = date('now','localtime') AND scope = ?",
+            (user_id, scope)
         ).fetchone()
         return r["count"] if r else 0
 
-    def _log_review_locked(self) -> None:
+    def _log_review_locked(self, user_id: int = ADMIN_USER_ID) -> None:
         """Registra un repaso hoy (para las rachas). Requiere el lock ya tomado."""
         self.conn.execute(
-            "INSERT INTO study_log (day, reviews) VALUES (date('now','localtime'), 1) "
-            "ON CONFLICT(day) DO UPDATE SET reviews = reviews + 1"
+            "INSERT INTO study_log (user_id, day, reviews) "
+            "VALUES (?, date('now','localtime'), 1) "
+            "ON CONFLICT(user_id, day) DO UPDATE SET reviews = reviews + 1", (user_id,)
         )
 
-    def get_streak(self) -> dict:
+    def get_streak(self, user_id: int = ADMIN_USER_ID) -> dict:
         with self._lock:
             rows = [r["day"] for r in self.conn.execute(
-                "SELECT day FROM study_log WHERE reviews > 0 ORDER BY day DESC"
+                "SELECT day FROM study_log WHERE user_id = ? AND reviews > 0 "
+                "ORDER BY day DESC", (user_id,)
             )]
             total = self.conn.execute(
                 "SELECT COALESCE(SUM(reviews),0) n FROM study_log"
@@ -750,17 +863,23 @@ class DatabaseManager:
             ).fetchone()["n"]
 
     # --- ajustes de estudio -------------------------------------------- #
-    def get_setting(self, key: str, default: str = "") -> str:
+    # Un tope de repasos es una decisión personal, así que los ajustes van por
+    # usuario. Mientras no haya login (Fase 1) el único que hay es el admin.
+    def get_setting(self, key: str, default: str = "",
+                    user_id: int = ADMIN_USER_ID) -> str:
         with self._lock:
             row = self.conn.execute(
-                "SELECT value FROM app_settings WHERE key = ?", (key,)).fetchone()
+                "SELECT value FROM user_settings WHERE user_id = ? AND key = ?",
+                (user_id, key)).fetchone()
         return row["value"] if row else default
 
-    def set_setting(self, key: str, value: str) -> None:
+    def set_setting(self, key: str, value: str,
+                    user_id: int = ADMIN_USER_ID) -> None:
         with self._lock:
             self.conn.execute(
-                "INSERT INTO app_settings (key, value) VALUES (?,?) "
-                "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (key, str(value)))
+                "INSERT INTO user_settings (user_id, key, value) VALUES (?,?,?) "
+                "ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value",
+                (user_id, key, str(value)))
             self.conn.commit()
 
     def review_budget_left(self) -> int:
@@ -1118,19 +1237,22 @@ class DatabaseManager:
             self.conn.commit()
 
     # --- actividad / tiempo (para estadísticas) ------------------------ #
-    def log_activity(self, module, active_seconds, open_seconds) -> None:
+    def log_activity(self, module, active_seconds, open_seconds,
+                     user_id: int = ADMIN_USER_ID) -> None:
         with self._lock:
             if active_seconds > 0 and module:
                 self.conn.execute(
-                    "INSERT INTO activity_log (day, module, seconds) VALUES (date('now','localtime'), ?, ?) "
-                    "ON CONFLICT(day, module) DO UPDATE SET seconds = seconds + ?",
-                    (module, int(active_seconds), int(active_seconds)),
+                    "INSERT INTO activity_log (user_id, day, module, seconds) "
+                    "VALUES (?, date('now','localtime'), ?, ?) "
+                    "ON CONFLICT(user_id, day, module) DO UPDATE SET seconds = seconds + ?",
+                    (user_id, module, int(active_seconds), int(active_seconds)),
                 )
             if open_seconds > 0:
                 self.conn.execute(
-                    "INSERT INTO session_log (day, open_seconds) VALUES (date('now','localtime'), ?) "
-                    "ON CONFLICT(day) DO UPDATE SET open_seconds = open_seconds + ?",
-                    (int(open_seconds), int(open_seconds)),
+                    "INSERT INTO session_log (user_id, day, open_seconds) "
+                    "VALUES (?, date('now','localtime'), ?) "
+                    "ON CONFLICT(user_id, day) DO UPDATE SET open_seconds = open_seconds + ?",
+                    (user_id, int(open_seconds), int(open_seconds)),
                 )
             self.conn.commit()
 
