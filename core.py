@@ -159,6 +159,7 @@ class DatabaseManager:
             self.conn.commit()
         self._migrate()
         self._migrate_multiuser()
+        self._migrate_deck_progress()
 
     def _migrate(self) -> None:
         """Añade columnas nuevas a DBs ya existentes (SQLite no tiene ADD COLUMN IF NOT EXISTS)."""
@@ -246,6 +247,8 @@ class DatabaseManager:
             # "Restaurante"). Estaba metida en 'note', que es el campo del
             # EJEMPLO, así que la tarjeta mostraba "Tiendas" donde debía ir una
             # frase de uso — y sin ejemplo no se puede construir el cloze.
+            # (category ya vive en SCHEMA.sql; el ALTER se queda para las bases
+            # creadas antes de que estuviera alli)
             dcols = {r["name"] for r in self.conn.execute("PRAGMA table_info(deck_cards)")}
             if "category" not in dcols:
                 try:
@@ -411,6 +414,83 @@ class DatabaseManager:
             # recién creada el bloque de arriba no llega a ejecutarse.
             for sql in self._MU_INDICES:
                 self.conn.execute(sql)
+            self.conn.commit()
+
+    # Columnas de una tarjeta tal y como las espera el frontend: el contenido
+    # es de deck_cards y el progreso del usuario sale de card_progress. No
+    # tener fila alli significa "sin ver", asi que el LEFT JOIN se rellena con
+    # los valores iniciales del SM-2.
+    _CARD_COLS = ("c.id, c.front, c.translation, c.note, c.category, c.audio_file, "
+                  "COALESCE(p.reps,0) AS reps, COALESCE(p.ease,2.5) AS ease, "
+                  "COALESCE(p.interval_days,0) AS interval_days")
+    _CARD_FROM = ("FROM deck_cards c "
+                  "LEFT JOIN card_progress p ON p.card_id = c.id AND p.user_id = ?")
+    _CARD_DUE = "COALESCE(p.due, date('now','localtime'))"
+
+    def _migrate_deck_progress(self) -> None:
+        """Fase 1, paso 3: el progreso SRS sale de deck_cards a card_progress.
+
+        El contenido de una tarjeta es compartido, pero haberla aprobado es
+        personal. Mientras ambos vivieran en la misma fila, el repaso de uno
+        era el repaso de todos.
+
+        card_progress se crea DESPUES de reconstruir deck_cards: al renombrar
+        una tabla, SQLite reescribe las claves ajenas que apuntan a ella, y si
+        card_progress existiera ya acabaria apuntando a la copia vieja.
+        """
+        with self._lock:
+            cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(deck_cards)")}
+            if "ease" not in cols:
+                return
+            self.conn.execute("PRAGMA foreign_keys = OFF")
+            previo = self.conn.isolation_level
+            self.conn.isolation_level = None
+            try:
+                self.conn.execute("BEGIN")
+                # SCHEMA.sql corre al arrancar y ya ha creado card_progress
+                # apuntando a deck_cards. Si se queda ahí durante el renombrado,
+                # SQLite reescribe esa clave ajena para que siga al nombre viejo
+                # y acaba apuntando a la copia que vamos a borrar. Se tira y se
+                # vuelve a crear después; solo puede estar vacía, porque el
+                # guard de arriba garantiza que el reparto aún no se hizo.
+                n = self.conn.execute(
+                    "SELECT COUNT(*) n FROM card_progress").fetchone()["n"] \
+                    if self.conn.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type='table' "
+                        "AND name='card_progress'").fetchone() else 0
+                if n:
+                    raise RuntimeError(
+                        f"card_progress ya tiene {n} filas antes de repartir "
+                        "deck_cards: migración inesperada, no se toca nada")
+                self.conn.execute("DROP TABLE IF EXISTS card_progress")
+                self.conn.execute("ALTER TABLE deck_cards RENAME TO deck_cards__pre_sp")
+                self.conn.execute(self._ddl_de("deck_cards"))
+                self.conn.execute(
+                    "INSERT INTO deck_cards (id, deck_id, position, front, translation, "
+                    "note, category, audio_file) SELECT id, deck_id, position, front, "
+                    "translation, note, category, audio_file FROM deck_cards__pre_sp")
+                self.conn.execute(self._ddl_de("card_progress"))
+                # se copia el estado de TODAS las tarjetas, no solo las
+                # estudiadas: asi el admin conserva exactamente lo que tenia.
+                self.conn.execute(
+                    "INSERT INTO card_progress "
+                    "(user_id, card_id, ease, interval_days, reps, due) "
+                    "SELECT ?, id, ease, interval_days, reps, due FROM deck_cards__pre_sp",
+                    (ADMIN_USER_ID,))
+                self.conn.execute("DROP TABLE deck_cards__pre_sp")
+                self.conn.execute("COMMIT")
+            except Exception:
+                self.conn.execute("ROLLBACK")
+                raise
+            finally:
+                self.conn.isolation_level = previo
+                self.conn.execute("PRAGMA foreign_keys = ON")
+            rotas = self.conn.execute("PRAGMA foreign_key_check").fetchall()
+            if rotas:
+                raise RuntimeError(
+                    f"partir deck_cards dejo {len(rotas)} referencias rotas")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_cardprog_due "
+                              "ON card_progress (user_id, due)")
             self.conn.commit()
 
     # --- libros -------------------------------------------------------- #
@@ -849,9 +929,12 @@ class DatabaseManager:
                       category="") -> None:
         with self._lock:
             self.conn.execute(
+                # sin estado SRS: el progreso es de cada usuario y vive en
+                # card_progress, así que volver a sembrar contenido no puede
+                # tocarlo. OR IGNORE respeta las tarjetas que ya existen.
                 "INSERT OR IGNORE INTO deck_cards "
-                "(deck_id, position, front, translation, note, audio_file, category, due) "
-                "VALUES (?,?,?,?,?,?,?, date('now','localtime'))",
+                "(deck_id, position, front, translation, note, audio_file, category) "
+                "VALUES (?,?,?,?,?,?,?)",
                 (deck_id, position, front, translation, note, audio_file, category),
             )
             self.conn.commit()
@@ -882,52 +965,65 @@ class DatabaseManager:
                 (user_id, key, str(value)))
             self.conn.commit()
 
-    def review_budget_left(self) -> int:
-        """Repasos que aún caben hoy según el tope GLOBAL.
+    def review_budget_left(self, user_id: int = ADMIN_USER_ID) -> int:
+        """Repasos que aún caben hoy según el tope GLOBAL del usuario.
 
         El tope es global, no por mazo: con 6 mazos, un tope de 20 en cada uno
         serían 120 al día, que es justo el problema que se quiere evitar.
         """
-        cap = int(self.get_setting("review_limit", str(DEFAULT_REVIEW_LIMIT)) or 0)
+        cap = int(self.get_setting("review_limit", str(DEFAULT_REVIEW_LIMIT),
+                                   user_id) or 0)
         if cap <= 0:
             return 10 ** 6            # 0 = sin tope
-        with self._lock:
-            row = self.conn.execute(
-                "SELECT COALESCE(reviews,0) n FROM study_log WHERE day = date('now','localtime')"
-            ).fetchone()
-        return max(0, cap - (row["n"] if row else 0))
+        return max(0, cap - self.reviews_today(user_id))
 
-    def reviews_today(self) -> int:
+    def reviews_today(self, user_id: int = ADMIN_USER_ID) -> int:
         with self._lock:
             row = self.conn.execute(
-                "SELECT COALESCE(reviews,0) n FROM study_log WHERE day = date('now','localtime')"
+                "SELECT COALESCE(reviews,0) n FROM study_log "
+                "WHERE user_id = ? AND day = date('now','localtime')", (user_id,)
             ).fetchone()
         return row["n"] if row else 0
 
-    def review_backlog(self) -> dict:
+    def review_backlog(self, user_id: int = ADMIN_USER_ID) -> dict:
         """Repasos vencidos: los de hoy y los que arrastras de días anteriores."""
         with self._lock:
             hoy = self.conn.execute(
-                "SELECT COUNT(*) n FROM deck_cards WHERE reps>0 AND due<=date('now','localtime')"
+                "SELECT COUNT(*) n FROM card_progress "
+                "WHERE user_id = ? AND reps>0 AND due<=date('now','localtime')", (user_id,)
             ).fetchone()["n"]
             hoy += self.conn.execute(
-                "SELECT COUNT(*) n FROM vocabulary WHERE reps>0 AND due<=date('now','localtime')"
+                "SELECT COUNT(*) n FROM vocabulary "
+                "WHERE user_id = ? AND reps>0 AND due<=date('now','localtime')", (user_id,)
             ).fetchone()["n"]
             atras = self.conn.execute(
-                "SELECT COUNT(*) n FROM deck_cards WHERE reps>0 AND due<date('now','localtime')"
+                "SELECT COUNT(*) n FROM card_progress "
+                "WHERE user_id = ? AND reps>0 AND due<date('now','localtime')", (user_id,)
             ).fetchone()["n"]
         return {"due": hoy, "overdue": atras}
 
-    def set_deck_new_limit(self, deck_id: int, limit: int) -> None:
-        with self._lock:
-            self.conn.execute("UPDATE decks SET new_limit=? WHERE id=?",
-                              (max(0, int(limit)), deck_id))
-            self.conn.commit()
+    def set_deck_new_limit(self, deck_id: int, limit: int,
+                           user_id: int = ADMIN_USER_ID) -> None:
+        """El tope de tarjetas nuevas es el ritmo de estudio de cada uno, no una
+        propiedad del mazo: se guarda como ajuste del usuario. decks.new_limit
+        se queda como el valor por defecto que fija el admin con el contenido."""
+        self.set_setting(f"deck_new_limit:{deck_id}", max(0, int(limit)), user_id)
 
-    def list_decks(self) -> list[dict]:
+    def _deck_new_limit_locked(self, deck_id: int, user_id: int) -> int:
+        """El tope del usuario si lo cambió; si no, el que trae el mazo."""
+        row = self.conn.execute(
+            "SELECT value FROM user_settings WHERE user_id = ? AND key = ?",
+            (user_id, f"deck_new_limit:{deck_id}")).fetchone()
+        if row:
+            return max(0, int(row["value"]))
+        d = self.conn.execute(
+            "SELECT new_limit FROM decks WHERE id = ?", (deck_id,)).fetchone()
+        return d["new_limit"] if d else 10
+
+    def list_decks(self, user_id: int = ADMIN_USER_ID) -> list[dict]:
         with self._lock:
             decks = self.conn.execute(
-                "SELECT id, key, name, description, lang, new_limit "
+                "SELECT id, key, name, description, lang "
                 "FROM decks ORDER BY sort_order, id"
             ).fetchall()
             out = []
@@ -936,50 +1032,56 @@ class DatabaseManager:
                     "SELECT COUNT(*) n FROM deck_cards WHERE deck_id = ?", (d["id"],)
                 ).fetchone()["n"]
                 due = self.conn.execute(
-                    "SELECT COUNT(*) n FROM deck_cards WHERE deck_id = ? AND due <= date('now','localtime')",
-                    (d["id"],),
+                    f"SELECT COUNT(*) n {self._CARD_FROM} "
+                    f"WHERE c.deck_id = ? AND {self._CARD_DUE} <= date('now','localtime')",
+                    (user_id, d["id"]),
                 ).fetchone()["n"]
                 unseen = self.conn.execute(
-                    "SELECT COUNT(*) n FROM deck_cards WHERE deck_id = ? AND reps = 0",
-                    (d["id"],),
+                    f"SELECT COUNT(*) n {self._CARD_FROM} "
+                    "WHERE c.deck_id = ? AND COALESCE(p.reps,0) = 0",
+                    (user_id, d["id"]),
                 ).fetchone()["n"]
                 # cuántas nuevas has empezado hoy: explica por qué "Review" deja
                 # de ofrecer tarjetas nuevas aunque queden sin ver
-                new_today = self._new_intro_today_locked("deck:" + str(d["id"]))
-                out.append({**dict(d), "total": total, "due": due,
+                new_today = self._new_intro_today_locked("deck:" + str(d["id"]), user_id)
+                out.append({**dict(d),
+                            "new_limit": self._deck_new_limit_locked(d["id"], user_id),
+                            "total": total, "due": due,
                             "unseen": unseen, "new_today": new_today})
         return out
 
-    def deck_due_cards(self, deck_id, new_limit=None, ahead: bool = False) -> list[dict]:
+    def deck_due_cards(self, deck_id, new_limit=None, ahead: bool = False,
+                       user_id: int = ADMIN_USER_ID) -> list[dict]:
         """Repaso inteligente (SRS): repasos que tocan hoy + máx `new_limit` NUEVAS
         (descontando las nuevas ya introducidas hoy = candado diario).
         Con ahead=True, si no queda nada pendiente devuelve las siguientes."""
-        cols = ("id, front, translation, note, category, audio_file, "
-                "reps, ease, interval_days")
-        budget = self.review_budget_left()   # fuera del lock: no es reentrante
+        budget = self.review_budget_left(user_id)  # fuera del lock: no es reentrante
         with self._lock:
             # ORDER BY due: primero lo más atrasado. Con tope, servir en otro
             # orden dejaría tarjetas viejas sin salir nunca.
             reviews = self.conn.execute(
-                f"SELECT {cols} FROM deck_cards WHERE deck_id = ? AND reps >= 1 "
-                "AND due <= date('now','localtime') ORDER BY due, position LIMIT ?",
-                (deck_id, budget),
+                f"SELECT {self._CARD_COLS} {self._CARD_FROM} "
+                "WHERE c.deck_id = ? AND COALESCE(p.reps,0) >= 1 "
+                f"AND {self._CARD_DUE} <= date('now','localtime') "
+                f"ORDER BY {self._CARD_DUE}, c.position LIMIT ?",
+                (user_id, deck_id, budget),
             ).fetchall()
             if new_limit is None:
-                row = self.conn.execute(
-                    "SELECT new_limit FROM decks WHERE id = ?", (deck_id,)).fetchone()
-                new_limit = row["new_limit"] if row else 10
-            rem = max(0, new_limit - self._new_intro_today_locked("deck:" + str(deck_id)))
+                new_limit = self._deck_new_limit_locked(deck_id, user_id)
+            rem = max(0, new_limit
+                      - self._new_intro_today_locked("deck:" + str(deck_id), user_id))
             new = self.conn.execute(
-                f"SELECT {cols} FROM deck_cards WHERE deck_id = ? AND reps = 0 "
-                "ORDER BY position LIMIT ?", (deck_id, rem),
+                f"SELECT {self._CARD_COLS} {self._CARD_FROM} "
+                "WHERE c.deck_id = ? AND COALESCE(p.reps,0) = 0 "
+                "ORDER BY c.position LIMIT ?", (user_id, deck_id, rem),
             ).fetchall()
             extra = []
             if ahead and not reviews and not new:
                 extra = self.conn.execute(
-                    f"SELECT {cols} FROM deck_cards WHERE deck_id = ? "
-                    "AND due > date('now','localtime') ORDER BY due, position LIMIT 20",
-                    (deck_id,),
+                    f"SELECT {self._CARD_COLS} {self._CARD_FROM} "
+                    f"WHERE c.deck_id = ? AND {self._CARD_DUE} > date('now','localtime') "
+                    f"ORDER BY {self._CARD_DUE}, c.position LIMIT 20",
+                    (user_id, deck_id),
                 ).fetchall()
         return [dict(r) for r in list(reviews) + list(new) + list(extra)]
 
@@ -1000,48 +1102,54 @@ class DatabaseManager:
             self.conn.execute("UPDATE deck_cards SET note=? WHERE id=?", (note, card_id))
             self.conn.commit()
 
-    def deck_new_cards(self, deck_id, limit=10) -> list[dict]:
+    def deck_new_cards(self, deck_id, limit=10,
+                       user_id: int = ADMIN_USER_ID) -> list[dict]:
         """Tarjetas SIN VER de un mazo, saltándose el candado diario.
 
         El candado existe para que no te satures, pero es tuyo: si hoy quieres
         aprender más, la app no debe escondértelas sin explicación.
         """
-        cols = ("id, front, translation, note, category, audio_file, "
-                "reps, ease, interval_days")
         with self._lock:
             rows = self.conn.execute(
-                f"SELECT {cols} FROM deck_cards WHERE deck_id = ? AND reps = 0 "
-                "ORDER BY position LIMIT ?", (deck_id, limit),
+                f"SELECT {self._CARD_COLS} {self._CARD_FROM} "
+                "WHERE c.deck_id = ? AND COALESCE(p.reps,0) = 0 "
+                "ORDER BY c.position LIMIT ?", (user_id, deck_id, limit),
             ).fetchall()
         return [dict(r) for r in rows]
 
-    def deck_study_cards(self, deck_id) -> list[dict]:
+    def deck_study_cards(self, deck_id, user_id: int = ADMIN_USER_ID) -> list[dict]:
         """TODAS las tarjetas del mazo (sin límite diario), las pendientes primero."""
-        cols = ("id, front, translation, note, category, audio_file, "
-                "reps, ease, interval_days")
         with self._lock:
             rows = self.conn.execute(
-                f"SELECT {cols} FROM deck_cards WHERE deck_id = ? "
-                "ORDER BY (due <= date('now','localtime')) DESC, position", (deck_id,),
+                f"SELECT {self._CARD_COLS} {self._CARD_FROM} WHERE c.deck_id = ? "
+                f"ORDER BY ({self._CARD_DUE} <= date('now','localtime')) DESC, c.position",
+                (user_id, deck_id),
             ).fetchall()
         return [dict(r) for r in rows]
 
-    def grade_deck_card(self, card_id, grade) -> None:
+    def grade_deck_card(self, card_id, grade, user_id: int = ADMIN_USER_ID) -> None:
         with self._lock:
             row = self.conn.execute(
-                "SELECT ease, interval_days, reps, deck_id FROM deck_cards WHERE id = ?", (card_id,)
+                "SELECT c.deck_id, COALESCE(p.ease,2.5) AS ease, "
+                "COALESCE(p.interval_days,0) AS interval_days, "
+                "COALESCE(p.reps,0) AS reps "
+                f"{self._CARD_FROM} WHERE c.id = ?", (user_id, card_id)
             ).fetchone()
             if not row:
                 return
             ease, interval, reps = _sm2(row["ease"], row["interval_days"], row["reps"], grade)
             self.conn.execute(
-                "UPDATE deck_cards SET ease=?, interval_days=?, reps=?, "
-                "due=date('now','localtime','+' || ? || ' days') WHERE id=?",
-                (ease, interval, reps, interval, card_id),
+                "INSERT INTO card_progress "
+                "(user_id, card_id, ease, interval_days, reps, due) "
+                "VALUES (?, ?, ?, ?, ?, date('now','localtime','+' || ? || ' days')) "
+                "ON CONFLICT(user_id, card_id) DO UPDATE SET "
+                "ease = excluded.ease, interval_days = excluded.interval_days, "
+                "reps = excluded.reps, due = excluded.due",
+                (user_id, card_id, ease, interval, reps, interval),
             )
             if row["reps"] == 0 and reps >= 1:
-                self._bump_new_intro_locked("deck:" + str(row["deck_id"]))
-            self._log_review_locked()
+                self._bump_new_intro_locked("deck:" + str(row["deck_id"]), user_id)
+            self._log_review_locked(user_id)
             self.conn.commit()
 
     # --- writings (Writing) + diario de errores ------------------------ #
@@ -1256,33 +1364,43 @@ class DatabaseManager:
                 )
             self.conn.commit()
 
-    def get_full_stats(self, rng: str = "week") -> dict:
+    def get_full_stats(self, rng: str = "week",
+                       user_id: int = ADMIN_USER_ID) -> dict:
         start = "date('now','localtime','-6 days')" if rng == "week" else "date('now','localtime','start of month')"
         with self._lock:
             days = self.conn.execute(
-                f"SELECT day, SUM(seconds) s FROM activity_log WHERE day >= {start} "
-                "GROUP BY day ORDER BY day"
+                f"SELECT day, SUM(seconds) s FROM activity_log "
+                f"WHERE user_id = ? AND day >= {start} "
+                "GROUP BY day ORDER BY day", (user_id,)
             ).fetchall()
             mods = self.conn.execute(
-                f"SELECT module, SUM(seconds) s FROM activity_log WHERE day >= {start} "
-                "GROUP BY module"
+                f"SELECT module, SUM(seconds) s FROM activity_log "
+                f"WHERE user_id = ? AND day >= {start} "
+                "GROUP BY module", (user_id,)
             ).fetchall()
             open_s = self.conn.execute(
-                f"SELECT COALESCE(SUM(open_seconds),0) s FROM session_log WHERE day >= {start}"
+                f"SELECT COALESCE(SUM(open_seconds),0) s FROM session_log "
+                f"WHERE user_id = ? AND day >= {start}", (user_id,)
             ).fetchone()["s"]
             active_s = self.conn.execute(
-                f"SELECT COALESCE(SUM(seconds),0) s FROM activity_log WHERE day >= {start}"
+                f"SELECT COALESCE(SUM(seconds),0) s FROM activity_log "
+                f"WHERE user_id = ? AND day >= {start}", (user_id,)
             ).fetchone()["s"]
-            # decks
+            # decks: el mazo es de todos, pero "aprendidas" es de quien pregunta
             deck_rows = self.conn.execute(
                 "SELECT d.name, d.key, COUNT(c.id) total, "
-                "SUM(CASE WHEN c.reps>=3 THEN 1 ELSE 0 END) learned "
-                "FROM decks d LEFT JOIN deck_cards c ON c.deck_id=d.id GROUP BY d.id ORDER BY d.sort_order"
+                "SUM(CASE WHEN COALESCE(p.reps,0)>=3 THEN 1 ELSE 0 END) learned "
+                "FROM decks d LEFT JOIN deck_cards c ON c.deck_id = d.id "
+                "LEFT JOIN card_progress p ON p.card_id = c.id AND p.user_id = ? "
+                "GROUP BY d.id ORDER BY d.sort_order", (user_id,)
             ).fetchall()
-            writings = self.conn.execute("SELECT COUNT(*) n FROM writings").fetchone()["n"]
+            writings = self.conn.execute(
+                "SELECT COUNT(*) n FROM writings WHERE user_id = ?", (user_id,)
+            ).fetchone()["n"]
             heat = self.conn.execute(
-                "SELECT day, SUM(seconds) s FROM activity_log WHERE day >= date('now','localtime','-97 days') "
-                "GROUP BY day"
+                "SELECT day, SUM(seconds) s FROM activity_log WHERE user_id = ? "
+                "AND day >= date('now','localtime','-97 days') "
+                "GROUP BY day", (user_id,)
             ).fetchall()
         modules = {r["module"]: round(r["s"] / 60) for r in mods}
         per_day = {r["day"]: round(r["s"] / 60) for r in days}

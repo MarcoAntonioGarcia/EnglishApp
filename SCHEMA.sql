@@ -143,6 +143,10 @@ CREATE TABLE IF NOT EXISTS decks (
     sort_order  INTEGER NOT NULL DEFAULT 0
 );
 
+-- deck_cards guarda SOLO el contenido de la tarjeta, que es compartido: lo cura
+-- el admin y lo ve todo el mundo. El progreso de estudio se fue a card_progress
+-- porque es de cada uno: si viviera aqui, aprobar una tarjeta se la aprobaria a
+-- todos los usuarios a la vez.
 CREATE TABLE IF NOT EXISTS deck_cards (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     deck_id       INTEGER NOT NULL,
@@ -150,17 +154,28 @@ CREATE TABLE IF NOT EXISTS deck_cards (
     front         TEXT    NOT NULL,             -- palabra/frase en el idioma meta (lo que se escucha)
     translation   TEXT    NOT NULL,             -- traducción al español
     note          TEXT,                         -- ejemplo/uso o nota gramatical
+    category      TEXT,                         -- situación de uso ("Tiendas", "Restaurante")
     audio_file    TEXT,                         -- nombre del .wav pre-generado (Samantha)
-    -- SRS (SM-2), por usuario/local:
-    ease          REAL    NOT NULL DEFAULT 2.5,
-    interval_days INTEGER NOT NULL DEFAULT 0,
-    reps          INTEGER NOT NULL DEFAULT 0,
-    due           TEXT    NOT NULL DEFAULT (date('now','localtime')),
     FOREIGN KEY (deck_id) REFERENCES decks(id) ON DELETE CASCADE,
     UNIQUE (deck_id, front)
 );
 
-CREATE INDEX IF NOT EXISTS idx_deckcards_due ON deck_cards (deck_id, due);
+-- card_progress: el estado SRS (SM-2) de UNA tarjeta para UN usuario.
+-- No tener fila aqui significa "tarjeta sin ver": las consultas hacen LEFT JOIN
+-- y rellenan con los valores por defecto, asi que un usuario nuevo empieza sin
+-- una sola fila y aun asi ve el mazo entero como nuevo.
+CREATE TABLE IF NOT EXISTS card_progress (
+    user_id       INTEGER NOT NULL DEFAULT 1,
+    card_id       INTEGER NOT NULL,
+    ease          REAL    NOT NULL DEFAULT 2.5,  -- factor de facilidad
+    interval_days INTEGER NOT NULL DEFAULT 0,    -- días hasta el próximo repaso
+    reps          INTEGER NOT NULL DEFAULT 0,    -- repasos correctos seguidos
+    due           TEXT    NOT NULL DEFAULT (date('now','localtime')),
+    PRIMARY KEY (user_id, card_id),
+    FOREIGN KEY (card_id) REFERENCES deck_cards(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_cardprog_due ON card_progress (user_id, due);
 
 -- ---------------------------------------------------------------------------
 -- study_log: un registro por día con cuántos repasos se hicieron -> rachas.
