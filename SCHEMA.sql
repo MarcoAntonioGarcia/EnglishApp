@@ -5,6 +5,26 @@
 PRAGMA foreign_keys = ON;
 
 -- ---------------------------------------------------------------------------
+-- users: cuentas de la plataforma.
+-- Fase 1 (actual): solo existe el admin (id=1) y todo el contenido personal ya
+-- guardado se le asigna a el. NO hay login todavia: password_hash esta vacio a
+-- proposito y nadie puede autenticarse.
+-- Fase 2: login por username/contrasena; el admin da o retira acceso con
+-- 'status'. La contrasena nunca se guarda en claro, solo su hash.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT    NOT NULL COLLATE NOCASE,   -- login sin distinguir mayusculas
+    password_hash TEXT    NOT NULL DEFAULT '',       -- vacio hasta la Fase 2
+    role          TEXT    NOT NULL DEFAULT 'user',   -- 'admin' | 'user'
+    status        TEXT    NOT NULL DEFAULT 'pending',-- 'pending' | 'active' | 'blocked'
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    UNIQUE (username),
+    CHECK (role   IN ('admin', 'user')),
+    CHECK (status IN ('pending', 'active', 'blocked'))
+);
+
+-- ---------------------------------------------------------------------------
 -- books: un registro por EPUB importado
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS books (

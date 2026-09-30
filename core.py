@@ -48,6 +48,11 @@ LIBRARY_DIR = os.path.join(BASE_DIR, "library")           # archivos subidos
 CONVERTED_DIR = os.path.join(ASSETS_DIR, "converted")     # EPUBs generados desde PDF
 PIPER_DIR = os.path.join(ASSETS_DIR, "piper")             # modelos de voz neural (Piper)
 
+# Cuenta del administrador. Mientras no exista login (Fase 1) TODO el contenido
+# personal pertenece a este usuario: es el unico que hay.
+ADMIN_USER_ID = 1
+ADMIN_USERNAME = "marco"
+
 # Voces neurales Piper (más humanas). value 'piper:<modelo>'. Solo se listan las
 # que tengan su .onnx descargado en assets/piper/.
 _PIPER_MODELS = {
@@ -167,6 +172,12 @@ class DatabaseManager:
             "due": "TEXT",
         }
         with self._lock:
+            # La plataforma pasa a ser multiusuario. En esta fase solo existe el
+            # admin y todo lo ya guardado es suyo. Se siembra aqui y no en
+            # SCHEMA.sql porque ese fichero es DDL puro.
+            self.conn.execute(
+                "INSERT OR IGNORE INTO users (id, username, role, status) "
+                "VALUES (?, ?, 'admin', 'active')", (ADMIN_USER_ID, ADMIN_USERNAME))
             existing = {r["name"] for r in self.conn.execute("PRAGMA table_info(vocabulary)")}
             for name, decl in cols.items():
                 if name not in existing:

@@ -27,3 +27,6 @@ venv/
 .playwright-cli/
 .vscode/
 .idea/
+
+# Copias de seguridad de la BD antes de migraciones. Locales, nunca al repo.
+backups/
