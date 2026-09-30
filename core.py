@@ -633,6 +633,12 @@ class DatabaseManager:
         El vocabulario que guardaste leyéndolo NO se borra: solo se desvincula.
         Esas palabras las aprendiste tú y siguen en tus repasos. Devuelve los
         datos del libro borrado, o None si no existía.
+
+        Es una acción de ADMIN sobre contenido compartido, así que no lleva
+        user_id a propósito: alcanza a todos los usuarios. Se desvinculan las
+        palabras de todos y se borra la posición de lectura de todos, porque el
+        libro deja de existir en la plataforma. 'kept_words' cuenta, por tanto,
+        las palabras conservadas de todo el mundo, no solo las del admin.
         """
         with self._lock:
             row = self.conn.execute("SELECT * FROM books WHERE id = ?", (book_id,)).fetchone()
@@ -731,45 +737,52 @@ class DatabaseManager:
 
     # --- vocabulario + repetición espaciada (SM-2) --------------------- #
     def add_vocab(self, term, translation, example="", lang="en", book_id=None,
-                  simple_example="") -> int:
+                  simple_example="", user_id: int = ADMIN_USER_ID) -> int:
         with self._lock:
+            # el duplicado se busca dentro de TU vocabulario: que otro haya
+            # guardado la misma palabra no puede impedirte guardarla a ti
             ex = self.conn.execute(
-                "SELECT id FROM vocabulary WHERE term = ? AND IFNULL(book_id,0) = IFNULL(?,0)",
-                (term, book_id),
+                "SELECT id FROM vocabulary WHERE user_id = ? AND term = ? "
+                "AND IFNULL(book_id,0) = IFNULL(?,0)",
+                (user_id, term, book_id),
             ).fetchone()
             if ex:
                 return ex["id"]
             cur = self.conn.execute(
-                "INSERT INTO vocabulary (book_id, term, translation, example, lang, "
-                "simple_example, due) VALUES (?, ?, ?, ?, ?, ?, date('now','localtime'))",
-                (book_id, term, translation, example, lang, simple_example),
+                "INSERT INTO vocabulary (user_id, book_id, term, translation, example, lang, "
+                "simple_example, due) VALUES (?, ?, ?, ?, ?, ?, ?, date('now','localtime'))",
+                (user_id, book_id, term, translation, example, lang, simple_example),
             )
             self.conn.commit()
             return cur.lastrowid
 
-    def list_vocab(self) -> list[dict]:
+    def list_vocab(self, user_id: int = ADMIN_USER_ID) -> list[dict]:
         with self._lock:
             rows = self.conn.execute(
                 "SELECT id, term, translation, example, simple_example, lang, reps, due, "
-                "(due <= date('now','localtime')) AS is_due FROM vocabulary ORDER BY created_at DESC"
+                "(due <= date('now','localtime')) AS is_due FROM vocabulary "
+                "WHERE user_id = ? ORDER BY created_at DESC", (user_id,)
             ).fetchall()
         return [dict(r) for r in rows]
 
-    def due_vocab(self, new_limit: int = 20, ahead: bool = False) -> list[dict]:
+    def due_vocab(self, new_limit: int = 20, ahead: bool = False,
+                  user_id: int = ADMIN_USER_ID) -> list[dict]:
         """Con ahead=True devuelve también las que aún no tocan, las más
         próximas primero: si quieres estudiar hoy, la app no debe impedírtelo."""
         cols = ("id, term, translation, example, simple_example, lang, "
                 "reps, ease, interval_days")
-        budget = self.review_budget_left()   # fuera del lock: no es reentrante
+        budget = self.review_budget_left(user_id)  # fuera del lock: no es reentrante
         with self._lock:
             reviews = self.conn.execute(
-                f"SELECT {cols} FROM vocabulary WHERE reps >= 1 AND due <= date('now','localtime') "
-                "ORDER BY due, created_at LIMIT ?", (budget,)
+                f"SELECT {cols} FROM vocabulary WHERE user_id = ? AND reps >= 1 "
+                "AND due <= date('now','localtime') "
+                "ORDER BY due, created_at LIMIT ?", (user_id, budget)
             ).fetchall()
-            rem = max(0, new_limit - self._new_intro_today_locked("vocab"))
+            rem = max(0, new_limit - self._new_intro_today_locked("vocab", user_id))
             new = self.conn.execute(
-                f"SELECT {cols} FROM vocabulary WHERE reps = 0 AND due <= date('now','localtime') "
-                "ORDER BY created_at LIMIT ?", (rem,)
+                f"SELECT {cols} FROM vocabulary WHERE user_id = ? AND reps = 0 "
+                "AND due <= date('now','localtime') "
+                "ORDER BY created_at LIMIT ?", (user_id, rem)
             ).fetchall()
             extra = []
             if ahead and not reviews and not new:
@@ -777,32 +790,38 @@ class DatabaseManager:
                 # diario dejó fuera: vencen HOY, no mañana. Buscar solo en el
                 # futuro las escondía justo cuando querías estudiarlas.
                 extra = self.conn.execute(
-                    f"SELECT {cols} FROM vocabulary WHERE reps = 0 "
-                    "AND due <= date('now','localtime') ORDER BY created_at LIMIT 20"
+                    f"SELECT {cols} FROM vocabulary WHERE user_id = ? AND reps = 0 "
+                    "AND due <= date('now','localtime') ORDER BY created_at LIMIT 20",
+                    (user_id,)
                 ).fetchall()
                 if not extra:   # nada nuevo pendiente: adelanta lo de días futuros
                     extra = self.conn.execute(
-                        f"SELECT {cols} FROM vocabulary WHERE due > date('now','localtime') "
-                        "ORDER BY due, created_at LIMIT 20"
+                        f"SELECT {cols} FROM vocabulary WHERE user_id = ? "
+                        "AND due > date('now','localtime') "
+                        "ORDER BY due, created_at LIMIT 20", (user_id,)
                     ).fetchall()
         return [dict(r) for r in list(reviews) + list(new) + list(extra)]
 
-    def grade_vocab(self, vid: int, grade: str) -> None:
+    def grade_vocab(self, vid: int, grade: str, user_id: int = ADMIN_USER_ID) -> None:
         with self._lock:
+            # el user_id no es solo para leer lo tuyo: impide calificar una
+            # palabra de otro usuario pasando su id
             row = self.conn.execute(
-                "SELECT ease, interval_days, reps FROM vocabulary WHERE id = ?", (vid,)
+                "SELECT ease, interval_days, reps FROM vocabulary "
+                "WHERE id = ? AND user_id = ?", (vid, user_id)
             ).fetchone()
             if not row:
                 return
             ease, interval, reps = _sm2(row["ease"], row["interval_days"], row["reps"], grade)
             self.conn.execute(
                 "UPDATE vocabulary SET ease=?, interval_days=?, reps=?, "
-                "due=date('now','localtime','+' || ? || ' days') WHERE id=?",
-                (ease, interval, reps, interval, vid),
+                "due=date('now','localtime','+' || ? || ' days') "
+                "WHERE id=? AND user_id=?",
+                (ease, interval, reps, interval, vid, user_id),
             )
             if row["reps"] == 0 and reps >= 1:  # tarjeta nueva introducida hoy
-                self._bump_new_intro_locked("vocab")
-            self._log_review_locked()
+                self._bump_new_intro_locked("vocab", user_id)
+            self._log_review_locked(user_id)
             self.conn.commit()
 
     def _bump_new_intro_locked(self, scope, user_id: int = ADMIN_USER_ID) -> None:
@@ -835,14 +854,17 @@ class DatabaseManager:
                 "ORDER BY day DESC", (user_id,)
             )]
             total = self.conn.execute(
-                "SELECT COALESCE(SUM(reviews),0) n FROM study_log"
+                "SELECT COALESCE(SUM(reviews),0) n FROM study_log WHERE user_id = ?",
+                (user_id,)
             ).fetchone()["n"]
             today_reviews = self.conn.execute(
-                "SELECT COALESCE(reviews,0) n FROM study_log WHERE day=date('now','localtime')"
+                "SELECT COALESCE(reviews,0) n FROM study_log "
+                "WHERE user_id = ? AND day=date('now','localtime')", (user_id,)
             ).fetchone()
             today_reviews = today_reviews["n"] if today_reviews else 0
             today_min = self.conn.execute(
-                "SELECT COALESCE(SUM(seconds),0) n FROM activity_log WHERE day=date('now','localtime')"
+                "SELECT COALESCE(SUM(seconds),0) n FROM activity_log "
+                "WHERE user_id = ? AND day=date('now','localtime')", (user_id,)
             ).fetchone()["n"]
         s = set(rows)
         today = datetime.date.today()
@@ -859,52 +881,64 @@ class DatabaseManager:
             d -= datetime.timedelta(days=1)
         return {"current": streak, "today": studied_today, **extra}
 
-    def new_vocab(self, limit: int = 10) -> list[dict]:
+    def new_vocab(self, limit: int = 10, user_id: int = ADMIN_USER_ID) -> list[dict]:
         """Palabras SIN VER, saltándose el candado diario (a petición tuya)."""
         cols = ("id, term, translation, example, simple_example, lang, "
                 "reps, ease, interval_days")
         with self._lock:
             rows = self.conn.execute(
-                f"SELECT {cols} FROM vocabulary WHERE reps = 0 ORDER BY created_at LIMIT ?",
-                (limit,),
+                f"SELECT {cols} FROM vocabulary WHERE user_id = ? AND reps = 0 "
+                "ORDER BY created_at LIMIT ?", (user_id, limit),
             ).fetchall()
         return [dict(r) for r in rows]
 
-    def set_simple_example(self, vid: int, text: str) -> None:
+    def set_simple_example(self, vid: int, text: str,
+                           user_id: int = ADMIN_USER_ID) -> None:
         with self._lock:
-            self.conn.execute("UPDATE vocabulary SET simple_example=? WHERE id=?", (text, vid))
+            self.conn.execute(
+                "UPDATE vocabulary SET simple_example=? WHERE id=? AND user_id=?",
+                (text, vid, user_id))
             self.conn.commit()
 
-    def delete_vocab(self, vid: int) -> bool:
-        """False si esa palabra no existía (para que la API responda 404)."""
+    def delete_vocab(self, vid: int, user_id: int = ADMIN_USER_ID) -> bool:
+        """False si esa palabra no existía (para que la API responda 404).
+
+        Filtrar por user_id hace que borrar la palabra de otro sea
+        indistinguible de borrar una que no existe: 404, no 403."""
         with self._lock:
-            cur = self.conn.execute("DELETE FROM vocabulary WHERE id = ?", (vid,))
+            cur = self.conn.execute(
+                "DELETE FROM vocabulary WHERE id = ? AND user_id = ?", (vid, user_id))
             self.conn.commit()
             return cur.rowcount > 0
 
-    def vocab_stats(self) -> dict:
+    def vocab_stats(self, user_id: int = ADMIN_USER_ID) -> dict:
         with self._lock:
-            total = self.conn.execute("SELECT COUNT(*) n FROM vocabulary").fetchone()["n"]
+            total = self.conn.execute(
+                "SELECT COUNT(*) n FROM vocabulary WHERE user_id = ?", (user_id,)
+            ).fetchone()["n"]
             due = self.conn.execute(
-                "SELECT COUNT(*) n FROM vocabulary WHERE due <= date('now','localtime')"
+                "SELECT COUNT(*) n FROM vocabulary WHERE user_id = ? "
+                "AND due <= date('now','localtime')", (user_id,)
             ).fetchone()["n"]
             new = self.conn.execute(
-                "SELECT COUNT(*) n FROM vocabulary WHERE reps = 0"
+                "SELECT COUNT(*) n FROM vocabulary WHERE user_id = ? AND reps = 0", (user_id,)
             ).fetchone()["n"]
             learning = self.conn.execute(
-                "SELECT COUNT(*) n FROM vocabulary WHERE reps BETWEEN 1 AND 2"
+                "SELECT COUNT(*) n FROM vocabulary WHERE user_id = ? "
+                "AND reps BETWEEN 1 AND 2", (user_id,)
             ).fetchone()["n"]
             learned = self.conn.execute(
-                "SELECT COUNT(*) n FROM vocabulary WHERE reps >= 3"
+                "SELECT COUNT(*) n FROM vocabulary WHERE user_id = ? AND reps >= 3", (user_id,)
             ).fetchone()["n"]
             # palabras añadidas por día (últimos 14 días) para la gráfica
             hist = self.conn.execute(
                 "SELECT date(created_at) d, COUNT(*) n FROM vocabulary "
-                "WHERE created_at >= date('now','localtime','-13 days') GROUP BY date(created_at)"
+                "WHERE user_id = ? AND created_at >= date('now','localtime','-13 days') "
+                "GROUP BY date(created_at)", (user_id,)
             ).fetchall()
             # cuántas nuevas llevas hoy: explica por qué Review deja de
             # ofrecerte palabras aunque acabes de guardarlas
-            new_today = self._new_intro_today_locked("vocab")
+            new_today = self._new_intro_today_locked("vocab", user_id)
         return {
             "total": total, "due": due, "new": new,
             "learning": learning, "learned": learned,
@@ -1153,64 +1187,73 @@ class DatabaseManager:
             self.conn.commit()
 
     # --- writings (Writing) + diario de errores ------------------------ #
-    def save_writing(self, title, original, corrected, level, assessment="") -> int:
+    def save_writing(self, title, original, corrected, level, assessment="",
+                     user_id: int = ADMIN_USER_ID) -> int:
         with self._lock:
             cur = self.conn.execute(
-                "INSERT INTO writings (title, original, corrected, level, assessment) "
-                "VALUES (?,?,?,?,?)",
-                (title, original, corrected, level, assessment),
+                "INSERT INTO writings (user_id, title, original, corrected, level, assessment) "
+                "VALUES (?,?,?,?,?,?)",
+                (user_id, title, original, corrected, level, assessment),
             )
             self.conn.commit()
             return cur.lastrowid
 
     def add_writing_error(self, writing_id, original, correction, explanation,
-                          category="other") -> None:
+                          category="other", user_id: int = ADMIN_USER_ID) -> None:
         with self._lock:
             self.conn.execute(
-                "INSERT INTO writing_errors (writing_id, original, correction, explanation, "
-                "category) VALUES (?,?,?,?,?)",
-                (writing_id, original, correction, explanation, category),
+                "INSERT INTO writing_errors (user_id, writing_id, original, correction, "
+                "explanation, category) VALUES (?,?,?,?,?,?)",
+                (user_id, writing_id, original, correction, explanation, category),
             )
             self.conn.commit()
 
-    def save_writing_upgrade(self, wid, upgraded, upgrade_level) -> None:
+    def save_writing_upgrade(self, wid, upgraded, upgrade_level,
+                             user_id: int = ADMIN_USER_ID) -> None:
         """Guarda la reescritura en SUS columnas. No toca 'corrected' ni 'level':
         el nivel de la tabla es el TUYO, no el objetivo del upgrade."""
         with self._lock:
             self.conn.execute(
-                "UPDATE writings SET upgraded=?, upgrade_level=? WHERE id=?",
-                (upgraded, upgrade_level, wid),
+                "UPDATE writings SET upgraded=?, upgrade_level=? "
+                "WHERE id=? AND user_id=?",
+                (upgraded, upgrade_level, wid, user_id),
             )
             self.conn.commit()
 
-    def list_writings(self) -> list[dict]:
+    def list_writings(self, user_id: int = ADMIN_USER_ID) -> list[dict]:
         with self._lock:
             rows = self.conn.execute(
                 "SELECT id, title, level, upgrade_level, created_at, "
                 "substr(original,1,80) AS preview "
-                "FROM writings ORDER BY created_at DESC"
+                "FROM writings WHERE user_id = ? ORDER BY created_at DESC", (user_id,)
             ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_writing(self, wid) -> dict | None:
+    def get_writing(self, wid, user_id: int = ADMIN_USER_ID) -> dict | None:
         with self._lock:
-            row = self.conn.execute("SELECT * FROM writings WHERE id=?", (wid,)).fetchone()
+            row = self.conn.execute(
+                "SELECT * FROM writings WHERE id=? AND user_id=?", (wid, user_id)).fetchone()
         return dict(row) if row else None
 
-    def delete_writing(self, wid) -> bool:
+    def delete_writing(self, wid, user_id: int = ADMIN_USER_ID) -> bool:
         """Borra un escrito y los errores de su diario. False si no existía."""
         with self._lock:
-            cur = self.conn.execute("DELETE FROM writings WHERE id=?", (wid,))
-            self.conn.execute("DELETE FROM writing_errors WHERE writing_id=?", (wid,))
+            cur = self.conn.execute(
+                "DELETE FROM writings WHERE id=? AND user_id=?", (wid, user_id))
+            self.conn.execute(
+                "DELETE FROM writing_errors WHERE writing_id=? AND user_id=?",
+                (wid, user_id))
             self.conn.commit()
             return cur.rowcount > 0
 
-    def list_writing_errors(self, limit=100, category="") -> list[dict]:
+    def list_writing_errors(self, limit=100, category="",
+                            user_id: int = ADMIN_USER_ID) -> list[dict]:
         sql = ("SELECT id, original, correction, explanation, category, created_at, "
-               "reviewed, (lesson IS NOT NULL) AS has_lesson FROM writing_errors ")
-        args: list = []
+               "reviewed, (lesson IS NOT NULL) AS has_lesson FROM writing_errors "
+               "WHERE user_id = ? ")
+        args: list = [user_id]
         if category:
-            sql += "WHERE category = ? "
+            sql += "AND category = ? "
             args.append(category)
         sql += "ORDER BY created_at DESC LIMIT ?"
         args.append(limit)
@@ -1219,57 +1262,68 @@ class DatabaseManager:
         return [dict(r) for r in rows]
 
     # --- lecciones generadas desde tus errores -------------------------- #
-    def save_custom_lesson(self, category, title, level, payload, error_count) -> int:
+    def save_custom_lesson(self, category, title, level, payload, error_count,
+                           user_id: int = ADMIN_USER_ID) -> int:
         with self._lock:
             cur = self.conn.execute(
-                "INSERT INTO custom_lessons (category,title,level,payload,error_count) "
-                "VALUES (?,?,?,?,?)",
-                (category, title, level, json.dumps(payload, ensure_ascii=False), error_count))
+                "INSERT INTO custom_lessons (user_id,category,title,level,payload,error_count) "
+                "VALUES (?,?,?,?,?,?)",
+                (user_id, category, title, level,
+                 json.dumps(payload, ensure_ascii=False), error_count))
             self.conn.commit()
             return cur.lastrowid
 
-    def list_custom_lessons(self) -> list[dict]:
+    def list_custom_lessons(self, user_id: int = ADMIN_USER_ID) -> list[dict]:
         with self._lock:
             rows = self.conn.execute(
                 "SELECT id, category, title, level, error_count, done, created_at "
-                "FROM custom_lessons ORDER BY created_at DESC").fetchall()
+                "FROM custom_lessons WHERE user_id = ? "
+                "ORDER BY created_at DESC", (user_id,)).fetchall()
         return [dict(r) for r in rows]
 
-    def get_custom_lesson(self, lid) -> dict | None:
+    def get_custom_lesson(self, lid, user_id: int = ADMIN_USER_ID) -> dict | None:
         with self._lock:
             row = self.conn.execute(
-                "SELECT * FROM custom_lessons WHERE id = ?", (lid,)).fetchone()
+                "SELECT * FROM custom_lessons WHERE id = ? AND user_id = ?",
+                (lid, user_id)).fetchone()
         if not row:
             return None
         out = dict(row)
         out["payload"] = json.loads(out["payload"])
         return out
 
-    def set_custom_lesson_done(self, lid, done=True) -> bool:
+    def set_custom_lesson_done(self, lid, done=True,
+                               user_id: int = ADMIN_USER_ID) -> bool:
         with self._lock:
-            cur = self.conn.execute("UPDATE custom_lessons SET done=? WHERE id=?",
-                                    (1 if done else 0, lid))
+            cur = self.conn.execute(
+                "UPDATE custom_lessons SET done=? WHERE id=? AND user_id=?",
+                (1 if done else 0, lid, user_id))
             self.conn.commit()
             return cur.rowcount > 0
 
-    def delete_custom_lesson(self, lid) -> bool:
+    def delete_custom_lesson(self, lid, user_id: int = ADMIN_USER_ID) -> bool:
         with self._lock:
-            cur = self.conn.execute("DELETE FROM custom_lessons WHERE id=?", (lid,))
+            cur = self.conn.execute(
+                "DELETE FROM custom_lessons WHERE id=? AND user_id=?", (lid, user_id))
             self.conn.commit()
             return cur.rowcount > 0
 
-    def errors_by_category(self, category: str, limit: int = 12) -> list[dict]:
+    def errors_by_category(self, category: str, limit: int = 12,
+                           user_id: int = ADMIN_USER_ID) -> list[dict]:
         with self._lock:
             rows = self.conn.execute(
                 "SELECT original, correction, explanation FROM writing_errors "
-                "WHERE COALESCE(NULLIF(category,''),'unclassified') = ? "
-                "ORDER BY created_at DESC LIMIT ?", (category, limit)).fetchall()
+                "WHERE user_id = ? "
+                "AND COALESCE(NULLIF(category,''),'unclassified') = ? "
+                "ORDER BY created_at DESC LIMIT ?",
+                (user_id, category, limit)).fetchall()
         return [dict(r) for r in rows]
 
-    def get_writing_error(self, eid) -> dict | None:
+    def get_writing_error(self, eid, user_id: int = ADMIN_USER_ID) -> dict | None:
         with self._lock:
             row = self.conn.execute(
-                "SELECT * FROM writing_errors WHERE id = ?", (eid,)).fetchone()
+                "SELECT * FROM writing_errors WHERE id = ? AND user_id = ?",
+                (eid, user_id)).fetchone()
         if not row:
             return None
         out = dict(row)
@@ -1277,20 +1331,23 @@ class DatabaseManager:
             out["lesson"] = json.loads(out["lesson"])
         return out
 
-    def set_error_lesson(self, eid, lesson) -> None:
+    def set_error_lesson(self, eid, lesson, user_id: int = ADMIN_USER_ID) -> None:
         with self._lock:
-            self.conn.execute("UPDATE writing_errors SET lesson=? WHERE id=?",
-                              (json.dumps(lesson, ensure_ascii=False), eid))
+            self.conn.execute(
+                "UPDATE writing_errors SET lesson=? WHERE id=? AND user_id=?",
+                (json.dumps(lesson, ensure_ascii=False), eid, user_id))
             self.conn.commit()
 
-    def set_error_reviewed(self, eid, reviewed=True) -> bool:
+    def set_error_reviewed(self, eid, reviewed=True,
+                           user_id: int = ADMIN_USER_ID) -> bool:
         with self._lock:
-            cur = self.conn.execute("UPDATE writing_errors SET reviewed=? WHERE id=?",
-                                    (1 if reviewed else 0, eid))
+            cur = self.conn.execute(
+                "UPDATE writing_errors SET reviewed=? WHERE id=? AND user_id=?",
+                (1 if reviewed else 0, eid, user_id))
             self.conn.commit()
             return cur.rowcount > 0
 
-    def writing_error_summary(self) -> list[dict]:
+    def writing_error_summary(self, user_id: int = ADMIN_USER_ID) -> list[dict]:
         """Tus errores agrupados por tipo, del más repetido al menos.
 
         Es lo que convierte el diario en algo accionable: no "24 errores
@@ -1300,7 +1357,8 @@ class DatabaseManager:
             rows = self.conn.execute(
                 "SELECT COALESCE(NULLIF(category,''),'unclassified') AS category, "
                 "COUNT(*) AS n, MAX(created_at) AS last_seen "
-                "FROM writing_errors GROUP BY 1 ORDER BY n DESC, last_seen DESC"
+                "FROM writing_errors WHERE user_id = ? "
+                "GROUP BY 1 ORDER BY n DESC, last_seen DESC", (user_id,)
             ).fetchall()
         # los porcentajes se calculan SOLO sobre lo clasificado: si no, los
         # errores antiguos dominan el diagnóstico y apuntan al sitio equivocado
@@ -1315,33 +1373,39 @@ class DatabaseManager:
         return out
 
     # --- test de nivel ------------------------------------------------- #
-    def save_test_result(self, level, correct, total) -> None:
+    def save_test_result(self, level, correct, total,
+                         user_id: int = ADMIN_USER_ID) -> None:
         with self._lock:
             self.conn.execute(
-                "INSERT INTO test_results (level, correct, total) VALUES (?,?,?)",
-                (level, correct, total))
+                "INSERT INTO test_results (user_id, level, correct, total) VALUES (?,?,?,?)",
+                (user_id, level, correct, total))
             self.conn.commit()
 
-    def last_test(self) -> dict | None:
+    def last_test(self, user_id: int = ADMIN_USER_ID) -> dict | None:
         with self._lock:
             r = self.conn.execute(
                 "SELECT level, correct, total, created_at FROM test_results "
-                "ORDER BY created_at DESC LIMIT 1").fetchone()
+                "WHERE user_id = ? ORDER BY created_at DESC LIMIT 1", (user_id,)).fetchone()
         return dict(r) if r else None
 
     # --- lecciones (progreso de la ruta) ------------------------------- #
-    def lesson_done_ids(self) -> list[str]:
+    def lesson_done_ids(self, user_id: int = ADMIN_USER_ID) -> list[str]:
         with self._lock:
-            rows = self.conn.execute("SELECT lesson_id FROM lesson_done").fetchall()
+            rows = self.conn.execute(
+                "SELECT lesson_id FROM lesson_done WHERE user_id = ?", (user_id,)).fetchall()
         return [r["lesson_id"] for r in rows]
 
-    def set_lesson_done(self, lesson_id: str, done: bool = True) -> None:
+    def set_lesson_done(self, lesson_id: str, done: bool = True,
+                        user_id: int = ADMIN_USER_ID) -> None:
         with self._lock:
             if done:
                 self.conn.execute(
-                    "INSERT OR IGNORE INTO lesson_done (lesson_id) VALUES (?)", (lesson_id,))
+                    "INSERT OR IGNORE INTO lesson_done (user_id, lesson_id) VALUES (?,?)",
+                    (user_id, lesson_id))
             else:
-                self.conn.execute("DELETE FROM lesson_done WHERE lesson_id=?", (lesson_id,))
+                self.conn.execute(
+                    "DELETE FROM lesson_done WHERE user_id=? AND lesson_id=?",
+                    (user_id, lesson_id))
             self.conn.commit()
 
     # --- actividad / tiempo (para estadísticas) ------------------------ #
@@ -1433,13 +1497,16 @@ class DatabaseManager:
             "heatmap": {r["day"]: round(r["s"] / 60) for r in heat},
         }
 
-    def nav_alerts(self) -> dict:
+    def nav_alerts(self, user_id: int = ADMIN_USER_ID) -> dict:
         """Días sin usar cada módulo de práctica (para el recordatorio del nav)."""
         with self._lock:
             rows = self.conn.execute(
-                "SELECT module, MAX(day) last FROM activity_log GROUP BY module"
+                "SELECT module, MAX(day) last FROM activity_log "
+                "WHERE user_id = ? GROUP BY module", (user_id,)
             ).fetchall()
-            any_act = self.conn.execute("SELECT COUNT(*) n FROM activity_log").fetchone()["n"]
+            any_act = self.conn.execute(
+                "SELECT COUNT(*) n FROM activity_log WHERE user_id = ?", (user_id,)
+            ).fetchone()["n"]
         last = {r["module"]: r["last"] for r in rows}
         today = datetime.date.today()
         stale = {}

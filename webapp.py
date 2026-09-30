@@ -24,7 +24,7 @@ import re
 import tempfile
 
 import uvicorn
-from fastapi import Body, FastAPI, File, HTTPException, UploadFile
+from fastapi import Body, Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -42,6 +42,16 @@ os.makedirs(core.LIBRARY_DIR, exist_ok=True)
 # --------------------------------------------------------------------------- #
 # Frontend
 # --------------------------------------------------------------------------- #
+def current_user() -> int:
+    """Quién está usando la app ahora mismo.
+
+    Fase 1: siempre el admin, porque todavía no hay login. En la Fase 2 esta
+    función pasa a leer la sesión del navegador, y con ese único cambio todos
+    los endpoints de abajo se vuelven multiusuario de golpe.
+    """
+    return core.ADMIN_USER_ID
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> HTMLResponse:
     with open(os.path.join(STATIC_DIR, "index.html"), "r", encoding="utf-8") as fh:
@@ -158,7 +168,7 @@ def get_stats(book_id: int) -> dict:
 
 
 @app.get("/api/books/{book_id}/difficulty")
-def book_difficulty(book_id: int) -> dict:
+def book_difficulty(book_id: int, uid: int = Depends(current_user)) -> dict:
     """Nivel estimado del libro y cuánto se aleja del tuyo.
 
     Existe para avisarte ANTES de empezar: leer dos escalones por encima de tu
@@ -167,7 +177,7 @@ def book_difficulty(book_id: int) -> dict:
     if db.get_book(book_id) is None:
         raise HTTPException(404, "Libro no encontrado")
     stats = core.readability(db.book_sample_sentences(book_id))
-    yours = (db.last_test() or {}).get("level") or ""
+    yours = (db.last_test(user_id=uid) or {}).get("level") or ""
     gap = core.level_gap(stats["level"], yours) if yours else 0
     if not yours:
         verdict = "Haz el test de nivel para comparar con el tuyo."
@@ -241,17 +251,17 @@ def set_chapter_done(book_id: int, idx: int, payload: dict = Body(...)) -> dict:
 # Estado de lectura (autoguardado)
 # --------------------------------------------------------------------------- #
 @app.get("/api/books/{book_id}/state")
-def get_state(book_id: int) -> dict:
-    return db.load_reading_state(book_id)
+def get_state(book_id: int, uid: int = Depends(current_user)) -> dict:
+    return db.load_reading_state(book_id, user_id=uid)
 
 
 @app.post("/api/books/{book_id}/state")
-def set_state(book_id: int, payload: dict = Body(...)) -> dict:
+def set_state(book_id: int, payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
     db.save_reading_state(
         book_id,
         int(payload.get("chapter_index", 0)),
         int(payload.get("sentence_index", 0)),
-    )
+        user_id=uid)
     return {"ok": True}
 
 
@@ -298,7 +308,7 @@ def set_config(payload: dict = Body(...)) -> dict:
 # Vocabulario + repetición espaciada (SRS)
 # --------------------------------------------------------------------------- #
 @app.post("/api/vocab")
-def add_vocab(payload: dict = Body(...)) -> dict:
+def add_vocab(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
     term = (payload.get("term") or "").strip()
     if not term:
         raise HTTPException(400, "Falta 'term'")
@@ -312,7 +322,7 @@ def add_vocab(payload: dict = Body(...)) -> dict:
     # del libro como hasta ahora: nunca bloquea el guardado.
     simple = ""
     try:
-        level = (db.last_test() or {}).get("level") or "B1"
+        level = (db.last_test(user_id=uid) or {}).get("level") or "B1"
         simple_pair = core.simple_example(term, level=level)
         if simple_pair["example"]:
             simple = simple_pair["example"]
@@ -327,25 +337,25 @@ def add_vocab(payload: dict = Body(...)) -> dict:
         payload.get("lang") or "en",
         payload.get("book_id"),
         simple_example=simple,
-    )
-    return {"id": vid, "simple_example": simple, **db.vocab_stats()}
+        user_id=uid)
+    return {"id": vid, "simple_example": simple, **db.vocab_stats(user_id=uid)}
 
 
 @app.get("/api/vocab")
-def list_vocab() -> list[dict]:
-    return db.list_vocab()
+def list_vocab(uid: int = Depends(current_user)) -> list[dict]:
+    return db.list_vocab(user_id=uid)
 
 
 @app.get("/api/vocab/due")
-def due_vocab(ahead: bool = False) -> list[dict]:
+def due_vocab(ahead: bool = False, uid: int = Depends(current_user)) -> list[dict]:
     """ahead=true: si no toca nada hoy, adelanta los próximos repasos."""
-    limite = int(db.get_setting("vocab_new_limit", "10") or 10)
-    return _with_cloze(db.due_vocab(new_limit=limite, ahead=ahead),
+    limite = int(db.get_setting("vocab_new_limit", "10", user_id=uid) or 10)
+    return _with_cloze(db.due_vocab(new_limit=limite, ahead=ahead, user_id=uid),
                        front_key="term", note_key="simple_example")
 
 
 @app.post("/api/vocab/backfill-examples")
-def backfill_examples(limit: int = 5) -> dict:
+def backfill_examples(limit: int = 5, uid: int = Depends(current_user)) -> dict:
     """Genera el ejemplo corto de las palabras que se quedaron sin él.
 
     Existe porque si la IA está caída justo al guardar una palabra, esa tarjeta
@@ -355,8 +365,8 @@ def backfill_examples(limit: int = 5) -> dict:
     reintentos, y un lote grande dejaría el servidor bloqueado varios minutos.
     Es seguro llamarlo varias veces: solo toca las que aún no tienen ejemplo.
     """
-    level = (db.last_test() or {}).get("level") or "B1"
-    pending = [w for w in db.list_vocab() if not (w.get("simple_example") or "").strip()]
+    level = (db.last_test(user_id=uid) or {}).get("level") or "B1"
+    pending = [w for w in db.list_vocab(user_id=uid) if not (w.get("simple_example") or "").strip()]
     done, failed = 0, 0
     for word in pending[:limit]:
         try:
@@ -368,36 +378,36 @@ def backfill_examples(limit: int = 5) -> dict:
             text = pair["example"]
             if pair["translation"]:
                 text += " — " + pair["translation"]
-            db.set_simple_example(word["id"], text)
+            db.set_simple_example(word["id"], text, user_id=uid)
             done += 1
     return {"filled": done, "remaining": max(0, len(pending) - done), "ai_failed": failed}
 
 
 @app.get("/api/vocab/new")
-def new_vocab(limit: int = 10) -> list[dict]:
+def new_vocab(limit: int = 10, uid: int = Depends(current_user)) -> list[dict]:
     """Palabras sin ver, ignorando el candado diario (a petición tuya)."""
-    return _with_cloze(db.new_vocab(limit=limit), front_key="term", note_key="simple_example")
+    return _with_cloze(db.new_vocab(limit=limit, user_id=uid), front_key="term", note_key="simple_example")
 
 
 @app.get("/api/vocab/stats")
-def vocab_stats() -> dict:
-    return db.vocab_stats()
+def vocab_stats(uid: int = Depends(current_user)) -> dict:
+    return db.vocab_stats(user_id=uid)
 
 
 @app.post("/api/vocab/{vid}/grade")
-def grade_vocab(vid: int, payload: dict = Body(...)) -> dict:
+def grade_vocab(vid: int, payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
     grade = payload.get("grade", "good")
     if grade not in ("again", "hard", "good", "easy"):
         raise HTTPException(400, "grade inválido")
-    db.grade_vocab(vid, grade)
-    return db.vocab_stats()
+    db.grade_vocab(vid, grade, user_id=uid)
+    return db.vocab_stats(user_id=uid)
 
 
 @app.delete("/api/vocab/{vid}")
-def delete_vocab(vid: int) -> dict:
-    if not db.delete_vocab(vid):
+def delete_vocab(vid: int, uid: int = Depends(current_user)) -> dict:
+    if not db.delete_vocab(vid, user_id=uid):
         raise HTTPException(404, "Esa palabra no existe")
-    return db.vocab_stats()
+    return db.vocab_stats(user_id=uid)
 
 
 # --------------------------------------------------------------------------- #
@@ -428,36 +438,36 @@ def study_check(payload: dict = Body(...)) -> dict:
 
 
 @app.get("/api/study/limits")
-def get_limits() -> dict:
+def get_limits(uid: int = Depends(current_user)) -> dict:
     """Topes de estudio y cuánto llevas hoy."""
-    done = db.reviews_today()
-    cap = int(db.get_setting("review_limit", str(core.DEFAULT_REVIEW_LIMIT)) or 0)
+    done = db.reviews_today(user_id=uid)
+    cap = int(db.get_setting("review_limit", str(core.DEFAULT_REVIEW_LIMIT), user_id=uid) or 0)
     return {"review_limit": cap, "reviews_today": done,
-            "review_left": db.review_budget_left() if cap else None,
-            "vocab_new_limit": int(db.get_setting("vocab_new_limit", "10") or 10),
+            "review_left": db.review_budget_left(user_id=uid) if cap else None,
+            "vocab_new_limit": int(db.get_setting("vocab_new_limit", "10", user_id=uid) or 10),
             "decks": [{"id": d["id"], "name": d["name"], "new_limit": d["new_limit"]}
-                      for d in db.list_decks()],
-            "backlog": db.review_backlog()}
+                      for d in db.list_decks(user_id=uid)],
+            "backlog": db.review_backlog(user_id=uid)}
 
 
 @app.post("/api/study/limits")
-def set_limits(payload: dict = Body(...)) -> dict:
+def set_limits(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
     if "review_limit" in payload:
-        db.set_setting("review_limit", max(0, int(payload["review_limit"])))
+        db.set_setting("review_limit", max(0, int(payload["review_limit"])), user_id=uid)
     if "vocab_new_limit" in payload:
-        db.set_setting("vocab_new_limit", max(0, int(payload["vocab_new_limit"])))
+        db.set_setting("vocab_new_limit", max(0, int(payload["vocab_new_limit"])), user_id=uid)
     for item in (payload.get("decks") or []):
-        db.set_deck_new_limit(int(item["id"]), int(item["new_limit"]))
-    return get_limits()
+        db.set_deck_new_limit(int(item["id"]), int(item["new_limit"]), user_id=uid)
+    return get_limits(uid=uid)
 
 
 @app.get("/api/decks")
-def list_decks() -> list[dict]:
-    return db.list_decks()
+def list_decks(uid: int = Depends(current_user)) -> list[dict]:
+    return db.list_decks(user_id=uid)
 
 
 @app.post("/api/decks/{deck_id}/backfill-examples")
-def deck_backfill_examples(deck_id: int, batch: int = 12) -> dict:
+def deck_backfill_examples(deck_id: int, batch: int = 12, uid: int = Depends(current_user)) -> dict:
     """Genera los ejemplos que faltan en un mazo, en lotes.
 
     Un lote por llamada a la IA (no una por tarjeta): 123 frases serían 123
@@ -467,7 +477,7 @@ def deck_backfill_examples(deck_id: int, batch: int = 12) -> dict:
     if not pending:
         return {"filled": 0, "remaining": 0, "done": True}
     lote = pending[:batch]
-    level = (db.last_test() or {}).get("level") or "B1"
+    level = (db.last_test(user_id=uid) or {}).get("level") or "B1"
     try:
         ejemplos = core.phrase_examples([c["front"] for c in lote], level=level)
     except core.AIUnavailable as exc:
@@ -483,31 +493,31 @@ def deck_backfill_examples(deck_id: int, batch: int = 12) -> dict:
 
 
 @app.get("/api/decks/{deck_id}/due")
-def deck_due(deck_id: int, new_limit: int | None = None, ahead: bool = False) -> list[dict]:
+def deck_due(deck_id: int, new_limit: int | None = None, ahead: bool = False, uid: int = Depends(current_user)) -> list[dict]:
     """new_limit sin valor = usa el tope configurado en el mazo (ajustable en 🎚)."""
-    return _with_cloze(db.deck_due_cards(deck_id, new_limit=new_limit, ahead=ahead))
+    return _with_cloze(db.deck_due_cards(deck_id, new_limit=new_limit, ahead=ahead, user_id=uid))
 
 
 @app.get("/api/streak")
-def streak() -> dict:
-    return db.get_streak()
+def streak(uid: int = Depends(current_user)) -> dict:
+    return db.get_streak(user_id=uid)
 
 
 @app.post("/api/activity")
-def activity(payload: dict = Body(...)) -> dict:
+def activity(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
     db.log_activity(payload.get("module", ""), int(payload.get("active", 0)),
-                    int(payload.get("open", 0)))
+                    int(payload.get("open", 0)), user_id=uid)
     return {"ok": True}
 
 
 @app.get("/api/stats/full")
-def stats_full(range: str = "week") -> dict:
-    return db.get_full_stats("month" if range == "month" else "week")
+def stats_full(range: str = "week", uid: int = Depends(current_user)) -> dict:
+    return db.get_full_stats("month" if range == "month" else "week", user_id=uid)
 
 
 @app.get("/api/nav-alerts")
-def nav_alerts() -> dict:
-    return db.nav_alerts()
+def nav_alerts(uid: int = Depends(current_user)) -> dict:
+    return db.nav_alerts(user_id=uid)
 
 
 # --------------------------------------------------------------------------- #
@@ -519,25 +529,25 @@ def test_form() -> dict:
 
 
 @app.post("/api/test/score")
-def test_score(payload: dict = Body(...)) -> dict:
+def test_score(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
     form_id = int(payload.get("form_id", 0))
     answers = payload.get("answers") or []
     result = core.score_test(form_id, answers)
-    db.save_test_result(result["level"], result["correct"], result["total"])
+    db.save_test_result(result["level"], result["correct"], result["total"], user_id=uid)
     return result
 
 
 @app.get("/api/test/last")
-def test_last() -> dict:
-    return db.last_test() or {}
+def test_last(uid: int = Depends(current_user)) -> dict:
+    return db.last_test(user_id=uid) or {}
 
 
 @app.post("/api/test/adaptive")
-def test_adaptive(payload: dict = Body(...)) -> dict:
+def test_adaptive(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
     answers = payload.get("answers") or []
     result = core.adaptive_next(answers)
     if result.get("done"):
-        db.save_test_result(result["level"], result.get("correct", 0), len(answers))
+        db.save_test_result(result["level"], result.get("correct", 0), len(answers), user_id=uid)
     return result
 
 
@@ -545,9 +555,9 @@ def test_adaptive(payload: dict = Body(...)) -> dict:
 # Lessons — método contrastivo (Ghio): beginner / mid / advanced
 # --------------------------------------------------------------------------- #
 @app.get("/api/lessons")
-def lessons(level: str = "") -> dict:
+def lessons(level: str = "", uid: int = Depends(current_user)) -> dict:
     items = core.get_lessons(level or None)
-    done = set(db.lesson_done_ids())
+    done = set(db.lesson_done_ids(user_id=uid))
     for it in items:
         it["done"] = it["id"] in done
     # checkpoints (mini-tests) por nivel
@@ -562,20 +572,20 @@ def lessons(level: str = "") -> dict:
 
 
 @app.get("/api/checkpoint/{cp_id}")
-def checkpoint_detail(cp_id: str) -> dict:
+def checkpoint_detail(cp_id: str, uid: int = Depends(current_user)) -> dict:
     cp = core.get_checkpoint(cp_id)
     if not cp:
         raise HTTPException(404, "Checkpoint not found")
-    cp["done"] = cp_id in set(db.lesson_done_ids())
+    cp["done"] = cp_id in set(db.lesson_done_ids(user_id=uid))
     return cp
 
 
 @app.post("/api/checkpoint/{cp_id}/done")
-def checkpoint_done(cp_id: str, payload: dict = Body(default={})) -> dict:
+def checkpoint_done(cp_id: str, payload: dict = Body(default={}), uid: int = Depends(current_user)) -> dict:
     if not core.get_checkpoint(cp_id):
         raise HTTPException(404, "Checkpoint not found")
     done = bool(payload.get("done", True))
-    db.set_lesson_done(cp_id, done)
+    db.set_lesson_done(cp_id, done, user_id=uid)
     return {"ok": True, "done": done}
 
 
@@ -583,71 +593,71 @@ def checkpoint_done(cp_id: str, payload: dict = Body(default={})) -> dict:
 # por orden de definición: si {lesson_id} va primero, captura "custom" como
 # si fuera el id de una lección y devuelve 404.
 @app.post("/api/lessons/generate")
-def generate_lesson(payload: dict = Body(default={})) -> dict:
+def generate_lesson(payload: dict = Body(default={}), uid: int = Depends(current_user)) -> dict:
     """Crea una lección a medida contra tu tipo de error más frecuente."""
-    resumen = [s for s in db.writing_error_summary() if s["category"] != "unclassified"]
+    resumen = [s for s in db.writing_error_summary(user_id=uid) if s["category"] != "unclassified"]
     if not resumen:
         raise HTTPException(400, "Aún no hay errores clasificados. Evalúa alguna redacción "
                                  "con «Check my writing» primero.")
     categoria = payload.get("category") or resumen[0]["category"]
     etiqueta = next((s["label"] for s in resumen if s["category"] == categoria), categoria)
-    errores = db.errors_by_category(categoria)
+    errores = db.errors_by_category(categoria, user_id=uid)
     if not errores:
         raise HTTPException(400, f"No hay errores de tipo «{etiqueta}».")
-    nivel = (db.last_test() or {}).get("level") or "B1"
+    nivel = (db.last_test(user_id=uid) or {}).get("level") or "B1"
     try:
         leccion = core.generate_error_lesson(etiqueta, errores, level=nivel)
     except core.AIUnavailable as exc:
         raise HTTPException(503, str(exc))
     lid = db.save_custom_lesson(categoria, leccion.get("title") or etiqueta,
-                                nivel, leccion, len(errores))
+                                nivel, leccion, len(errores), user_id=uid)
     return {"id": lid, "category": categoria, "label": etiqueta,
             "based_on": len(errores), "lesson": leccion}
 
 
 @app.get("/api/lessons/custom")
-def list_custom_lessons() -> list[dict]:
-    return db.list_custom_lessons()
+def list_custom_lessons(uid: int = Depends(current_user)) -> list[dict]:
+    return db.list_custom_lessons(user_id=uid)
 
 
 @app.get("/api/lessons/custom/{lid}")
-def get_custom_lesson(lid: int) -> dict:
-    row = db.get_custom_lesson(lid)
+def get_custom_lesson(lid: int, uid: int = Depends(current_user)) -> dict:
+    row = db.get_custom_lesson(lid, user_id=uid)
     if not row:
         raise HTTPException(404, "Esa lección no existe")
     return row
 
 
 @app.post("/api/lessons/custom/{lid}/done")
-def custom_lesson_done(lid: int, payload: dict = Body(default={})) -> dict:
-    if not db.set_custom_lesson_done(lid, bool(payload.get("done", True))):
+def custom_lesson_done(lid: int, payload: dict = Body(default={}), uid: int = Depends(current_user)) -> dict:
+    if not db.set_custom_lesson_done(lid, bool(payload.get("done", True)), user_id=uid):
         raise HTTPException(404, "Esa lección no existe")
     return {"ok": True}
 
 
 @app.delete("/api/lessons/custom/{lid}")
-def delete_custom_lesson(lid: int) -> dict:
-    if not db.delete_custom_lesson(lid):
+def delete_custom_lesson(lid: int, uid: int = Depends(current_user)) -> dict:
+    if not db.delete_custom_lesson(lid, user_id=uid):
         raise HTTPException(404, "Esa lección no existe")
     return {"deleted": lid}
 
 
 @app.get("/api/lessons/{lesson_id}")
-def lesson_detail(lesson_id: str) -> dict:
+def lesson_detail(lesson_id: str, uid: int = Depends(current_user)) -> dict:
     ls = core.get_lesson(lesson_id)
     if not ls:
         raise HTTPException(404, "Lesson not found")
     out = dict(ls)
-    out["done"] = lesson_id in set(db.lesson_done_ids())
+    out["done"] = lesson_id in set(db.lesson_done_ids(user_id=uid))
     return out
 
 
 @app.post("/api/lessons/{lesson_id}/done")
-def lesson_done(lesson_id: str, payload: dict = Body(default={})) -> dict:
+def lesson_done(lesson_id: str, payload: dict = Body(default={}), uid: int = Depends(current_user)) -> dict:
     if not core.get_lesson(lesson_id):
         raise HTTPException(404, "Lesson not found")
     done = bool(payload.get("done", True))
-    db.set_lesson_done(lesson_id, done)
+    db.set_lesson_done(lesson_id, done, user_id=uid)
     return {"ok": True, "done": done}
 
 
@@ -667,7 +677,7 @@ async def writing_extract(file: UploadFile = File(...)) -> dict:
 
 
 @app.post("/api/writing/check")
-def writing_check(payload: dict = Body(...)) -> dict:
+def writing_check(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
     text = (payload.get("text") or "").strip()
     if not text:
         raise HTTPException(400, "Falta 'text'")
@@ -679,23 +689,23 @@ def writing_check(payload: dict = Body(...)) -> dict:
     # guarda el escrito + los errores en el diario
     title = (payload.get("title") or text[:40]).strip()
     wid = db.save_writing(title, text, result.get("corrected"), result.get("level"),
-                          result.get("assessment", ""))
+                          result.get("assessment", ""), user_id=uid)
     for e in result.get("errors", []):
         db.add_writing_error(wid, e.get("original", ""), e.get("correction", ""),
-                             e.get("explanation", ""), e.get("category", "other"))
+                             e.get("explanation", ""), e.get("category", "other"), user_id=uid)
     result["writing_id"] = wid
     return result
 
 
 @app.post("/api/writing/upgrade")
-def writing_upgrade(payload: dict = Body(...)) -> dict:
+def writing_upgrade(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
     text = (payload.get("text") or "").strip()
     level = payload.get("level", "B2")
     if not text:
         raise HTTPException(400, "Falta 'text'")
     wid = payload.get("writing_id")
     # el upgrade parte del nivel evaluado: primero hay que saber en qué nivel escribes
-    record = db.get_writing(int(wid)) if wid else None
+    record = db.get_writing(int(wid), user_id=uid) if wid else None
     from_level = (record or {}).get("level") or ""
     if not from_level:
         raise HTTPException(
@@ -713,71 +723,71 @@ def writing_upgrade(payload: dict = Body(...)) -> dict:
         upgraded = core.writing_upgrade(text, level, from_level=from_level)
     except core.AIUnavailable as exc:
         raise HTTPException(503, str(exc))
-    db.save_writing_upgrade(int(wid), upgraded, level)
+    db.save_writing_upgrade(int(wid), upgraded, level, user_id=uid)
     return {"upgraded": upgraded, "level": level, "from_level": from_level}
 
 
 @app.get("/api/writings")
-def list_writings() -> list[dict]:
-    return db.list_writings()
+def list_writings(uid: int = Depends(current_user)) -> list[dict]:
+    return db.list_writings(user_id=uid)
 
 
 @app.get("/api/writings/{wid}")
-def get_writing(wid: int) -> dict:
+def get_writing(wid: int, uid: int = Depends(current_user)) -> dict:
     """Detalle completo: original, corrección, evaluación y upgrade (para comparar)."""
-    record = db.get_writing(wid)
+    record = db.get_writing(wid, user_id=uid)
     if not record:
         raise HTTPException(404, "No existe ese escrito")
     return record
 
 
 @app.delete("/api/writings/{wid}")
-def delete_writing(wid: int) -> dict:
-    if not db.delete_writing(wid):
+def delete_writing(wid: int, uid: int = Depends(current_user)) -> dict:
+    if not db.delete_writing(wid, user_id=uid):
         raise HTTPException(404, "No existe ese escrito")
     return {"deleted": wid}
 
 
 @app.get("/api/writing/errors")
-def writing_errors(category: str = "") -> list[dict]:
-    return db.list_writing_errors(category=category)
+def writing_errors(category: str = "", uid: int = Depends(current_user)) -> list[dict]:
+    return db.list_writing_errors(category=category, user_id=uid)
 
 
 @app.post("/api/writing/errors/{eid}/explain")
-def explain_error(eid: int, force: bool = False) -> dict:
+def explain_error(eid: int, force: bool = False, uid: int = Depends(current_user)) -> dict:
     """Mini-lección para UN error. Se cachea: la segunda vez no gasta IA."""
-    err = db.get_writing_error(eid)
+    err = db.get_writing_error(eid, user_id=uid)
     if not err:
         raise HTTPException(404, "Ese error no existe")
     if err.get("lesson") and not force:
         return {"id": eid, "lesson": err["lesson"], "cached": True}
-    nivel = (db.last_test() or {}).get("level") or "B1"
+    nivel = (db.last_test(user_id=uid) or {}).get("level") or "B1"
     try:
         leccion = core.explain_error(err.get("original", ""), err.get("correction", ""),
                                      err.get("explanation", ""), level=nivel)
     except core.AIUnavailable as exc:
         raise HTTPException(503, str(exc))
-    db.set_error_lesson(eid, leccion)
+    db.set_error_lesson(eid, leccion, user_id=uid)
     return {"id": eid, "lesson": leccion, "cached": False}
 
 
 @app.post("/api/writing/errors/{eid}/reviewed")
-def mark_error_reviewed(eid: int, payload: dict = Body(default={})) -> dict:
-    if not db.set_error_reviewed(eid, bool(payload.get("reviewed", True))):
+def mark_error_reviewed(eid: int, payload: dict = Body(default={}), uid: int = Depends(current_user)) -> dict:
+    if not db.set_error_reviewed(eid, bool(payload.get("reviewed", True)), user_id=uid):
         raise HTTPException(404, "Ese error no existe")
     return {"ok": True, "reviewed": bool(payload.get("reviewed", True))}
 
 
 @app.get("/api/writing/errors/summary")
-def writing_error_summary() -> list[dict]:
+def writing_error_summary(uid: int = Depends(current_user)) -> list[dict]:
     """Tus errores agrupados por tipo gramatical, del más repetido al menos."""
-    return db.writing_error_summary()
+    return db.writing_error_summary(user_id=uid)
 
 
 @app.get("/api/writing/progress")
-def writing_progress() -> dict:
+def writing_progress(uid: int = Depends(current_user)) -> dict:
     """Evolución de tu nivel CEFR escrito a lo largo del tiempo."""
-    rows = [w for w in db.list_writings() if w.get("level")]
+    rows = [w for w in db.list_writings(user_id=uid) if w.get("level")]
     rows.reverse()  # del más antiguo al más reciente
     points = [{"date": (w.get("created_at") or "")[:10], "level": w["level"],
                "value": core.CEFR_LEVELS.index(w["level"]) + 1, "title": w.get("title") or ""}
@@ -790,16 +800,16 @@ def writing_progress() -> dict:
 
 
 @app.get("/api/decks/{deck_id}/new")
-def deck_new(deck_id: int, limit: int = 10) -> list[dict]:
+def deck_new(deck_id: int, limit: int = 10, uid: int = Depends(current_user)) -> list[dict]:
     """Siguientes tarjetas sin ver, ignorando el candado diario (a petición tuya)."""
-    return _with_cloze(db.deck_new_cards(deck_id, limit=limit))
+    return _with_cloze(db.deck_new_cards(deck_id, limit=limit, user_id=uid))
 
 
 @app.get("/api/decks/{deck_id}/study")
-def deck_study(deck_id: int) -> list[dict]:
+def deck_study(deck_id: int, uid: int = Depends(current_user)) -> list[dict]:
     # todas las tarjetas, sin límite diario
-    cards = db.deck_study_cards(deck_id)
-    if not cards and not any(d["id"] == deck_id for d in db.list_decks()):
+    cards = db.deck_study_cards(deck_id, user_id=uid)
+    if not cards and not any(d["id"] == deck_id for d in db.list_decks(user_id=uid)):
         raise HTTPException(404, "Ese mazo no existe")
     return _with_cloze(cards)
 
@@ -821,11 +831,11 @@ def tts(text: str, voice: str = "", rate: int = 0, lang: str = "en") -> FileResp
 
 
 @app.post("/api/decks/cards/{card_id}/grade")
-def grade_deck_card(card_id: int, payload: dict = Body(...)) -> dict:
+def grade_deck_card(card_id: int, payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
     grade = payload.get("grade", "good")
     if grade not in ("again", "hard", "good", "easy"):
         raise HTTPException(400, "grade inválido")
-    db.grade_deck_card(card_id, grade)
+    db.grade_deck_card(card_id, grade, user_id=uid)
     return {"ok": True}
 
 
@@ -833,14 +843,14 @@ def grade_deck_card(card_id: int, payload: dict = Body(...)) -> dict:
 # Export a Anki (.apkg) — genera audio server-side y lo empaqueta
 # --------------------------------------------------------------------------- #
 @app.post("/api/export/anki")
-def export_anki(payload: dict = Body(...)) -> FileResponse:
+def export_anki(payload: dict = Body(...), uid: int = Depends(current_user)) -> FileResponse:
     items = payload.get("items") or []
     if not items:
         # sin items -> exporta TODO el vocabulario guardado
         items = [
             {"word": v["term"], "translation": v.get("translation") or "",
              "example": v.get("example") or "", "lang": v.get("lang") or "en"}
-            for v in db.list_vocab()
+            for v in db.list_vocab(user_id=uid)
         ]
     if not items:
         raise HTTPException(400, "No hay vocabulario para exportar")
