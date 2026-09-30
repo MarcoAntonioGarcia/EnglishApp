@@ -53,6 +53,11 @@
   .btn:disabled{opacity:.5;cursor:not-allowed;}
   .side-foot{display:flex;align-items:center;gap:10px;color:var(--side-muted);font-size:12px;padding:6px;}
   .avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(145deg,#4a4d55,#2a2c31);}
+  .side-cuenta{display:flex;gap:8px;align-items:center;padding:0 6px 4px;}
+  .side-cuenta a,.side-cuenta button{background:none;border:0;padding:2px 0;font:inherit;
+    font-size:11.5px;color:var(--side-muted);cursor:pointer;text-decoration:none;}
+  .side-cuenta a:hover,.side-cuenta button:hover{color:var(--side-ink);text-decoration:underline;}
+  .side-cuenta button{margin-left:auto;}
 
   /* ---------- Reader (centro, estilo libro) ---------- */
   .reader-wrap{display:flex;flex-direction:column;min-width:0;background:var(--bg);}
@@ -443,11 +448,18 @@
       <b id="streakNum">0</b><span style="color:var(--side-muted)">day streak</span>
     </div>
     <div id="goalBox" onclick="setDailyGoal()" title="Daily goal (click to change)" style="cursor:pointer;padding:0 10px;font-size:12.5px;color:var(--side-muted)"></div>
-    <div class="side-foot" onclick="openSettings()" title="Settings" style="cursor:pointer">
+    <div class="side-foot" title="Cuenta">
       <div class="avatar"></div>
-      <div style="flex:1">Marco Antonio<br><span style="color:#6c6f77">Local session</span></div>
+      <div style="flex:1;min-width:0;overflow:hidden">
+        <span id="cuentaNombre" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">…</span>
+        <span id="cuentaRol" style="color:#6c6f77"></span>
+      </div>
       <span id="aiDot" title="AI status" style="font-size:11px;color:#6c6f77">●</span>
-      <span style="color:#6c6f77;font-size:15px">⚙</span>
+      <span onclick="openSettings()" title="Settings" style="cursor:pointer;color:#6c6f77;font-size:15px">⚙</span>
+    </div>
+    <div class="side-cuenta">
+      <a href="/admin" id="enlaceAdmin" hidden>Usuarios</a>
+      <button type="button" onclick="salir()">Salir</button>
     </div>
   </aside>
 
@@ -2681,6 +2693,24 @@ updateStreak();
 loadNavAlerts();
 refreshAiDot();
 window.addEventListener("beforeunload",saveState);
+</script>
+<script>
+// --- cuenta: quién ha entrado, panel de admin y salir ---------------------
+async function cargarCuenta(){
+  const r = await fetch("/api/auth/me");
+  if(r.status === 401){ location.href = "/entrar"; return; }
+  if(!r.ok) return;
+  const u = await r.json();
+  document.getElementById("cuentaNombre").textContent = u.email || u.username;
+  document.getElementById("cuentaRol").textContent =
+    (u.role === "admin" ? "Administrador" : "Sesión iniciada");
+  if(u.role === "admin") document.getElementById("enlaceAdmin").hidden = false;
+}
+async function salir(){
+  await fetch("/api/auth/logout", {method:"POST"});
+  location.href = "/entrar";
+}
+cargarCuenta();
 </script>
 </body>
 </html>

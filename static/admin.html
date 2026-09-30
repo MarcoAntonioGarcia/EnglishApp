@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Usuarios · English App</title>
+<style>
+  :root{
+    --bg:#efe9df; --card:#fffdf9; --line:#e7e0d2; --ink:#2a2723; --muted:#8a8378;
+    --gold:#c9a86a; --accent:#2f6b5e; --danger:#b4453b;
+    --shadow:0 1px 3px rgba(40,33,20,.06),0 8px 24px rgba(40,33,20,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);padding:28px 20px;
+       font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+  .caja{max-width:900px;margin:0 auto}
+  header{display:flex;align-items:baseline;justify-content:space-between;gap:14px;
+         flex-wrap:wrap;margin-bottom:20px}
+  h1{margin:0;font-size:22px;font-weight:600;letter-spacing:-.3px}
+  header a{color:var(--accent);font-size:13.5px;text-decoration:none}
+  header a:hover{text-decoration:underline}
+  .tarjeta{background:var(--card);border:1px solid var(--line);border-radius:14px;
+           box-shadow:var(--shadow);overflow:hidden}
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:680px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;
+     color:var(--muted);padding:12px 14px;border-bottom:1px solid var(--line);font-weight:600}
+  td{padding:13px 14px;border-bottom:1px solid #f1ebdf;font-size:14px;vertical-align:middle}
+  tr:last-child td{border-bottom:0}
+  .correo{font-weight:600}
+  .sub{color:var(--muted);font-size:12px}
+  .chip{display:inline-block;padding:2.5px 9px;border-radius:99px;font-size:11.5px;font-weight:600}
+  .pending{background:#fdf3dd;color:#8a6d1f}
+  .active{background:#eaf3f0;color:var(--accent)}
+  .blocked{background:#fdeeec;color:var(--danger)}
+  .admin{background:#efe6f6;color:#6b4d8f}
+  .acciones{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  button{padding:6px 11px;border-radius:7px;font:inherit;font-size:12.5px;font-weight:600;
+         cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+  button:hover{background:#f7f2e8}
+  button.ok{background:var(--accent);color:#fff;border-color:var(--accent)}
+  button.mal{color:var(--danger);border-color:#f0cfca}
+  button:disabled{opacity:.4;cursor:default}
+  .vacio{padding:34px 16px;text-align:center;color:var(--muted);font-size:14px}
+  .aviso{margin-bottom:16px;padding:10px 13px;border-radius:8px;font-size:13.5px;display:none}
+  .aviso.error{background:#fdeeec;border:1px solid #f0cfca;color:var(--danger);display:block}
+  .aviso.ok{background:#eaf3f0;border:1px solid #c8e0d8;color:var(--accent);display:block}
+</style>
+</head>
+<body>
+<main class="caja">
+  <header>
+    <h1>Usuarios</h1>
+    <a href="/">← Volver a la app</a>
+  </header>
+
+  <div class="aviso" id="aviso" role="status"></div>
+
+  <div class="tarjeta">
+    <div class="scroll"><table>
+      <thead><tr>
+        <th>Cuenta</th><th>Estado</th><th>Clave IA</th><th>Alta</th>
+        <th style="text-align:right">Acciones</th>
+      </tr></thead>
+      <tbody id="filas"></tbody>
+    </table></div>
+    <div class="vacio" id="vacio" hidden>Todavía no hay nadie más registrado.</div>
+  </div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+let yo = null;
+
+const ETIQUETA = {pending:"Pendiente", active:"Activo", blocked:"Bloqueado"};
+
+function decir(texto, tipo){
+  const a = $("#aviso");
+  a.textContent = texto;
+  a.className = "aviso " + tipo;
+  if(tipo === "ok") setTimeout(() => { a.className = "aviso"; }, 3500);
+}
+
+async function llamar(url, cuerpo){
+  const r = await fetch(url, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(cuerpo),
+  });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok) throw new Error(d.detail || "No se pudo completar.");
+  return d;
+}
+
+function acciones(u){
+  const soyYo = yo && u.id === yo.id;
+  const b = [];
+  if(u.status === "pending")
+    b.push(`<button class="ok" data-a="active" data-id="${u.id}">Aprobar</button>`);
+  if(u.status === "active" && !soyYo)
+    b.push(`<button class="mal" data-a="blocked" data-id="${u.id}">Bloquear</button>`);
+  if(u.status === "blocked")
+    b.push(`<button class="ok" data-a="active" data-id="${u.id}">Reactivar</button>`);
+  b.push(`<button data-a="clave" data-id="${u.id}">Resetear contraseña</button>`);
+  return b.join("");
+}
+
+function pintar(usuarios){
+  $("#filas").innerHTML = usuarios.map(u => `
+    <tr>
+      <td>
+        <div class="correo">${u.email || u.username}</div>
+        <div class="sub">${u.role === "admin" ? '<span class="chip admin">Administrador</span>' : u.username}</div>
+      </td>
+      <td><span class="chip ${u.status}">${ETIQUETA[u.status] || u.status}</span></td>
+      <td class="sub">${u.tiene_clave_gemini ? u.pista_clave_gemini : "—"}</td>
+      <td class="sub">${(u.created_at || "").slice(0, 10)}</td>
+      <td><div class="acciones">${acciones(u)}</div></td>
+    </tr>`).join("");
+  $("#vacio").hidden = usuarios.length > 1;
+}
+
+async function cargar(){
+  const r = await fetch("/api/admin/users");
+  if(r.status === 401) return location.href = "/entrar";
+  if(!r.ok) return decir("No se pudo cargar la lista.", "error");
+  pintar(await r.json());
+}
+
+$("#filas").addEventListener("click", async e => {
+  const b = e.target.closest("button");
+  if(!b) return;
+  const id = Number(b.dataset.id);
+  b.disabled = true;
+  try{
+    if(b.dataset.a === "clave"){
+      const clave = prompt("Contraseña nueva para este usuario (mínimo 10 caracteres).\n" +
+                           "Se le cerrarán las sesiones abiertas.");
+      if(clave === null) return;
+      await llamar(`/api/admin/users/${id}/password`, {password: clave});
+      decir("Contraseña cambiada y sesiones cerradas.", "ok");
+    }else{
+      await llamar(`/api/admin/users/${id}/status`, {status: b.dataset.a});
+      decir("Hecho.", "ok");
+    }
+    await cargar();
+  }catch(err){
+    decir(err.message, "error");
+  }finally{
+    b.disabled = false;
+  }
+});
+
+fetch("/api/auth/me").then(r => r.json()).then(u => { yo = u; cargar(); });
+</script>
+</body>
+</html>

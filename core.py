@@ -24,13 +24,16 @@ La unidad atómica del diseño es la ORACIÓN. Ver ARCHITECTURE.md / SCHEMA.sql.
 
 from __future__ import annotations
 
+import contextvars
 import datetime
 import hashlib
+import hmac
 import html
 import json
 import math
 import os
 import re
+import secrets
 import shutil
 import sqlite3
 import subprocess
@@ -100,8 +103,37 @@ def _read_config() -> dict:
         return {}
 
 
+# La key de Gemini es de cada usuario (la cuota del free tier va por cuenta),
+# pero la piden funciones que están al fondo de la cadena del LLM. Pasarla por
+# parámetro obligaría a hilar user_id por media docena de capas, así que viaja
+# en una variable de contexto que la web fija al principio de cada petición.
+#
+# Aquí sí es aceptable, al contrario que con user_id: si no estuviera puesta, lo
+# peor que pasa es que la IA salga como "no configurada". No se filtran datos.
+_key_de_la_peticion: contextvars.ContextVar = contextvars.ContextVar(
+    "gemini_api_key", default=None)
+
+
+def usar_api_key(key: str | None):
+    """Fija la key del usuario de esta petición. Devuelve el token para soltarla."""
+    return _key_de_la_peticion.set((key or "").strip())
+
+
+def soltar_api_key(token) -> None:
+    _key_de_la_peticion.reset(token)
+
+
 def get_api_key() -> str | None:
-    """Devuelve la API key: primero la variable de entorno, luego el archivo local."""
+    """La API key que toca usar ahora mismo.
+
+    Si estamos dentro de una petición web, la del usuario que la hizo -- y si no
+    tiene, NINGUNA: caer en la del admin le gastaría su cuota a él. El archivo
+    local y la variable de entorno solo sirven ya para los scripts de consola
+    (seed_decks.py, warm_audio.py), que corren fuera de toda petición.
+    """
+    de_la_peticion = _key_de_la_peticion.get()
+    if de_la_peticion is not None:
+        return de_la_peticion or None
     key = os.environ.get("GEMINI_API_KEY")
     if key:
         return key.strip() or None
@@ -133,6 +165,64 @@ def ai_status() -> dict:
     masked = ("…" + key[-4:]) if key and len(key) >= 4 else ("set" if key else "")
     return {"enabled": bool(key), "key_masked": masked, "model": GEMINI_MODEL,
             "from_env": bool(os.environ.get("GEMINI_API_KEY")) and not _read_config().get("gemini_api_key")}
+
+
+COMO_SACAR_LA_KEY = [
+    "Entra en aistudio.google.com/apikey con tu cuenta de Google.",
+    "Pulsa «Create API key». Si te pide un proyecto, acepta el que te ofrece.",
+    "Copia la clave que aparece (empieza por AIza…).",
+    "Pégala aquí abajo y guarda.",
+]
+
+
+# --------------------------------------------------------------------------- #
+# Contraseñas
+# --------------------------------------------------------------------------- #
+# scrypt viene en la librería estándar: no hace falta bcrypt ni argon2, que
+# serían una dependencia más para lo mismo. Los parámetros son los recomendados
+# para uso interactivo; van GUARDADOS en el propio hash, así que subirlos más
+# adelante no invalida las contraseñas ya existentes.
+_SCRYPT_N, _SCRYPT_R, _SCRYPT_P = 2 ** 14, 8, 1
+_SCRYPT_MAXMEM = 64 * 1024 * 1024
+LONGITUD_MINIMA_CLAVE = 10
+
+
+def hash_password(plain: str) -> str:
+    """Devuelve 'scrypt$N$r$p$salt$hash'. Nunca se guarda la contraseña en claro."""
+    salt = secrets.token_bytes(16)
+    dk = hashlib.scrypt(plain.encode("utf-8"), salt=salt, n=_SCRYPT_N, r=_SCRYPT_R,
+                        p=_SCRYPT_P, dklen=32, maxmem=_SCRYPT_MAXMEM)
+    return f"scrypt${_SCRYPT_N}${_SCRYPT_R}${_SCRYPT_P}${salt.hex()}${dk.hex()}"
+
+
+def verify_password(plain: str, stored: str) -> bool:
+    """Compara en tiempo constante: comparar con == filtra cuántos bytes coinciden."""
+    try:
+        algo, n, r, p, salt_hex, dk_hex = stored.split("$")
+        if algo != "scrypt":
+            return False
+        dk = hashlib.scrypt(plain.encode("utf-8"), salt=bytes.fromhex(salt_hex),
+                            n=int(n), r=int(r), p=int(p), dklen=len(dk_hex) // 2,
+                            maxmem=_SCRYPT_MAXMEM)
+    except (ValueError, TypeError):
+        return False                      # hash vacío o con formato raro
+    return hmac.compare_digest(dk.hex(), dk_hex)
+
+
+def problema_con_la_clave(plain: str) -> str:
+    """Mensaje de error si la contraseña no vale, o cadena vacía si vale."""
+    if len(plain or "") < LONGITUD_MINIMA_CLAVE:
+        return f"La contraseña debe tener al menos {LONGITUD_MINIMA_CLAVE} caracteres."
+    if plain.strip() != plain:
+        return "La contraseña no puede empezar ni acabar con espacios."
+    return ""
+
+
+_RE_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def email_valido(email: str) -> bool:
+    return bool(_RE_EMAIL.match((email or "").strip()))
 
 
 # --------------------------------------------------------------------------- #
@@ -396,6 +486,19 @@ class DatabaseManager:
                     # un ALTER porque UNIQUE(email) es restricción de tabla y
                     # ALTER no puede añadirla: una base migrada tiene que quedar
                     # idéntica a una recién creada, o acabarán divergiendo.
+                    # sessions apunta a users y SCHEMA.sql ya la ha creado: si
+                    # se queda durante el renombrado, SQLite le reescribe la
+                    # clave ajena al nombre viejo. Mismo caso que card_progress.
+                    if self.conn.execute(
+                            "SELECT 1 FROM sqlite_master WHERE type='table' "
+                            "AND name='sessions'").fetchone():
+                        n = self.conn.execute(
+                            "SELECT COUNT(*) n FROM sessions").fetchone()["n"]
+                        if n:
+                            raise RuntimeError(
+                                f"sessions tiene {n} filas antes de migrar users: "
+                                "migración inesperada, no se toca nada")
+                        self.conn.execute("DROP TABLE sessions")
                     self._rebuild("users",
                                   ("id", "username", "password_hash", "role",
                                    "status", "created_at"), con_user_id=False)
@@ -492,6 +595,180 @@ class DatabaseManager:
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_cardprog_due "
                               "ON card_progress (user_id, due)")
             self.conn.commit()
+
+    # --- cuentas y sesiones -------------------------------------------- #
+    #
+    # Reglas que se respetan en todo este bloque:
+    #   * la contraseña en claro no se guarda, no se registra y no se devuelve;
+    #   * la key de Gemini es del usuario: solo se enseñan sus últimos 4
+    #     caracteres, nunca entera;
+    #   * bloquear a alguien o cambiarle la contraseña le cierra las sesiones.
+
+    CAMPOS_PRIVADOS = ("password_hash", "gemini_api_key")
+
+    @staticmethod
+    def _publico(row) -> dict:
+        """La ficha de un usuario tal y como puede salir hacia el navegador."""
+        d = dict(row)
+        key = d.get("gemini_api_key") or ""
+        for campo in DatabaseManager.CAMPOS_PRIVADOS:
+            d.pop(campo, None)
+        d["tiene_clave_gemini"] = bool(key)
+        d["pista_clave_gemini"] = ("…" + key[-4:]) if len(key) >= 4 else ""
+        return d
+
+    def get_user(self, user_id: int) -> dict | None:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        return self._publico(row) if row else None
+
+    def find_user(self, login: str) -> dict | None:
+        """Busca por username O por email: se puede entrar con cualquiera de los dos.
+
+        Devuelve la fila CRUDA (con el hash): solo la usa el login.
+        """
+        login = (login or "").strip()
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT * FROM users WHERE username = ? OR email = ?",
+                (login, login)).fetchone()
+        return dict(row) if row else None
+
+    def create_user(self, email: str, password: str, username: str = "",
+                    role: str = "user", status: str = "pending") -> int:
+        """Alta de usuario. Devuelve el id nuevo.
+
+        Lanza ValueError si el correo o la contraseña no valen, o si ya existe
+        una cuenta con ese correo.
+        """
+        email = (email or "").strip()
+        if not email_valido(email):
+            raise ValueError("Ese correo no tiene un formato válido.")
+        problema = problema_con_la_clave(password)
+        if problema:
+            raise ValueError(problema)
+        # para un usuario normal el username ES su correo: entra con lo que
+        # escribió al registrarse, sin inventarse un alias
+        username = (username or email).strip()
+        with self._lock:
+            ya = self.conn.execute(
+                "SELECT 1 FROM users WHERE username = ? OR email = ?",
+                (username, email)).fetchone()
+            if ya:
+                raise ValueError("Ya hay una cuenta con ese correo.")
+            cur = self.conn.execute(
+                "INSERT INTO users (username, email, password_hash, role, status) "
+                "VALUES (?,?,?,?,?)",
+                (username, email, hash_password(password), role, status))
+            self.conn.commit()
+            return cur.lastrowid
+
+    def set_password(self, user_id: int, password: str) -> None:
+        """Cambia la contraseña y cierra todas sus sesiones: si se cambia porque
+        pudo filtrarse, dejar sesiones vivas no arreglaría nada."""
+        problema = problema_con_la_clave(password)
+        if problema:
+            raise ValueError(problema)
+        with self._lock:
+            self.conn.execute("UPDATE users SET password_hash = ? WHERE id = ?",
+                              (hash_password(password), user_id))
+            self._revocar_sesiones_locked(user_id)
+            self.conn.commit()
+
+    def set_user_status(self, user_id: int, status: str) -> bool:
+        """'pending' | 'active' | 'blocked'. Bloquear cierra sus sesiones."""
+        if status not in ("pending", "active", "blocked"):
+            raise ValueError("Estado desconocido: " + str(status))
+        with self._lock:
+            cur = self.conn.execute("UPDATE users SET status = ? WHERE id = ?",
+                                    (status, user_id))
+            if status != "active":
+                self._revocar_sesiones_locked(user_id)
+            self.conn.commit()
+            return cur.rowcount > 0
+
+    def list_users(self) -> list[dict]:
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT * FROM users ORDER BY "
+                "CASE status WHEN 'pending' THEN 0 WHEN 'active' THEN 1 ELSE 2 END, "
+                "created_at").fetchall()
+        return [self._publico(r) for r in rows]
+
+    def count_admins(self) -> int:
+        with self._lock:
+            return self.conn.execute(
+                "SELECT COUNT(*) n FROM users WHERE role='admin' AND status='active'"
+            ).fetchone()["n"]
+
+    # --- key de Gemini, propia de cada usuario -------------------------- #
+    def set_gemini_key(self, user_id: int, key: str) -> None:
+        with self._lock:
+            self.conn.execute("UPDATE users SET gemini_api_key = ? WHERE id = ?",
+                              ((key or "").strip(), user_id))
+            self.conn.commit()
+
+    def get_gemini_key(self, user_id: int) -> str:
+        """La key ENTERA. Solo para llamar a Gemini: no sale hacia el navegador."""
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT gemini_api_key FROM users WHERE id = ?", (user_id,)).fetchone()
+        return (row["gemini_api_key"] or "") if row else ""
+
+    # --- sesiones -------------------------------------------------------- #
+    @staticmethod
+    def _hash_token(token: str) -> str:
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+    def create_session(self, user_id: int, dias: int = 30) -> str:
+        """Abre sesión y devuelve el token, que solo viajará en la cookie.
+
+        En la tabla se guarda su SHA-256: quien leyera la base no podría
+        suplantar a nadie con lo que encuentre allí.
+        """
+        token = secrets.token_urlsafe(32)
+        with self._lock:
+            self.conn.execute(
+                "INSERT INTO sessions (token_hash, user_id, expires_at) "
+                "VALUES (?, ?, datetime('now','localtime','+' || ? || ' days'))",
+                (self._hash_token(token), user_id, int(dias)))
+            self.conn.commit()
+        return token
+
+    def user_for_token(self, token: str) -> dict | None:
+        """El usuario de una sesión, o None si no vale.
+
+        Comprueba además que siga activo: bloquear a alguien tiene que echarlo
+        aunque su cookie siga siendo técnicamente válida.
+        """
+        if not token:
+            return None
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id "
+                "WHERE s.token_hash = ? AND s.expires_at > datetime('now','localtime') "
+                "AND u.status = 'active'",
+                (self._hash_token(token),)).fetchone()
+        return dict(row) if row else None
+
+    def delete_session(self, token: str) -> None:
+        if not token:
+            return
+        with self._lock:
+            self.conn.execute("DELETE FROM sessions WHERE token_hash = ?",
+                              (self._hash_token(token),))
+            self.conn.commit()
+
+    def _revocar_sesiones_locked(self, user_id: int) -> None:
+        self.conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+
+    def purge_expired_sessions(self) -> int:
+        with self._lock:
+            cur = self.conn.execute(
+                "DELETE FROM sessions WHERE expires_at <= datetime('now','localtime')")
+            self.conn.commit()
+            return cur.rowcount
 
     # --- libros -------------------------------------------------------- #
     def list_books(self) -> list[dict]:

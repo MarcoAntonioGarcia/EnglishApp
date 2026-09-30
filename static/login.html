@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Entrar · English App</title>
+<style>
+  :root{
+    --bg:#efe9df; --card:#fffdf9; --line:#e7e0d2; --ink:#2a2723; --muted:#8a8378;
+    --gold:#c9a86a; --accent:#2f6b5e; --danger:#b4453b;
+    --shadow:0 1px 3px rgba(40,33,20,.06),0 8px 24px rgba(40,33,20,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);
+       color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+       padding:24px}
+  .caja{width:100%;max-width:380px}
+  .marca{text-align:center;margin-bottom:22px}
+  .marca h1{margin:0;font-size:26px;letter-spacing:-.4px;font-weight:600}
+  .marca p{margin:6px 0 0;color:var(--muted);font-size:13px}
+  .tarjeta{background:var(--card);border:1px solid var(--line);border-radius:14px;
+           box-shadow:var(--shadow);padding:22px}
+  .pestanas{display:flex;gap:4px;background:#f3ede2;padding:4px;border-radius:9px;margin-bottom:18px}
+  .pestanas button{flex:1;border:0;background:transparent;padding:8px;border-radius:6px;
+                   font:inherit;font-size:13px;color:var(--muted);cursor:pointer}
+  .pestanas button[aria-selected="true"]{background:var(--card);color:var(--ink);font-weight:600;
+                                          box-shadow:0 1px 2px rgba(40,33,20,.08)}
+  label{display:block;font-size:12px;color:var(--muted);margin:0 0 5px;font-weight:600}
+  input{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:8px;
+        font:inherit;background:#fff;color:var(--ink)}
+  input:focus{outline:2px solid var(--gold);outline-offset:-1px;border-color:var(--gold)}
+  .campo{margin-bottom:14px}
+  .ayuda{font-size:11.5px;color:var(--muted);margin-top:5px}
+  button.principal{width:100%;padding:11px;border:0;border-radius:8px;background:var(--accent);
+                   color:#fff;font:inherit;font-weight:600;cursor:pointer}
+  button.principal:hover{filter:brightness(1.08)}
+  button.principal:disabled{opacity:.55;cursor:default}
+  .aviso{margin-top:14px;padding:10px 12px;border-radius:8px;font-size:13px;display:none}
+  .aviso.error{background:#fdeeec;border:1px solid #f0cfca;color:var(--danger);display:block}
+  .aviso.ok{background:#eaf3f0;border:1px solid #c8e0d8;color:var(--accent);display:block}
+  .pie{text-align:center;color:var(--muted);font-size:11.5px;margin-top:18px}
+</style>
+</head>
+<body>
+<main class="caja">
+  <div class="marca">
+    <h1>English App</h1>
+    <p>Lectura, vocabulario y escritura</p>
+  </div>
+
+  <div class="tarjeta">
+    <div class="pestanas" role="tablist">
+      <button role="tab" aria-selected="true"  data-vista="entrar">Entrar</button>
+      <button role="tab" aria-selected="false" data-vista="alta">Crear cuenta</button>
+    </div>
+
+    <form id="formEntrar">
+      <div class="campo">
+        <label for="login">Correo</label>
+        <input id="login" name="login" autocomplete="username" required>
+      </div>
+      <div class="campo">
+        <label for="clave">Contraseña</label>
+        <input id="clave" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="principal" type="submit">Entrar</button>
+    </form>
+
+    <form id="formAlta" hidden>
+      <div class="campo">
+        <label for="email">Correo</label>
+        <input id="email" type="email" autocomplete="email" required>
+      </div>
+      <div class="campo">
+        <label for="clave1">Contraseña</label>
+        <input id="clave1" type="password" autocomplete="new-password" required minlength="10">
+        <div class="ayuda">Mínimo 10 caracteres.</div>
+      </div>
+      <div class="campo">
+        <label for="clave2">Repite la contraseña</label>
+        <input id="clave2" type="password" autocomplete="new-password" required>
+      </div>
+      <button class="principal" type="submit">Crear cuenta</button>
+      <div class="ayuda" style="margin-top:10px">
+        Un administrador tiene que aprobar tu cuenta antes de que puedas entrar.
+      </div>
+    </form>
+
+    <div class="aviso" id="aviso" role="status"></div>
+  </div>
+
+  <p class="pie">Tus datos de estudio son solo tuyos.</p>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const aviso = $("#aviso");
+
+function decir(texto, tipo){
+  aviso.textContent = texto;
+  aviso.className = "aviso " + tipo;
+}
+
+document.querySelectorAll(".pestanas button").forEach(b => {
+  b.onclick = () => {
+    const entrar = b.dataset.vista === "entrar";
+    document.querySelectorAll(".pestanas button").forEach(
+      x => x.setAttribute("aria-selected", String(x === b)));
+    $("#formEntrar").hidden = !entrar;
+    $("#formAlta").hidden = entrar;
+    aviso.className = "aviso";
+  };
+});
+
+async function enviar(url, cuerpo, boton){
+  boton.disabled = true;
+  try{
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(cuerpo),
+    });
+    const datos = await r.json().catch(() => ({}));
+    if(!r.ok) throw new Error(datos.detail || "Algo ha fallado.");
+    return datos;
+  } finally {
+    boton.disabled = false;
+  }
+}
+
+$("#formEntrar").onsubmit = async e => {
+  e.preventDefault();
+  try{
+    const d = await enviar("/api/auth/login",
+      {login: $("#login").value.trim(), password: $("#clave").value},
+      e.submitter);
+    // sin clave de Gemini todavía: se le explica cómo sacarla antes de entrar
+    location.href = d.necesita_key ? "/bienvenida" : "/";
+  }catch(err){ decir(err.message, "error"); }
+};
+
+$("#formAlta").onsubmit = async e => {
+  e.preventDefault();
+  if($("#clave1").value !== $("#clave2").value){
+    return decir("Las dos contraseñas no coinciden.", "error");
+  }
+  try{
+    const d = await enviar("/api/auth/register",
+      {email: $("#email").value.trim(), password: $("#clave1").value},
+      e.submitter);
+    $("#formAlta").reset();
+    decir(d.mensaje, "ok");
+  }catch(err){ decir(err.message, "error"); }
+};
+</script>
+</body>
+</html>

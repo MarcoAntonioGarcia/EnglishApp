@@ -300,3 +300,21 @@ CREATE TABLE IF NOT EXISTS user_settings (
 -- Los indices sobre user_id se crean en la migracion (core._migrate_multiuser),
 -- no aqui: este fichero se ejecuta ANTES que las migraciones y en una base
 -- antigua la columna todavia no existe. Mismo motivo que idx_vocab_due.
+
+-- ---------------------------------------------------------------------------
+-- sessions: una sesion abierta = una fila. Se guarda el SHA-256 del token, no
+-- el token: el original solo existe en la cookie del navegador, asi que quien
+-- consiga leer esta tabla no puede suplantar a nadie.
+-- Tenerlas en la base (y no en una cookie firmada) permite revocarlas: al
+-- bloquear a alguien o cambiarle la contrasena, sus sesiones se borran y queda
+-- fuera al instante.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT    PRIMARY KEY,
+    user_id    INTEGER NOT NULL,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    expires_at TEXT    NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);

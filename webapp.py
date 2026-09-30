@@ -22,9 +22,11 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+import time
 
 import uvicorn
-from fastapi import Body, Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import (Body, Depends, FastAPI, File, HTTPException, Request,
+                     Response, UploadFile)
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -42,20 +44,265 @@ os.makedirs(core.LIBRARY_DIR, exist_ok=True)
 # --------------------------------------------------------------------------- #
 # Frontend
 # --------------------------------------------------------------------------- #
-def current_user() -> int:
-    """Quién está usando la app ahora mismo.
+# --------------------------------------------------------------------------- #
+# Sesión: quién está usando la app
+# --------------------------------------------------------------------------- #
+COOKIE = "sesion"
+DIAS_DE_SESION = 30
 
-    Fase 1: siempre el admin, porque todavía no hay login. En la Fase 2 esta
-    función pasa a leer la sesión del navegador, y con ese único cambio todos
-    los endpoints de abajo se vuelven multiusuario de golpe.
+# En producción la cookie tiene que ir SOLO por HTTPS. En local se sirve por
+# HTTP plano, así que el valor se toma del entorno y hay que activarlo al
+# desplegar: COOKIE_SEGURA=1
+COOKIE_SEGURA = os.environ.get("COOKIE_SEGURA", "") == "1"
+
+# Intentos de login fallidos por IP. En memoria a propósito: para 5-20 usuarios
+# no merece una tabla, y reiniciar el proceso no es un agujero porque quien
+# controla el proceso ya ha ganado.
+MAX_INTENTOS = 10
+VENTANA_INTENTOS = 15 * 60          # segundos
+_intentos: dict[str, list[float]] = {}
+
+
+def _ip(peticion: Request) -> str:
+    return (peticion.client.host if peticion.client else "?")
+
+
+def _demasiados_intentos(ip: str) -> bool:
+    ahora = time.time()
+    fallos = [t for t in _intentos.get(ip, []) if ahora - t < VENTANA_INTENTOS]
+    _intentos[ip] = fallos
+    return len(fallos) >= MAX_INTENTOS
+
+
+def _apuntar_fallo(ip: str) -> None:
+    _intentos.setdefault(ip, []).append(time.time())
+
+
+class SesionMiddleware:
+    """Resuelve la sesión UNA vez por petición, antes de nada.
+
+    Tiene que ser middleware ASGI puro y no BaseHTTPMiddleware ni una
+    dependencia: FastAPI ejecuta dependencias y endpoints sync en hilos del
+    pool, cada uno con su COPIA del contexto, así que una variable de contexto
+    fijada en una dependencia no llega al endpoint. Se comprobó midiéndolo: la
+    key del usuario no llegaba y core caía en la del fichero local, con lo que
+    todos habrían gastado la cuota del admin.
+
+    Aquí sí funciona porque este código corre en la misma tarea que envuelve al
+    endpoint, y el hilo del pool hereda una copia de ESTE contexto.
     """
-    return core.ADMIN_USER_ID
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        usuario = db.user_for_token(Request(scope).cookies.get(COOKIE, ""))
+        scope.setdefault("state", {})["usuario"] = usuario
+        # la IA de esta petición usa la key de ESTE usuario. Si no tiene, cadena
+        # vacía: que no herede la de nadie.
+        token = core.usar_api_key((usuario or {}).get("gemini_api_key") or "")
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            core.soltar_api_key(token)
+
+
+app.add_middleware(SesionMiddleware)
+
+
+def usuario_de_la_peticion(peticion: Request) -> dict | None:
+    """La fila del usuario logueado, o None. No lanza: sirve para decidir qué
+    página servir. La consulta ya la hizo el middleware."""
+    return peticion.scope.get("state", {}).get("usuario")
+
+
+def current_user(peticion: Request) -> int:
+    """El id de quien hace la petición. 401 si no hay sesión válida.
+
+    Es de donde sale el user_id de los 46 endpoints: cambiar esta función es lo
+    único que hizo falta para que la app pasara de un usuario a muchos.
+    """
+    u = usuario_de_la_peticion(peticion)
+    if not u:
+        raise HTTPException(401, "Necesitas iniciar sesión.")
+    return u["id"]
+
+
+def current_admin(peticion: Request) -> int:
+    """Como current_user, pero además exige ser admin. 404 si no lo es: no hay
+    por qué confirmarle a nadie que el panel existe."""
+    u = usuario_de_la_peticion(peticion)
+    if not u:
+        raise HTTPException(401, "Necesitas iniciar sesión.")
+    if u.get("role") != "admin":
+        raise HTTPException(404, "No encontrado")
+    return u["id"]
+
+
+def _poner_cookie(respuesta: Response, token: str) -> None:
+    respuesta.set_cookie(
+        COOKIE, token,
+        max_age=DIAS_DE_SESION * 24 * 3600,
+        httponly=True,        # que el JavaScript de la página no pueda leerla
+        samesite="lax",       # no viaja en peticiones cross-site: frena el CSRF
+        secure=COOKIE_SEGURA,
+        path="/",
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Alta, entrada y salida
+# --------------------------------------------------------------------------- #
+@app.post("/api/auth/register")
+def registro(payload: dict = Body(...)) -> dict:
+    """Alta de un usuario normal. Queda PENDIENTE hasta que el admin lo apruebe:
+    el registro está abierto, pero el acceso no."""
+    try:
+        db.create_user(email=(payload.get("email") or ""),
+                       password=(payload.get("password") or ""))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True,
+            "mensaje": "Cuenta creada. Un administrador tiene que aprobarla "
+                       "antes de que puedas entrar."}
+
+
+@app.post("/api/auth/login")
+def login(peticion: Request, respuesta: Response, payload: dict = Body(...)) -> dict:
+    ip = _ip(peticion)
+    if _demasiados_intentos(ip):
+        raise HTTPException(429, "Demasiados intentos. Prueba dentro de un rato.")
+
+    fila = db.find_user(payload.get("login") or "")
+    clave = payload.get("password") or ""
+    # se comprueba la contraseña AUNQUE el usuario no exista, contra un hash de
+    # mentira: si no, el tiempo de respuesta delataría qué correos están dados
+    # de alta.
+    guardado = (fila or {}).get("password_hash") or "scrypt$16384$8$1$00$00"
+    correcta = core.verify_password(clave, guardado)
+
+    if not fila or not correcta:
+        _apuntar_fallo(ip)
+        raise HTTPException(401, "Correo o contraseña incorrectos.")
+    if fila["status"] == "pending":
+        raise HTTPException(403, "Tu cuenta todavía está pendiente de aprobación.")
+    if fila["status"] == "blocked":
+        raise HTTPException(403, "Tu cuenta está bloqueada.")
+
+    _intentos.pop(ip, None)
+    _poner_cookie(respuesta, db.create_session(fila["id"], DIAS_DE_SESION))
+    db.purge_expired_sessions()
+    return {"ok": True, "role": fila["role"],
+            "necesita_key": not (fila.get("gemini_api_key") or "")}
+
+
+@app.post("/api/auth/logout")
+def logout(peticion: Request, respuesta: Response) -> dict:
+    db.delete_session(peticion.cookies.get(COOKIE, ""))
+    respuesta.delete_cookie(COOKIE, path="/")
+    return {"ok": True}
+
+
+@app.get("/api/auth/me")
+def quien_soy(uid: int = Depends(current_user)) -> dict:
+    ficha = db.get_user(uid) or {}
+    ficha["pasos_para_la_key"] = core.COMO_SACAR_LA_KEY
+    return ficha
+
+
+@app.post("/api/auth/gemini-key")
+def guardar_mi_key(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
+    """Cada usuario guarda SU propia key: la cuota del free tier va por cuenta."""
+    key = (payload.get("key") or "").strip()
+    if key and not key.startswith("AIza"):
+        raise HTTPException(400, "Eso no parece una clave de Google AI Studio "
+                                 "(las suyas empiezan por AIza).")
+    db.set_gemini_key(uid, key)
+    return {"ok": True, "tiene_clave_gemini": bool(key)}
+
+
+# --------------------------------------------------------------------------- #
+# Panel de administración
+# --------------------------------------------------------------------------- #
+@app.get("/api/admin/users")
+def admin_usuarios(uid: int = Depends(current_admin)) -> list[dict]:
+    return db.list_users()
+
+
+@app.post("/api/admin/users/{user_id}/status")
+def admin_cambiar_estado(user_id: int, payload: dict = Body(...),
+                         uid: int = Depends(current_admin)) -> dict:
+    estado = payload.get("status") or ""
+    if user_id == uid and estado != "active":
+        raise HTTPException(400, "No puedes desactivar tu propia cuenta.")
+    objetivo = db.get_user(user_id)
+    if not objetivo:
+        raise HTTPException(404, "No existe ese usuario.")
+    # dejar la plataforma sin ningún admin activo la volvería ingobernable
+    if (objetivo["role"] == "admin" and estado != "active"
+            and db.count_admins() <= 1):
+        raise HTTPException(400, "Es el único administrador activo que queda.")
+    try:
+        if not db.set_user_status(user_id, estado):
+            raise HTTPException(404, "No existe ese usuario.")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True, "status": estado}
+
+
+@app.post("/api/admin/users/{user_id}/password")
+def admin_resetear_clave(user_id: int, payload: dict = Body(...),
+                         uid: int = Depends(current_admin)) -> dict:
+    """Reset manual de contraseña.
+
+    No hay 'he olvidado mi contraseña' por correo porque enviar correo pide otro
+    servicio externo; para un grupo pequeño, que la reponga el admin es más
+    simple y no cuesta nada. Cambiarla cierra las sesiones de esa persona.
+    """
+    if not db.get_user(user_id):
+        raise HTTPException(404, "No existe ese usuario.")
+    try:
+        db.set_password(user_id, payload.get("password") or "")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True}
+
+
+def _pagina(nombre: str) -> HTMLResponse:
+    with open(os.path.join(STATIC_DIR, nombre), "r", encoding="utf-8") as fh:
+        return HTMLResponse(fh.read())
 
 
 @app.get("/", response_class=HTMLResponse)
-def index() -> HTMLResponse:
-    with open(os.path.join(STATIC_DIR, "index.html"), "r", encoding="utf-8") as fh:
-        return HTMLResponse(fh.read())
+def index(peticion: Request) -> HTMLResponse:
+    """La app si hay sesión; si no, la pantalla de entrada."""
+    return _pagina("index.html" if usuario_de_la_peticion(peticion) else "login.html")
+
+
+@app.get("/entrar", response_class=HTMLResponse)
+def pagina_login() -> HTMLResponse:
+    return _pagina("login.html")
+
+
+@app.get("/bienvenida", response_class=HTMLResponse)
+def pagina_bienvenida(peticion: Request) -> HTMLResponse:
+    """Cómo sacar la clave de Gemini. Se llega aquí al entrar sin tenerla."""
+    if not usuario_de_la_peticion(peticion):
+        return _pagina("login.html")
+    return _pagina("bienvenida.html")
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def pagina_admin(peticion: Request) -> HTMLResponse:
+    """Panel de administración. Quien no sea admin ni siquiera ve que existe."""
+    u = usuario_de_la_peticion(peticion)
+    if not u:
+        return _pagina("login.html")
+    if u.get("role") != "admin":
+        raise HTTPException(404, "No encontrado")
+    return _pagina("admin.html")
 
 
 # --------------------------------------------------------------------------- #
@@ -293,14 +540,25 @@ def llm(payload: dict = Body(...)) -> dict:
 # Configuración de IA (API key de Gemini) — guardada localmente, nunca en código
 # --------------------------------------------------------------------------- #
 @app.get("/api/config")
-def get_config() -> dict:
+def get_config(uid: int = Depends(current_user)) -> dict:
+    # current_user ya ha puesto la key de este usuario en el contexto, asi que
+    # ai_status describe LA SUYA
     return core.ai_status()
 
 
 @app.post("/api/config")
-def set_config(payload: dict = Body(...)) -> dict:
+def set_config(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
+    """Guarda la key en la ficha del usuario, no en config.local.json.
+
+    Antes habia una sola key para toda la app; ahora la cuota del free tier de
+    Google va por cuenta, asi que cada uno guarda la suya.
+    """
     key = (payload.get("gemini_api_key") or "").strip()
-    core.set_api_key(key)
+    if key and not key.startswith("AIza"):
+        raise HTTPException(400, "Eso no parece una clave de Google AI Studio "
+                                 "(las suyas empiezan por AIza).")
+    db.set_gemini_key(uid, key)
+    core.usar_api_key(key)          # que surta efecto ya, sin volver a entrar
     return core.ai_status()
 
 
