@@ -94,6 +94,54 @@ CATALOG = [
     ("gatsby", "The Great Gatsby", "F. Scott Fitzgerald", "B2", "libro", 64317,
      "En dominio público desde 2021. Literario y con metáforas densas: déjalo "
      "para cuando los demás B2 te resulten cómodos."),
+
+    # ------- No ficción: hábitos, foco y carácter -------
+    # El género de la superación personal es MÁS VIEJO que el dominio público:
+    # lo inventó Samuel Smiles en 1859, así que los clásicos del género son
+    # libres. Los niveles de este bloque están MEDIDOS con el mismo analizador
+    # que usa la app (core.readability), no estimados a ojo. Donde la fórmula
+    # engaña, el aviso lo dice: mide sílabas y longitud de frase, no sabe nada
+    # de vocabulario abstracto ni de inglés arcaico.
+    ("24-hours", "How to Live on 24 Hours a Day", "Arnold Bennett", "B2", "ensayo", 2274,
+     "Lo más parecido a «Deep Work» que existe libre, y es de 1908: cómo "
+     "recuperar tu tiempo y tu atención del trabajo. Medido en 64.4 de Flesch, "
+     "casi idéntico a «Atomic Habits» (65.0). Cincuenta páginas."),
+    ("acres-diamonds", "Acres of Diamonds", "Russell H. Conwell", "B2", "ensayo", 368,
+     "Una conferencia transcrita, así que suena a alguien hablando: ritmo "
+     "natural y pocas palabras largas (7.3 %, menos que «The Time Machine»). "
+     "La mejor puerta de entrada a la no ficción."),
+    ("science-rich", "The Science of Getting Rich", "W. D. Wattles", "B2", "ensayo", 59844,
+     "Prosa llana y deliberadamente repetitiva: vuelve sobre las mismas ideas "
+     "con las mismas palabras, que para aprender es una ventaja. De 1910."),
+    ("concentration", "The Power of Concentration", "W. W. Atkinson", "B2", "ensayo", 1570,
+     "Entrenamiento de la atención en lecciones cortas e independientes. Las "
+     "frases más cortas de todo este bloque: 14.4 palabras de media."),
+    ("as-a-man-thinketh", "As a Man Thinketh", "James Allen", "C1", "ensayo", 4507,
+     "El sustituto temático de «Atomic Habits»: cómo el pensamiento forma el "
+     "carácter. Aviso: es el más CORTO (20 páginas) y también el más DIFÍCIL "
+     "de aquí. 12.3 % de palabras largas, por encima incluso de «Deep Work». "
+     "Corto no significa fácil."),
+    ("self-help", "Self-Help", "Samuel Smiles", "B2", "ensayo", 935,
+     "El libro que le dio nombre al género, en 1859. Son biografías breves de "
+     "gente constante, así que puedes leer capítulos sueltos sin perder el hilo."),
+    ("franklin", "The Autobiography of Benjamin Franklin", "Benjamin Franklin", "B2",
+     "ensayo", 148,
+     "Su tabla de 13 virtudes es, literalmente, un rastreador de hábitos de "
+     "1791. Aviso: ortografía del XVIII y mayúsculas a media frase. El medidor "
+     "dice B2, pero esa rareza cuesta más de lo que refleja el número."),
+    ("emerson", "Essays (incluye «Self-Reliance»)", "R. W. Emerson", "B2", "ensayo", 16643,
+     "Aviso: el medidor da B2 por lo cortas que son sus frases, pero Emerson "
+     "escribe en aforismos abstractos. Entiendes cada palabra y aun así cuesta "
+     "seguir el argumento. Mejor a párrafos sueltos que de corrido."),
+    ("meditations", "Meditations", "Marco Aurelio", "C1", "ensayo", 2680,
+     "Aviso importante: el medidor lo pone en B1 (71.7) porque tiene frases "
+     "cortas y palabras llanas. La fórmula no ve el «thou/thee/hath» de la "
+     "traducción de 1862 ni la densidad filosófica. En la práctica es C1."),
+    ("walden", "Walden", "H. D. Thoreau", "C1", "ensayo", 205,
+     "Mismo caso y más extremo: sale B1 medido (73.1, el «más fácil» de toda "
+     "esta lista) y no lo es. Thoreau usa palabras corrientes para ideas "
+     "abstractas y se va por las ramas durante páginas. La fórmula cuenta "
+     "sílabas, no ideas."),
 ]
 
 # Clásicos que suelen recomendarse y que NO conviene atacar a este nivel.

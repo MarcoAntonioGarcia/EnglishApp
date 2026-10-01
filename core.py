@@ -369,6 +369,14 @@ class DatabaseManager:
             # "Restaurante"). Estaba metida en 'note', que es el campo del
             # EJEMPLO, así que la tarjeta mostraba "Tiendas" donde debía ir una
             # frase de uso — y sin ejemplo no se puede construir el cloze.
+            # visible en books: libros privados del admin
+            bcols = {r["name"] for r in self.conn.execute("PRAGMA table_info(books)")}
+            if "visible" not in bcols:
+                try:
+                    self.conn.execute(
+                        "ALTER TABLE books ADD COLUMN visible INTEGER NOT NULL DEFAULT 1")
+                except sqlite3.OperationalError:
+                    pass
             # (category ya vive en SCHEMA.sql; el ALTER se queda para las bases
             # creadas antes de que estuviera alli)
             dcols = {r["name"] for r in self.conn.execute("PRAGMA table_info(deck_cards)")}
@@ -856,12 +864,44 @@ class DatabaseManager:
             return cur.rowcount
 
     # --- libros -------------------------------------------------------- #
-    def list_books(self) -> list[dict]:
+    def puede_ver_libro(self, book_id: int, user_id: int) -> bool:
+        """¿Puede este usuario abrir este libro?
+
+        Los libros con visible=0 son privados del admin: existen en la base y él
+        los lee con normalidad, pero no se sirven a nadie más. Es la respuesta a
+        un libro con derechos de autor, donde lo que no se puede hacer es
+        DISTRIBUIRLO: tener la copia es legítimo.
+        """
         with self._lock:
-            rows = self.conn.execute(
-                "SELECT id, title, author FROM books ORDER BY added_at DESC"
-            ).fetchall()
-        return [dict(r) for r in rows]
+            row = self.conn.execute(
+                "SELECT b.visible, u.role FROM books b, users u "
+                "WHERE b.id = ? AND u.id = ?", (book_id, user_id)).fetchone()
+        if not row:
+            return False
+        return bool(row["visible"]) or row["role"] == "admin"
+
+    def set_book_visible(self, book_id: int, visible: bool) -> bool:
+        with self._lock:
+            cur = self.conn.execute("UPDATE books SET visible = ? WHERE id = ?",
+                                    (1 if visible else 0, book_id))
+            self.conn.commit()
+            return cur.rowcount > 0
+
+    def list_books(self, user_id: int = ADMIN_USER_ID) -> list[dict]:
+        """La biblioteca que ve este usuario.
+
+        Los libros privados solo salen para el admin, y a él se le marcan como
+        tales para que sepa qué está viendo de más.
+        """
+        with self._lock:
+            es_admin = (self.conn.execute(
+                "SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+                or {"role": "user"})["role"] == "admin"
+            sql = "SELECT id, title, author, visible FROM books "
+            if not es_admin:
+                sql += "WHERE visible = 1 "
+            rows = self.conn.execute(sql + "ORDER BY added_at DESC").fetchall()
+        return [{**dict(r), "visible": bool(r["visible"])} for r in rows]
 
     def find_book_by_path(self, source_path: str) -> int | None:
         with self._lock:
@@ -905,9 +945,14 @@ class DatabaseManager:
                 raise
 
     def get_book(self, book_id: int, user_id: int = ADMIN_USER_ID) -> dict | None:
+        """None también si el libro es privado y quien pregunta no es el admin:
+        así quien no puede verlo recibe un 404 igual que si no existiera."""
+        if not self.puede_ver_libro(book_id, user_id):
+            return None
         with self._lock:
             row = self.conn.execute(
-                "SELECT id, title, author, language FROM books WHERE id = ?", (book_id,)
+                "SELECT id, title, author, language, visible FROM books WHERE id = ?",
+                (book_id,)
             ).fetchone()
             if row is None:
                 return None

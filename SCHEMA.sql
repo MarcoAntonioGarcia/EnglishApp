@@ -40,6 +40,11 @@ CREATE TABLE IF NOT EXISTS books (
     language      TEXT,                       -- código idioma si el EPUB lo declara (ej. 'en')
     source_path   TEXT    NOT NULL,           -- ruta al .epub original
     added_at      TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    -- 1 = lo ve todo el mundo; 0 = privado del admin.
+    -- El limite legal de un libro con derechos es DISTRIBUIRLO, no tenerlo: el
+    -- admin puede leer su copia y marcarla privada para no servirsela a nadie.
+    -- Sirve igual para libros que todavia esta preparando.
+    visible       INTEGER NOT NULL DEFAULT 1,
     UNIQUE (source_path)
 );
 

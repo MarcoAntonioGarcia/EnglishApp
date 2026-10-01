@@ -325,7 +325,7 @@ _SAFE = re.compile(r"[^A-Za-z0-9._ -]")
 
 @app.get("/api/books")
 def list_books(uid: int = Depends(current_user)) -> list[dict]:
-    return db.list_books()
+    return db.list_books(user_id=uid)
 
 
 @app.post("/api/upload")
@@ -351,16 +351,17 @@ def get_catalog(uid: int = Depends(current_user)) -> dict:
     """Lecturas gratis y legales (dominio público), clasificadas por nivel y tipo."""
     # El título del EPUB no siempre coincide con el del catálogo ("Aesop's
     # Fables" vs "Aesop's Fables; a new translation"): se compara por prefijo.
-    ya = [(b.get("title") or "").strip().lower() for b in db.list_books()]
+    ya = [(b.get("title") or "").strip().lower() for b in db.list_books(user_id=uid)]
     libros = []
     for item in catalog.as_dicts():
         t = item["title"].strip().lower()
         tengo = any(x.startswith(t) or t.startswith(x) for x in ya if x)
         libros.append({**item, "in_library": tengo})
     return {"books": libros,
-            "levels": ["A2", "B1", "B2"],
+            "levels": ["A2", "B1", "B2", "C1"],
             "kinds": {"relato": "Relatos cortos", "historia": "Historias",
-                      "libro": "Libros completos"},
+                      "libro": "Libros completos",
+                      "ensayo": "Ensayo y no ficción"},
             "avoid": [{"title": t, "why": w} for t, w in catalog.NOT_RECOMMENDED]}
 
 
@@ -417,13 +418,38 @@ def delete_book(book_id: int, uid: int = Depends(current_admin)) -> dict:
             "kept_words": info.get("kept_words", 0), "file_removed": file_removed}
 
 
+def _exigir_libro(book_id: int, uid: int) -> None:
+    """404 si el libro no existe O es privado y no eres el admin.
+
+    404 y no 403 a propósito: confirmar que existe un libro que no puedes abrir
+    ya filtra información sobre el catálogo privado.
+    """
+    if not db.puede_ver_libro(book_id, uid):
+        raise HTTPException(404, "Libro no encontrado")
+
+
+@app.post("/api/books/{book_id}/visibility")
+def set_book_visibility(book_id: int, payload: dict = Body(...),
+                        uid: int = Depends(current_admin)) -> dict:
+    """Publica o esconde un libro. Solo el admin.
+
+    Un libro con derechos de autor se puede LEER pero no distribuir: esconderlo
+    deja la copia del admin intacta y lo retira de la biblioteca de los demás.
+    """
+    if not db.set_book_visible(book_id, bool(payload.get("visible", True))):
+        raise HTTPException(404, "Libro no encontrado")
+    return {"ok": True, "visible": bool(payload.get("visible", True))}
+
+
 @app.get("/api/books/{book_id}/toc")
 def get_toc(book_id: int, uid: int = Depends(current_user)) -> list[dict]:
+    _exigir_libro(book_id, uid)
     return db.get_toc(book_id, user_id=uid)
 
 
 @app.get("/api/books/{book_id}/stats")
 def get_stats(book_id: int, uid: int = Depends(current_user)) -> dict:
+    _exigir_libro(book_id, uid)
     return db.get_book_stats(book_id)
 
 
@@ -494,6 +520,7 @@ def improve_index(book_id: int, uid: int = Depends(current_admin)) -> list[dict]
 
 @app.get("/api/books/{book_id}/chapter/{idx}")
 def get_chapter(book_id: int, idx: int, uid: int = Depends(current_user)) -> dict:
+    _exigir_libro(book_id, uid)
     chapter = db.get_chapter(book_id, idx)
     # sin capítulo, el lector se quedaba en blanco sin decir por qué
     if not chapter.get("sentences") and chapter.get("title") is None:
@@ -503,6 +530,7 @@ def get_chapter(book_id: int, idx: int, uid: int = Depends(current_user)) -> dic
 
 @app.post("/api/books/{book_id}/chapter/{idx}/done")
 def set_chapter_done(book_id: int, idx: int, payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
+    _exigir_libro(book_id, uid)
     db.set_chapter_done(book_id, idx, bool(payload.get("done", True)),
                         user_id=uid)
     return db.get_book(book_id, user_id=uid)
@@ -513,11 +541,13 @@ def set_chapter_done(book_id: int, idx: int, payload: dict = Body(...), uid: int
 # --------------------------------------------------------------------------- #
 @app.get("/api/books/{book_id}/state")
 def get_state(book_id: int, uid: int = Depends(current_user)) -> dict:
+    _exigir_libro(book_id, uid)
     return db.load_reading_state(book_id, user_id=uid)
 
 
 @app.post("/api/books/{book_id}/state")
 def set_state(book_id: int, payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
+    _exigir_libro(book_id, uid)
     db.save_reading_state(
         book_id,
         int(payload.get("chapter_index", 0)),
