@@ -214,13 +214,25 @@ def quien_soy(uid: int = Depends(current_user)) -> dict:
 
 @app.post("/api/auth/gemini-key")
 def guardar_mi_key(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
-    """Cada usuario guarda SU propia key: la cuota del free tier va por cuenta."""
+    """Cada usuario guarda SU propia key: la cuota del free tier va por cuenta.
+
+    Se comprueba contra Google antes de guardarla. Mirar el prefijo no servía:
+    Google emite claves 'AIza…' y también 'AQ.…', así que una clave buena podía
+    quedar rechazada por una suposición nuestra.
+    """
     key = (payload.get("key") or "").strip()
-    if key and not key.startswith("AIza"):
-        raise HTTPException(400, "Eso no parece una clave de Google AI Studio "
-                                 "(las suyas empiezan por AIza).")
+    if not key:                       # vaciarla es legítimo: desactiva la IA
+        db.set_gemini_key(uid, "")
+        return {"ok": True, "tiene_clave_gemini": False}
+
+    estado, mensaje = core.probar_api_key(key)
+    if estado == "invalida":
+        raise HTTPException(400, mensaje)
     db.set_gemini_key(uid, key)
-    return {"ok": True, "tiene_clave_gemini": bool(key)}
+    core.usar_api_key(key)            # que surta efecto ya, sin volver a entrar
+    return {"ok": True, "tiene_clave_gemini": True,
+            "aviso": ("Guardada, pero no hemos podido comprobarla contra Google: "
+                      + mensaje) if estado == "sin_comprobar" else ""}
 
 
 # --------------------------------------------------------------------------- #
@@ -554,9 +566,10 @@ def set_config(payload: dict = Body(...), uid: int = Depends(current_user)) -> d
     Google va por cuenta, asi que cada uno guarda la suya.
     """
     key = (payload.get("gemini_api_key") or "").strip()
-    if key and not key.startswith("AIza"):
-        raise HTTPException(400, "Eso no parece una clave de Google AI Studio "
-                                 "(las suyas empiezan por AIza).")
+    if key:
+        estado, mensaje = core.probar_api_key(key)
+        if estado == "invalida":
+            raise HTTPException(400, mensaje)
     db.set_gemini_key(uid, key)
     core.usar_api_key(key)          # que surta efecto ya, sin volver a entrar
     return core.ai_status()

@@ -170,9 +170,47 @@ def ai_status() -> dict:
 COMO_SACAR_LA_KEY = [
     "Entra en aistudio.google.com/apikey con tu cuenta de Google.",
     "Pulsa «Create API key». Si te pide un proyecto, acepta el que te ofrece.",
-    "Copia la clave que aparece (empieza por AIza…).",
-    "Pégala aquí abajo y guarda.",
+    "Copia la clave entera, sin espacios por delante ni por detrás.",
+    "Pégala aquí abajo y guarda: la comprobamos al momento contra Google.",
 ]
+
+
+def probar_api_key(key: str) -> tuple[str, str]:
+    """¿Sirve esta clave? Lo comprueba USÁNDOLA, con la llamada más barata posible.
+
+    Mirar el prefijo no vale: Google ha emitido claves que empiezan por 'AIza' y
+    otras por 'AQ.', y nada impide que mañana use otro. Lo único que responde de
+    verdad a la pregunta es gastar un token y ver qué contesta.
+
+    Devuelve (estado, mensaje) con estado en:
+      'ok'            la clave funciona
+      'invalida'      Google la rechaza: no hay que guardarla
+      'sin_comprobar' no se pudo preguntar (sin red, por ejemplo). Se guarda
+                      igual y se avisa: negarse dejaría al usuario atascado por
+                      algo que no es culpa de su clave.
+    """
+    key = (key or "").strip()
+    if not key:
+        return "invalida", "No has pegado ninguna clave."
+    try:
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=key)
+        client.models.generate_content(
+            model=GEMINI_MODEL, contents="ok",
+            config=types.GenerateContentConfig(max_output_tokens=1))
+        return "ok", ""
+    except Exception as e:                      # el SDK lanza de todo
+        msg = str(e)
+        bajo = msg.lower()
+        if ("api_key_invalid" in bajo or "api key not valid" in bajo
+                or "permission_denied" in bajo or "unauthenticated" in bajo):
+            return "invalida", ("Google dice que esa clave no es válida. "
+                                "Comprueba que la copiaste entera.")
+        if "resource_exhausted" in bajo or "quota" in bajo:
+            # la clave es buena; solo se ha quedado sin cuota por hoy
+            return "ok", ""
+        return "sin_comprobar", msg[:160]
 
 
 # --------------------------------------------------------------------------- #

@@ -51,10 +51,10 @@
     <ol id="pasos"></ol>
 
     <label for="key">Pega aquí tu clave</label>
-    <input id="key" placeholder="AIza…" autocomplete="off" spellcheck="false">
+    <input id="key" placeholder="Pega la clave completa" autocomplete="off" spellcheck="false">
 
     <div class="fila">
-      <button class="principal" id="guardar">Guardar y empezar</button>
+      <button class="principal" id="guardar">Comprobar y guardar</button>
       <button class="secundario" id="saltar">Ahora no</button>
     </div>
 
@@ -91,6 +91,8 @@ $("#guardar").onclick = async () => {
     return;
   }
   boton.disabled = true;
+    aviso.textContent = "Comprobando la clave con Google…";
+    aviso.className = "aviso ok";
   try{
     const r = await fetch("/api/auth/gemini-key", {
       method: "POST",
@@ -99,7 +101,7 @@ $("#guardar").onclick = async () => {
     });
     const d = await r.json().catch(() => ({}));
     if(!r.ok) throw new Error(d.detail || "No se pudo guardar.");
-    aviso.textContent = "Guardada. Entrando…";
+    aviso.textContent = d.aviso || "Comprobada y guardada. Entrando…";
     aviso.className = "aviso ok";
     setTimeout(() => location.href = "/", 700);
   }catch(err){
