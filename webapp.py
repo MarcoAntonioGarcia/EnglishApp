@@ -324,12 +324,13 @@ _SAFE = re.compile(r"[^A-Za-z0-9._ -]")
 
 
 @app.get("/api/books")
-def list_books() -> list[dict]:
+def list_books(uid: int = Depends(current_user)) -> list[dict]:
     return db.list_books()
 
 
 @app.post("/api/upload")
-async def upload(file: UploadFile = File(...)) -> dict:
+async def upload(file: UploadFile = File(...),
+                 uid: int = Depends(current_admin)) -> dict:
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in (".pdf", ".epub"):
         raise HTTPException(400, "Solo se aceptan archivos .pdf o .epub")
@@ -341,12 +342,12 @@ async def upload(file: UploadFile = File(...)) -> dict:
         book_id = core.ingest(dest, db)  # convierte PDF->EPUB si hace falta
     except Exception as exc:
         raise HTTPException(400, f"No se pudo procesar el archivo: {exc}")
-    book = db.get_book(book_id)
+    book = db.get_book(book_id, user_id=uid)
     return {"book_id": book_id, **book}
 
 
 @app.get("/api/catalog")
-def get_catalog() -> dict:
+def get_catalog(uid: int = Depends(current_user)) -> dict:
     """Lecturas gratis y legales (dominio público), clasificadas por nivel y tipo."""
     # El título del EPUB no siempre coincide con el del catálogo ("Aesop's
     # Fables" vs "Aesop's Fables; a new translation"): se compara por prefijo.
@@ -364,7 +365,7 @@ def get_catalog() -> dict:
 
 
 @app.post("/api/catalog/{key}/add")
-def add_from_catalog(key: str) -> dict:
+def add_from_catalog(key: str, uid: int = Depends(current_admin)) -> dict:
     """Descarga el EPUB de Project Gutenberg y lo añade a tu biblioteca."""
     item = catalog.get(key)
     if not item:
@@ -387,15 +388,15 @@ def add_from_catalog(key: str) -> dict:
 
 
 @app.get("/api/books/{book_id}")
-def get_book(book_id: int) -> dict:
-    book = db.get_book(book_id)
+def get_book(book_id: int, uid: int = Depends(current_user)) -> dict:
+    book = db.get_book(book_id, user_id=uid)
     if book is None:
         raise HTTPException(404, "Libro no encontrado")
     return book
 
 
 @app.delete("/api/books/{book_id}")
-def delete_book(book_id: int) -> dict:
+def delete_book(book_id: int, uid: int = Depends(current_admin)) -> dict:
     """Borra un libro. El vocabulario guardado leyéndolo se conserva."""
     info = db.delete_book(book_id)
     if info is None:
@@ -417,12 +418,12 @@ def delete_book(book_id: int) -> dict:
 
 
 @app.get("/api/books/{book_id}/toc")
-def get_toc(book_id: int) -> list[dict]:
-    return db.get_toc(book_id)
+def get_toc(book_id: int, uid: int = Depends(current_user)) -> list[dict]:
+    return db.get_toc(book_id, user_id=uid)
 
 
 @app.get("/api/books/{book_id}/stats")
-def get_stats(book_id: int) -> dict:
+def get_stats(book_id: int, uid: int = Depends(current_user)) -> dict:
     return db.get_book_stats(book_id)
 
 
@@ -433,7 +434,7 @@ def book_difficulty(book_id: int, uid: int = Depends(current_user)) -> dict:
     Existe para avisarte ANTES de empezar: leer dos escalones por encima de tu
     nivel no es un reto, es una frustración con pasos extra.
     """
-    if db.get_book(book_id) is None:
+    if db.get_book(book_id, user_id=uid) is None:
         raise HTTPException(404, "Libro no encontrado")
     stats = core.readability(db.book_sample_sentences(book_id))
     yours = (db.last_test(user_id=uid) or {}).get("level") or ""
@@ -453,7 +454,7 @@ def book_difficulty(book_id: int, uid: int = Depends(current_user)) -> dict:
 
 
 @app.post("/api/books/{book_id}/rename")
-def rename_book(book_id: int, payload: dict = Body(...)) -> dict:
+def rename_book(book_id: int, payload: dict = Body(...), uid: int = Depends(current_admin)) -> dict:
     title = (payload.get("title") or "").strip()
     if not title:
         raise HTTPException(400, "El título no puede estar vacío")
@@ -462,14 +463,14 @@ def rename_book(book_id: int, payload: dict = Body(...)) -> dict:
 
 
 @app.post("/api/books/{book_id}/index/improve")
-def improve_index(book_id: int) -> list[dict]:
+def improve_index(book_id: int, uid: int = Depends(current_admin)) -> list[dict]:
     """Usa la IA para leer el inicio de cada sección y ponerle un título descriptivo.
     No reordena el texto (eso rompería la lectura); mejora los nombres del índice."""
-    book = db.get_book(book_id)
+    book = db.get_book(book_id, user_id=uid)
     if book is None:
         raise HTTPException(404, "Libro no encontrado")
     lang = "es"  # los títulos del índice, en español (idioma del usuario)
-    toc = db.get_toc(book_id)
+    toc = db.get_toc(book_id, user_id=uid)
     improved = 0
     for c in toc:
         sample = db.get_chapter_sample(book_id, c["index"], n=3)
@@ -488,11 +489,11 @@ def improve_index(book_id: int) -> list[dict]:
             if clean:
                 db.set_chapter_title(book_id, c["index"], clean)
                 improved += 1
-    return db.get_toc(book_id)
+    return db.get_toc(book_id, user_id=uid)
 
 
 @app.get("/api/books/{book_id}/chapter/{idx}")
-def get_chapter(book_id: int, idx: int) -> dict:
+def get_chapter(book_id: int, idx: int, uid: int = Depends(current_user)) -> dict:
     chapter = db.get_chapter(book_id, idx)
     # sin capítulo, el lector se quedaba en blanco sin decir por qué
     if not chapter.get("sentences") and chapter.get("title") is None:
@@ -501,9 +502,10 @@ def get_chapter(book_id: int, idx: int) -> dict:
 
 
 @app.post("/api/books/{book_id}/chapter/{idx}/done")
-def set_chapter_done(book_id: int, idx: int, payload: dict = Body(...)) -> dict:
-    db.set_chapter_done(book_id, idx, bool(payload.get("done", True)))
-    return db.get_book(book_id)
+def set_chapter_done(book_id: int, idx: int, payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
+    db.set_chapter_done(book_id, idx, bool(payload.get("done", True)),
+                        user_id=uid)
+    return db.get_book(book_id, user_id=uid)
 
 
 # --------------------------------------------------------------------------- #
@@ -528,7 +530,7 @@ def set_state(book_id: int, payload: dict = Body(...), uid: int = Depends(curren
 # IA (Gemini) con caché en DB
 # --------------------------------------------------------------------------- #
 @app.post("/api/llm")
-def llm(payload: dict = Body(...)) -> dict:
+def llm(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
     text = (payload.get("text") or "").strip()
     kind = payload.get("kind", "translation")
     lang = payload.get("target_lang", "es")
@@ -694,7 +696,7 @@ def _with_cloze(cards: list[dict], front_key="front", note_key="note") -> list[d
 
 
 @app.post("/api/study/check")
-def study_check(payload: dict = Body(...)) -> dict:
+def study_check(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
     """Compara lo que escribiste con las respuestas válidas.
 
     Se comprueba en el servidor a propósito: duplicar la normalización en el
@@ -738,7 +740,7 @@ def list_decks(uid: int = Depends(current_user)) -> list[dict]:
 
 
 @app.post("/api/decks/{deck_id}/backfill-examples")
-def deck_backfill_examples(deck_id: int, batch: int = 12, uid: int = Depends(current_user)) -> dict:
+def deck_backfill_examples(deck_id: int, batch: int = 12, uid: int = Depends(current_admin)) -> dict:
     """Genera los ejemplos que faltan en un mazo, en lotes.
 
     Un lote por llamada a la IA (no una por tarjeta): 123 frases serían 123
@@ -795,7 +797,7 @@ def nav_alerts(uid: int = Depends(current_user)) -> dict:
 # Test de diagnóstico de nivel (5 versiones equivalentes)
 # --------------------------------------------------------------------------- #
 @app.get("/api/test/form")
-def test_form() -> dict:
+def test_form(uid: int = Depends(current_user)) -> dict:
     return core.get_test_form()
 
 
@@ -936,7 +938,8 @@ def lesson_done(lesson_id: str, payload: dict = Body(default={}), uid: int = Dep
 # Writing: extraer texto (incl. foto→OCR), corregir+explicar, upgrade
 # --------------------------------------------------------------------------- #
 @app.post("/api/writing/extract")
-async def writing_extract(file: UploadFile = File(...)) -> dict:
+async def writing_extract(file: UploadFile = File(...),
+                          uid: int = Depends(current_user)) -> dict:
     data = await file.read()
     try:
         text = core.extract_text_from_upload(file.filename or "", data)
@@ -1086,12 +1089,12 @@ def deck_study(deck_id: int, uid: int = Depends(current_user)) -> list[dict]:
 
 
 @app.get("/api/voices")
-def voices(lang: str = "en") -> list[dict]:
+def voices(lang: str = "en", uid: int = Depends(current_user)) -> list[dict]:
     return core.list_voices(lang)
 
 
 @app.get("/api/tts")
-def tts(text: str, voice: str = "", rate: int = 0, lang: str = "en") -> FileResponse:
+def tts(text: str, voice: str = "", rate: int = 0, lang: str = "en", uid: int = Depends(current_user)) -> FileResponse:
     """Genera (y cachea) audio para 'text' con la voz/velocidad pedidas. Sirve el .wav.
     Permite cambiar voz y ritmo de los decks dinámicamente sin re-sembrar."""
     text = (text or "").strip()

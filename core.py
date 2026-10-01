@@ -288,6 +288,7 @@ class DatabaseManager:
         self._migrate()
         self._migrate_multiuser()
         self._migrate_deck_progress()
+        self._migrate_chapter_done()
 
     def _migrate(self) -> None:
         """Añade columnas nuevas a DBs ya existentes (SQLite no tiene ADD COLUMN IF NOT EXISTS)."""
@@ -317,13 +318,6 @@ class DatabaseManager:
                         pass
             self.conn.execute("UPDATE vocabulary SET due = date('now','localtime') WHERE due IS NULL")
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_vocab_due ON vocabulary (due)")
-            # 'done' en chapters (capítulos completados)
-            chcols = {r["name"] for r in self.conn.execute("PRAGMA table_info(chapters)")}
-            if "done" not in chcols:
-                try:
-                    self.conn.execute("ALTER TABLE chapters ADD COLUMN done INTEGER NOT NULL DEFAULT 0")
-                except sqlite3.OperationalError:
-                    pass
             # writings: el upgrade vivía en 'corrected' y pisaba la corrección y el
             # nivel evaluado. Ahora tiene columnas propias.
             # Ejemplo corto y a tu nivel para estudiar. La frase del libro se
@@ -567,6 +561,59 @@ class DatabaseManager:
     _CARD_FROM = ("FROM deck_cards c "
                   "LEFT JOIN card_progress p ON p.card_id = c.id AND p.user_id = ?")
     _CARD_DUE = "COALESCE(p.due, date('now','localtime'))"
+
+    def _migrate_chapter_done(self) -> None:
+        """Saca 'capítulo leído' de chapters, que es contenido compartido.
+
+        chapters tiene 12.559 frases apuntándole con una clave ajena, así que
+        durante la reconstrucción se activa legacy_alter_table: sin eso SQLite
+        reescribiría esa clave para que siguiera al nombre temporal y las
+        frases acabarían huérfanas al borrar la tabla vieja.
+        """
+        with self._lock:
+            cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(chapters)")}
+            if "done" not in cols:
+                return
+            self.conn.execute("PRAGMA foreign_keys = OFF")
+            previo = self.conn.isolation_level
+            self.conn.isolation_level = None
+            try:
+                self.conn.execute("BEGIN")
+                if self.conn.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type='table' "
+                        "AND name='chapter_done'").fetchone():
+                    n = self.conn.execute(
+                        "SELECT COUNT(*) n FROM chapter_done").fetchone()["n"]
+                    if n:
+                        raise RuntimeError(
+                            f"chapter_done ya tiene {n} filas: migración inesperada")
+                    self.conn.execute("DROP TABLE chapter_done")
+                self.conn.execute(self._ddl_de("chapter_done"))
+                self.conn.execute(
+                    "INSERT INTO chapter_done (user_id, book_id, chapter_index) "
+                    "SELECT ?, book_id, chapter_index FROM chapters "
+                    "WHERE COALESCE(done,0) = 1", (ADMIN_USER_ID,))
+                self.conn.execute("PRAGMA legacy_alter_table = ON")
+                self.conn.execute("ALTER TABLE chapters RENAME TO chapters__pre_cd")
+                self.conn.execute("PRAGMA legacy_alter_table = OFF")
+                self.conn.execute(self._ddl_de("chapters"))
+                self.conn.execute(
+                    "INSERT INTO chapters (id, book_id, chapter_index, title) "
+                    "SELECT id, book_id, chapter_index, title FROM chapters__pre_cd")
+                self.conn.execute("DROP TABLE chapters__pre_cd")
+                self.conn.execute("COMMIT")
+            except Exception:
+                self.conn.execute("ROLLBACK")
+                raise
+            finally:
+                self.conn.isolation_level = previo
+                self.conn.execute("PRAGMA legacy_alter_table = OFF")
+                self.conn.execute("PRAGMA foreign_keys = ON")
+            rotas = self.conn.execute("PRAGMA foreign_key_check").fetchall()
+            if rotas:
+                raise RuntimeError(
+                    f"sacar 'done' de chapters dejó {len(rotas)} referencias rotas")
+            self.conn.commit()
 
     def _migrate_deck_progress(self) -> None:
         """Fase 1, paso 3: el progreso SRS sale de deck_cards a card_progress.
@@ -857,7 +904,7 @@ class DatabaseManager:
                 self.conn.rollback()
                 raise
 
-    def get_book(self, book_id: int) -> dict | None:
+    def get_book(self, book_id: int, user_id: int = ADMIN_USER_ID) -> dict | None:
         with self._lock:
             row = self.conn.execute(
                 "SELECT id, title, author, language FROM books WHERE id = ?", (book_id,)
@@ -868,8 +915,8 @@ class DatabaseManager:
                 "SELECT COUNT(*) AS n FROM chapters WHERE book_id = ?", (book_id,)
             ).fetchone()["n"]
             done = self.conn.execute(
-                "SELECT COUNT(*) AS n FROM chapters WHERE book_id = ? AND COALESCE(done,0)=1",
-                (book_id,)).fetchone()["n"]
+                "SELECT COUNT(*) AS n FROM chapter_done WHERE user_id = ? AND book_id = ?",
+                (user_id, book_id)).fetchone()["n"]
         d = dict(row)
         d["chapter_count"] = n
         d["chapters_done"] = done
@@ -916,22 +963,32 @@ class DatabaseManager:
         counts = [r["n"] for r in rows]
         return {"counts": counts, "total": sum(counts)}
 
-    def get_toc(self, book_id: int) -> list[dict]:
+    def get_toc(self, book_id: int, user_id: int = ADMIN_USER_ID) -> list[dict]:
         """Índice: lista de capítulos/secciones (índice + título + completado)."""
         with self._lock:
             rows = self.conn.execute(
-                "SELECT chapter_index, title, COALESCE(done,0) done FROM chapters "
-                "WHERE book_id = ? ORDER BY chapter_index",
-                (book_id,),
+                "SELECT c.chapter_index, c.title, "
+                "(d.chapter_index IS NOT NULL) done FROM chapters c "
+                "LEFT JOIN chapter_done d ON d.book_id = c.book_id "
+                "AND d.chapter_index = c.chapter_index AND d.user_id = ? "
+                "WHERE c.book_id = ? ORDER BY c.chapter_index",
+                (user_id, book_id),
             ).fetchall()
         return [{"index": r["chapter_index"], "title": r["title"],
                  "done": bool(r["done"])} for r in rows]
 
-    def set_chapter_done(self, book_id: int, chapter_index: int, done: bool) -> None:
+    def set_chapter_done(self, book_id: int, chapter_index: int, done: bool,
+                         user_id: int = ADMIN_USER_ID) -> None:
         with self._lock:
-            self.conn.execute(
-                "UPDATE chapters SET done = ? WHERE book_id = ? AND chapter_index = ?",
-                (1 if done else 0, book_id, chapter_index))
+            if done:
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO chapter_done (user_id, book_id, chapter_index) "
+                    "VALUES (?,?,?)", (user_id, book_id, chapter_index))
+            else:
+                self.conn.execute(
+                    "DELETE FROM chapter_done "
+                    "WHERE user_id=? AND book_id=? AND chapter_index=?",
+                    (user_id, book_id, chapter_index))
             self.conn.commit()
 
     def set_chapter_title(self, book_id: int, chapter_index: int, title: str) -> None:
@@ -1788,9 +1845,9 @@ class DatabaseManager:
                   "learned": r["learned"] or 0} for r in deck_rows]
         deck_total = sum(d["total"] for d in decks)
         deck_learned = sum(d["learned"] for d in decks)
-        vocab = self.vocab_stats()
-        streak = self.get_streak()
-        reading = self._reading_progress()
+        vocab = self.vocab_stats(user_id)
+        streak = self.get_streak(user_id)
+        reading = self._reading_progress(user_id)
         # área de oportunidad: módulo de práctica con menos minutos
         practice = {m: modules.get(m, 0) for m in ("reading", "decks", "writing", "flashcards")}
         least = min(practice, key=practice.get)
@@ -1832,7 +1889,7 @@ class DatabaseManager:
                 stale[m] = (today - datetime.date.fromisoformat(last[m])).days
         return {"stale": stale, "has_activity": bool(any_act)}
 
-    def _reading_progress(self) -> list:
+    def _reading_progress(self, user_id: int = ADMIN_USER_ID) -> list:
         """Progreso por CAPÍTULOS COMPLETADOS (check) por libro."""
         with self._lock:
             books = self.conn.execute("SELECT id, title FROM books").fetchall()
@@ -1842,8 +1899,8 @@ class DatabaseManager:
                     "SELECT COUNT(*) n FROM chapters WHERE book_id=?", (b["id"],)
                 ).fetchone()["n"] or 1
                 done = self.conn.execute(
-                    "SELECT COUNT(*) n FROM chapters WHERE book_id=? AND COALESCE(done,0)=1",
-                    (b["id"],)).fetchone()["n"]
+                    "SELECT COUNT(*) n FROM chapter_done WHERE user_id=? AND book_id=?",
+                    (user_id, b["id"])).fetchone()["n"]
                 out.append({"title": b["title"], "pct": round(done / total * 100),
                             "done": done, "total": total})
         return out

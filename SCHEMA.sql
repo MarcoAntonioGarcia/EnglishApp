@@ -318,3 +318,19 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
+
+-- ---------------------------------------------------------------------------
+-- chapter_done: capitulos que UN usuario ha terminado.
+-- Antes era una columna 'done' en chapters, que es contenido compartido: si
+-- alguien marcaba un capitulo como leido, se lo marcaba a todo el mundo. Mismo
+-- error que tenia el SRS dentro de deck_cards.
+-- No tener fila aqui significa "sin leer".
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS chapter_done (
+    user_id       INTEGER NOT NULL DEFAULT 1,
+    book_id       INTEGER NOT NULL,
+    chapter_index INTEGER NOT NULL,
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    PRIMARY KEY (user_id, book_id, chapter_index),
+    FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+);
