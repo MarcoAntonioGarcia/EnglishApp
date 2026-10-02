@@ -109,6 +109,9 @@ CREATE TABLE IF NOT EXISTS vocabulary (
     reps          INTEGER NOT NULL DEFAULT 0,    -- repasos correctos seguidos
     due           TEXT    NOT NULL DEFAULT (date('now','localtime')), -- fecha del próximo repaso
     created_at    TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    -- ejemplo corto y al nivel del usuario, para la flashcard. Lo añadía
+    -- _migrate; se declara aquí para que el esquema sea completo.
+    simple_example TEXT,
     FOREIGN KEY (book_id)     REFERENCES books(id)     ON DELETE SET NULL,
     FOREIGN KEY (sentence_id) REFERENCES sentences(id) ON DELETE SET NULL
 );
@@ -145,7 +148,10 @@ CREATE TABLE IF NOT EXISTS decks (
     name        TEXT    NOT NULL,
     description TEXT,
     lang        TEXT    NOT NULL DEFAULT 'en',
-    sort_order  INTEGER NOT NULL DEFAULT 0
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    -- tope de tarjetas NUEVAS al día que trae el mazo. Es el valor por defecto
+    -- que fija el admin: el de cada usuario vive en user_settings.
+    new_limit   INTEGER NOT NULL DEFAULT 10
 );
 
 -- deck_cards guarda SOLO el contenido de la tarjeta, que es compartido: lo cura
@@ -270,6 +276,9 @@ CREATE TABLE IF NOT EXISTS writing_errors (
     correction  TEXT,
     explanation TEXT,
     created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    category    TEXT,                 -- tipo gramatical, para agrupar por patrón
+    lesson      TEXT,                 -- mini-lección en JSON, generada a demanda
+    reviewed    INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (writing_id) REFERENCES writings(id) ON DELETE CASCADE
 );
 

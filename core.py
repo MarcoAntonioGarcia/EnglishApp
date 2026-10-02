@@ -289,6 +289,7 @@ class DatabaseManager:
         self._migrate_multiuser()
         self._migrate_deck_progress()
         self._migrate_chapter_done()
+        self._migrate_fechas_locales()
 
     def _migrate(self) -> None:
         """Añade columnas nuevas a DBs ya existentes (SQLite no tiene ADD COLUMN IF NOT EXISTS)."""
@@ -569,6 +570,88 @@ class DatabaseManager:
     _CARD_FROM = ("FROM deck_cards c "
                   "LEFT JOIN card_progress p ON p.card_id = c.id AND p.user_id = ?")
     _CARD_DUE = "COALESCE(p.due, date('now','localtime'))"
+
+    # Tablas cuyas fechas por defecto se guardaron en UTC en bases creadas con
+    # un SCHEMA.sql antiguo.
+    _TABLAS_CON_FECHA = ("books", "vocabulary", "writings", "writing_errors",
+                         "translations", "test_results")
+
+    def _rebuild_desde_esquema(self, tabla: str) -> None:
+        """Recrea la tabla con la forma EXACTA que dicta SCHEMA.sql y le pasa los datos.
+
+        Copia la intersección de columnas viejas y nuevas, así que no hay listas
+        que mantener a mano ni importa el orden.
+        """
+        viejo = tabla + "__pre_fx"
+        self.conn.execute(f"ALTER TABLE {tabla} RENAME TO {viejo}")
+        self.conn.execute(self._ddl_de(tabla))
+        nuevas = [r["name"] for r in self.conn.execute(f"PRAGMA table_info({tabla})")]
+        viejas = {r["name"] for r in self.conn.execute(f"PRAGMA table_info({viejo})")}
+        cols = ", ".join(c for c in nuevas if c in viejas)
+        self.conn.execute(
+            f"INSERT INTO {tabla} ({cols}) SELECT {cols} FROM {viejo}")
+        self.conn.execute(f"DROP TABLE {viejo}")
+
+    def _migrate_fechas_locales(self) -> None:
+        """Pasa las fechas por defecto de UTC a hora local.
+
+        datetime('now') devuelve UTC. En México son seis horas, así que una fila
+        guardada después de las 18:00 quedaba fechada al día siguiente. Importa
+        porque el SRS y las rachas razonan en días: un repaso de las 19:00 podía
+        contar como de mañana. Afecta a bases creadas con un SCHEMA.sql viejo;
+        una recién creada ya nace bien.
+
+        De paso, vocabulary.due deja de admitir nulos: _migrate la añadió sin
+        default porque SQLite no acepta uno no constante en un ALTER.
+
+        SQLite no permite cambiar el DEFAULT de una columna, así que hay que
+        reconstruir. legacy_alter_table va activado porque chapters, sentences,
+        reading_state, vocabulary y chapter_done apuntan a books, y
+        writing_errors apunta a writings: sin eso el renombrado les reescribiría
+        la clave ajena al nombre temporal.
+        """
+        with self._lock:
+            pendientes = []
+            for t in self._TABLAS_CON_FECHA:
+                fila = self.conn.execute(
+                    "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+                    (t,)).fetchone()
+                if fila and re.search(r"(datetime|date)\('now'\)", fila["sql"] or ""):
+                    pendientes.append(t)
+            if not pendientes:
+                return
+            self.conn.execute("PRAGMA foreign_keys = OFF")
+            previo = self.conn.isolation_level
+            self.conn.isolation_level = None
+            try:
+                self.conn.execute("BEGIN")
+                self.conn.execute("PRAGMA legacy_alter_table = ON")
+                for t in pendientes:
+                    self._rebuild_desde_esquema(t)
+                self.conn.execute("PRAGMA legacy_alter_table = OFF")
+                self.conn.execute("COMMIT")
+            except Exception:
+                self.conn.execute("ROLLBACK")
+                raise
+            finally:
+                self.conn.isolation_level = previo
+                self.conn.execute("PRAGMA legacy_alter_table = OFF")
+                self.conn.execute("PRAGMA foreign_keys = ON")
+            rotas = self.conn.execute("PRAGMA foreign_key_check").fetchall()
+            if rotas:
+                raise RuntimeError(
+                    f"la migración de fechas dejó {len(rotas)} referencias rotas")
+        # Los índices de una tabla se van con ella al reconstruirla, y SCHEMA.sql
+        # ya se ejecutó antes de llegar aquí: hay que rehacerlos.
+        with open(SCHEMA_PATH, "r", encoding="utf-8") as fh:
+            script = fh.read()
+        with self._lock:
+            self.conn.executescript(script)
+            self.conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_vocab_due ON vocabulary (due)")
+            for sql in self._MU_INDICES:
+                self.conn.execute(sql)
+            self.conn.commit()
 
     def _migrate_chapter_done(self) -> None:
         """Saca 'capítulo leído' de chapters, que es contenido compartido.

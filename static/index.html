@@ -941,15 +941,27 @@
     <div class="modal-b">
       <div class="setsect">
         <div class="setlabel">🤖 IA (Gemini)</div>
-        <p class="muted" style="margin:0 0 10px;font-size:13.5px">La app usa Gemini (gratis) para traducir, corregir tu escritura y leer fotos. Pega tu API key para activar la IA. Se guarda <b>solo en tu computadora</b>, nunca se sube.</p>
+        <p class="muted" style="margin:0 0 10px;font-size:13.5px">La app usa Gemini (gratis) para traducir, corregir tu escritura y leer fotos. Pega tu API key para activar la IA. Se guarda en <b>tu ficha de usuario</b> y es solo tuya: nadie más la ve ni gasta tu cuota, y a partir de ahora solo verás sus últimos cuatro caracteres.</p>
         <div id="aiStatusLine" class="aistatus"></div>
-        <input id="apiKeyInput" type="password" class="setinput" placeholder="Pega tu API key aquí (AIza...)" autocomplete="off" />
+        <input id="apiKeyInput" type="password" class="setinput" placeholder="Pega tu API key completa" autocomplete="off" />
         <div style="display:flex;gap:8px;margin-top:10px">
           <button class="btn gold" onclick="saveConfig()">Save</button>
           <button class="btn" onclick="clearConfig()">Clear</button>
         </div>
-        <p class="muted" style="margin:12px 0 0;font-size:12.5px">¿No tienes una? Consíguela gratis en <b>aistudio.google.com/apikey</b> (Google AI Studio → Create API key). Es tuya; si la compartiste por error, cámbiala desde ahí.</p>
+        <p class="muted" style="margin:12px 0 0;font-size:12.5px">¿No tienes una? Consíguela gratis en <b>aistudio.google.com/apikey</b> (Google AI Studio → Create API key). Al guardarla la comprobamos contra Google, así que sabrás al momento si sirve. Es tuya; si la compartiste por error, bórrala desde ahí y crea otra.</p>
         <div id="setMsg" class="muted" style="font-size:13px;margin-top:8px"></div>
+      </div>
+
+      <div class="setsect">
+        <div class="setlabel">🔑 Tu contraseña</div>
+        <p class="muted" style="margin:0 0 10px;font-size:13.5px">Al cambiarla se cierran las demás sesiones que tengas abiertas. Esta no.</p>
+        <input id="claveActual" type="password" class="setinput" placeholder="Contraseña actual" autocomplete="current-password" />
+        <input id="claveNueva" type="password" class="setinput" style="margin-top:8px" placeholder="Contraseña nueva (mínimo 10)" autocomplete="new-password" />
+        <input id="claveNueva2" type="password" class="setinput" style="margin-top:8px" placeholder="Repite la nueva" autocomplete="new-password" />
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn gold" onclick="cambiarClave()">Cambiar contraseña</button>
+        </div>
+        <div id="claveMsg" class="muted" style="font-size:13px;margin-top:8px"></div>
         <div class="legalbox">
           <b>Software libre · AGPL-3.0</b>
           <div>Se distribuye SIN NINGUNA GARANTÍA. Puedes usarlo, estudiarlo y
@@ -985,19 +997,50 @@ async function api(url,opts){const r=await fetch(url,opts);if(!r.ok){let m;try{m
 /* ---------- Biblioteca ---------- */
 async function loadBooks(){
   const books=await api("/api/books");const el=document.getElementById("library");el.innerHTML="";
+  // renombrar, borrar y publicar son acciones de admin: a un usuario normal esos
+  // botones le devolverían 404, así que no se le muestran
+  const u=await miCuenta(); const esAdmin=!!u && u.role==="admin";
   if(!books.length){ el.innerHTML='<div class="muted" style="padding:8px">Your library is empty.</div>'; }
   books.forEach(b=>{
     const d=document.createElement("div");d.className="bookitem"+(b.id===S.bookId?" active":"");d.dataset.id=b.id;
     d.innerHTML='<div class="ic"></div>';
     const bt=document.createElement("div");bt.className="bt";bt.textContent=b.title;bt.onclick=()=>openBook(b.id);
-    const ren=document.createElement("button");ren.className="ren";ren.textContent="✎";ren.title="Rename";
-    ren.onclick=(e)=>{e.stopPropagation();renameBook(b.id,b.title);};
-    const del=document.createElement("button");del.className="ren del";del.textContent="🗑";
-    del.title="Delete this book";
-    del.onclick=(e)=>{e.stopPropagation();deleteBook(b.id,b.title);};
-    d.appendChild(bt);d.appendChild(ren);d.appendChild(del);
+    if(esAdmin && b.visible===false){
+      bt.title="Privado: solo tú lo ves";
+      const can=document.createElement("span");can.textContent=" 🔒";can.style.opacity=".6";
+      bt.appendChild(can);
+    }
+    d.appendChild(bt);
+    if(esAdmin){
+      const ojo=document.createElement("button");ojo.className="ren";
+      ojo.textContent=b.visible===false?"🔒":"👁";
+      ojo.title=b.visible===false
+        ? "Privado: solo tú lo ves. Pulsa para publicarlo a todos."
+        : "Visible para todos. Pulsa para hacerlo privado.";
+      ojo.onclick=(e)=>{e.stopPropagation();cambiarVisibilidad(b.id,b.title,b.visible!==false);};
+      const ren=document.createElement("button");ren.className="ren";ren.textContent="✎";ren.title="Rename";
+      ren.onclick=(e)=>{e.stopPropagation();renameBook(b.id,b.title);};
+      const del=document.createElement("button");del.className="ren del";del.textContent="🗑";
+      del.title="Delete this book";
+      del.onclick=(e)=>{e.stopPropagation();deleteBook(b.id,b.title);};
+      d.appendChild(ojo);d.appendChild(ren);d.appendChild(del);
+    }
     d.onclick=()=>openBook(b.id);el.appendChild(d);
   });
+}
+
+async function cambiarVisibilidad(id,titulo,eraVisible){
+  const aviso=eraVisible
+    ? "«"+titulo+"» dejará de aparecer para los demás usuarios.\n\n"+
+      "Tú lo seguirás leyendo con tu progreso intacto. Es lo que conviene hacer "+
+      "con un libro que tienes derecho a leer pero no a distribuir."
+    : "«"+titulo+"» pasará a estar visible para TODOS los usuarios.\n\n"+
+      "Asegúrate de que es de dominio público antes de publicarlo.";
+  if(!confirm(aviso)) return;
+  await api("/api/books/"+id+"/visibility",{method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({visible:!eraVisible})});
+  await loadBooks();
 }
 async function deleteBook(id,title){
   // Es la acción más destructiva de la app: se confirma escribiendo, no con un
@@ -1724,6 +1767,23 @@ async function saveConfig(){
     openSettings();  // refresca estado (enmascarado)
     toast("IA activada 🤖");
   }catch(e){m.textContent="Error: "+e.message;}
+}
+async function cambiarClave(){
+  const m=document.getElementById("claveMsg");
+  const actual=document.getElementById("claveActual").value;
+  const n1=document.getElementById("claveNueva").value;
+  const n2=document.getElementById("claveNueva2").value;
+  if(!actual||!n1){m.textContent="Rellena la actual y la nueva.";return;}
+  if(n1!==n2){m.textContent="Las dos nuevas no coinciden.";return;}
+  m.textContent="Cambiando…";
+  try{
+    const r=await api("/api/auth/password",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({current:actual,new:n1})});
+    m.textContent="✓ "+r.mensaje;
+    ["claveActual","claveNueva","claveNueva2"].forEach(i=>document.getElementById(i).value="");
+    toast("Contraseña cambiada 🔑");
+  }catch(e){ m.textContent="Error: "+e.message; }
 }
 async function clearConfig(){
   try{await api("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({gemini_api_key:""})});}
@@ -2696,11 +2756,18 @@ window.addEventListener("beforeunload",saveState);
 </script>
 <script>
 // --- cuenta: quién ha entrado, panel de admin y salir ---------------------
-async function cargarCuenta(){
+let YO = null;
+async function miCuenta(){
+  if(YO) return YO;
   const r = await fetch("/api/auth/me");
-  if(r.status === 401){ location.href = "/entrar"; return; }
-  if(!r.ok) return;
-  const u = await r.json();
+  if(r.status === 401){ location.href = "/entrar"; return null; }
+  if(!r.ok) return null;
+  YO = await r.json();
+  return YO;
+}
+async function cargarCuenta(){
+  const u = await miCuenta();
+  if(!u) return;
   document.getElementById("cuentaNombre").textContent = u.email || u.username;
   document.getElementById("cuentaRol").textContent =
     (u.role === "admin" ? "Administrador" : "Sesión iniciada");

@@ -58,24 +58,28 @@ COOKIE_SEGURA = os.environ.get("COOKIE_SEGURA", "") == "1"
 # Intentos de login fallidos por IP. En memoria a propósito: para 5-20 usuarios
 # no merece una tabla, y reiniciar el proceso no es un agujero porque quien
 # controla el proceso ya ha ganado.
-MAX_INTENTOS = 10
-VENTANA_INTENTOS = 15 * 60          # segundos
-_intentos: dict[str, list[float]] = {}
+# (accion, tope, ventana en segundos)
+#   login: 10 fallos por cuarto de hora, contra la fuerza bruta.
+#   registro: 5 altas por hora. El registro esta abierto a proposito, pero sin
+#   tope un bot llena la tabla de usuarios y el panel de aprobaciones de basura.
+TOPES = {"login": (10, 15 * 60), "registro": (5, 60 * 60)}
+_intentos: dict[tuple[str, str], list[float]] = {}
 
 
 def _ip(peticion: Request) -> str:
     return (peticion.client.host if peticion.client else "?")
 
 
-def _demasiados_intentos(ip: str) -> bool:
+def _demasiados_intentos(accion: str, ip: str) -> bool:
+    tope, ventana = TOPES[accion]
     ahora = time.time()
-    fallos = [t for t in _intentos.get(ip, []) if ahora - t < VENTANA_INTENTOS]
-    _intentos[ip] = fallos
-    return len(fallos) >= MAX_INTENTOS
+    recientes = [t for t in _intentos.get((accion, ip), []) if ahora - t < ventana]
+    _intentos[(accion, ip)] = recientes
+    return len(recientes) >= tope
 
 
-def _apuntar_fallo(ip: str) -> None:
-    _intentos.setdefault(ip, []).append(time.time())
+def _apuntar_intento(accion: str, ip: str) -> None:
+    _intentos.setdefault((accion, ip), []).append(time.time())
 
 
 class SesionMiddleware:
@@ -156,14 +160,23 @@ def _poner_cookie(respuesta: Response, token: str) -> None:
 # Alta, entrada y salida
 # --------------------------------------------------------------------------- #
 @app.post("/api/auth/register")
-def registro(payload: dict = Body(...)) -> dict:
+def registro(peticion: Request, payload: dict = Body(...)) -> dict:
     """Alta de un usuario normal. Queda PENDIENTE hasta que el admin lo apruebe:
-    el registro está abierto, pero el acceso no."""
+    el registro está abierto, pero el acceso no.
+
+    Se cuentan las altas CONSEGUIDAS, no los intentos: lo que hay que frenar es
+    que alguien cree cuentas en serie, no que se equivoque al teclear su correo.
+    """
+    ip = _ip(peticion)
+    if _demasiados_intentos("registro", ip):
+        raise HTTPException(429, "Demasiadas cuentas creadas desde aquí. "
+                                 "Inténtalo dentro de un rato.")
     try:
         db.create_user(email=(payload.get("email") or ""),
                        password=(payload.get("password") or ""))
     except ValueError as e:
         raise HTTPException(400, str(e))
+    _apuntar_intento("registro", ip)
     return {"ok": True,
             "mensaje": "Cuenta creada. Un administrador tiene que aprobarla "
                        "antes de que puedas entrar."}
@@ -172,7 +185,7 @@ def registro(payload: dict = Body(...)) -> dict:
 @app.post("/api/auth/login")
 def login(peticion: Request, respuesta: Response, payload: dict = Body(...)) -> dict:
     ip = _ip(peticion)
-    if _demasiados_intentos(ip):
+    if _demasiados_intentos("login", ip):
         raise HTTPException(429, "Demasiados intentos. Prueba dentro de un rato.")
 
     fila = db.find_user(payload.get("login") or "")
@@ -184,14 +197,14 @@ def login(peticion: Request, respuesta: Response, payload: dict = Body(...)) -> 
     correcta = core.verify_password(clave, guardado)
 
     if not fila or not correcta:
-        _apuntar_fallo(ip)
+        _apuntar_intento("login", ip)
         raise HTTPException(401, "Correo o contraseña incorrectos.")
     if fila["status"] == "pending":
         raise HTTPException(403, "Tu cuenta todavía está pendiente de aprobación.")
     if fila["status"] == "blocked":
         raise HTTPException(403, "Tu cuenta está bloqueada.")
 
-    _intentos.pop(ip, None)
+    _intentos.pop(("login", ip), None)
     _poner_cookie(respuesta, db.create_session(fila["id"], DIAS_DE_SESION))
     db.purge_expired_sessions()
     return {"ok": True, "role": fila["role"],
@@ -210,6 +223,32 @@ def quien_soy(uid: int = Depends(current_user)) -> dict:
     ficha = db.get_user(uid) or {}
     ficha["pasos_para_la_key"] = core.COMO_SACAR_LA_KEY
     return ficha
+
+
+@app.post("/api/auth/password")
+def cambiar_mi_clave(peticion: Request, respuesta: Response,
+                     payload: dict = Body(...),
+                     uid: int = Depends(current_user)) -> dict:
+    """Cambio de contraseña por el propio usuario.
+
+    Pide la actual: con la cookie de alguien bastaría si no, y una sesión robada
+    no debería poder dejarte fuera de tu propia cuenta.
+
+    set_password cierra TODAS las sesiones, incluida la de quien la cambia, así
+    que se le abre una nueva al momento para que no lo echemos de la app por
+    hacer lo correcto.
+    """
+    fila = db.find_user((db.get_user(uid) or {}).get("username") or "")
+    if not fila or not core.verify_password(payload.get("current") or "",
+                                           fila["password_hash"] or ""):
+        raise HTTPException(403, "La contraseña actual no es correcta.")
+    try:
+        db.set_password(uid, payload.get("new") or "")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    _poner_cookie(respuesta, db.create_session(uid, DIAS_DE_SESION))
+    return {"ok": True, "mensaje": "Contraseña cambiada. Se han cerrado las "
+                                   "demás sesiones que tuvieras abiertas."}
 
 
 @app.post("/api/auth/gemini-key")
