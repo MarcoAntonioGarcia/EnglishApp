@@ -65,6 +65,24 @@ def generar() -> str:
     return "\n".join(salida) + "\n"
 
 
+def sentencias() -> list[str]:
+    """El esquema troceado en sentencias ejecutables, sin comentarios.
+
+    Vive aquí y no en cada script porque la primera versión de este troceado
+    descartaba los bloques que EMPEZABAN por un comentario, y con ellos se fue
+    la tabla users entera -- sin dar error, porque nunca llegó a ejecutarse.
+    """
+    fuera = []
+    for trozo in re.split(r";\s*\n", generar()):
+        # quita las líneas de comentario del principio, no el trozo completo
+        lineas = [l for l in trozo.split("\n")
+                  if not l.strip().startswith("--")]
+        limpio = "\n".join(lineas).strip()
+        if limpio:
+            fuera.append(limpio)
+    return fuera
+
+
 def comprobar(ddl: str) -> int:
     """Avisa de restos de dialecto SQLite que no supe traducir."""
     sospechas = [
@@ -86,7 +104,13 @@ if __name__ == "__main__":
     ddl = generar()
     if "--check" in sys.argv:
         codigo = comprobar(ddl)
-        print("tablas: %d  |  indices: %d"
-              % (ddl.count("CREATE TABLE"), ddl.count("CREATE INDEX")))
-        raise SystemExit(codigo)
+        s = sentencias()
+        print("tablas: %d  |  indices: %d  |  sentencias: %d"
+              % (ddl.count("CREATE TABLE"), ddl.count("CREATE INDEX"), len(s)))
+        # cada sentencia tiene que ser ejecutable: si alguna quedó vacía o sin
+        # su CREATE, el troceado se comió algo
+        huecos = [x[:40] for x in s if not re.match(r"CREATE (TABLE|INDEX|UNIQUE)", x)]
+        for h in huecos:
+            print("SENTENCIA RARA: " + h, file=sys.stderr)
+        raise SystemExit(1 if (huecos or codigo) else 0)
     print(ddl)

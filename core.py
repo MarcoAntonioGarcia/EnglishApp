@@ -295,6 +295,121 @@ def a_postgres(sql: str) -> str:
     return sql
 
 
+def url_de_postgres() -> str:
+    """La cadena de conexión de Postgres, o cadena vacía si toca SQLite.
+
+    Mira SOLO la variable de entorno, nunca el fichero .env. Si leyera .env,
+    la app local se conectaría a producción sin que nadie lo pidiera por el
+    simple hecho de que el fichero existe -- un sitio donde equivocarse es muy
+    fácil y las consecuencias son escribir en la base de todos.
+
+    En Render la variable se define en su panel. En local, SQLite.
+    """
+    return (os.environ.get("DATABASE_URL") or "").strip()
+
+
+def url_del_fichero_env() -> str:
+    """La cadena guardada en .env. Para los scripts de migración y pruebas, que
+    sí tienen que apuntar a Postgres a propósito."""
+    try:
+        with open(os.path.join(BASE_DIR, ".env"), "r", encoding="utf-8") as fh:
+            for linea in fh:
+                if linea.startswith("DATABASE_URL="):
+                    return linea.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    return ""
+
+
+def _tablas_con_id() -> frozenset:
+    """Tablas que tienen columna 'id'.
+
+    Postgres no tiene lastrowid: para saber el id recién creado hay que pedir
+    RETURNING id. Pero añadirlo a ciegas falla en las tablas con clave
+    compuesta (study_log, card_progress, chapter_done...), que no tienen 'id'.
+    La lista se deduce de SCHEMA.sql para que no haya que mantenerla a mano.
+    """
+    try:
+        with open(SCHEMA_PATH, "r", encoding="utf-8") as fh:
+            texto = fh.read()
+    except OSError:
+        return frozenset()
+    fuera = set()
+    for m in re.finditer(r"CREATE TABLE IF NOT EXISTS (\w+)\s*\((.*?)\n\);",
+                         texto, re.S):
+        if re.search(r"^\s{4}id\s", m.group(2), re.M):
+            fuera.add(m.group(1))
+    return frozenset(fuera)
+
+
+class _CursorPG:
+    """Imita lo que el código espera de un cursor de sqlite3."""
+
+    def __init__(self, cur, lastrowid=None):
+        self._cur = cur
+        self.lastrowid = lastrowid
+
+    @property
+    def rowcount(self):
+        return self._cur.rowcount
+
+    def fetchone(self):
+        return self._cur.fetchone()
+
+    def fetchall(self):
+        return self._cur.fetchall()
+
+    def __iter__(self):
+        return iter(self._cur)
+
+
+class ConexionPostgres:
+    """Habla con Postgres por la misma puerta que el código usa para SQLite.
+
+    Traduce cada consulta al vuelo con a_postgres() y devuelve filas accesibles
+    por nombre, que es como las lee todo el código. Así el resto de core.py no
+    se enteró del cambio de motor.
+
+    No imita las PRAGMA ni las transacciones explícitas a propósito: eso solo lo
+    usan las migraciones, y en Postgres no se ejecutan -- el esquema se crea de
+    una vez con pg_schema, porque Postgres sí sabe alterar columnas y no hace
+    falta reconstruir tablas para cambiar un default o una clave primaria.
+    """
+
+    def __init__(self, url: str) -> None:
+        import psycopg
+        from psycopg.rows import dict_row
+        self._con = psycopg.connect(url, row_factory=dict_row, connect_timeout=30)
+        self._con_id = _tablas_con_id()
+        # el código asigna estos dos; aquí no significan nada pero tienen que
+        # existir para no reventar
+        self.row_factory = None
+        self.isolation_level = ""
+
+    def execute(self, sql: str, params=()):
+        pg = a_postgres(sql)
+        m = re.match(r"\s*INSERT\s+INTO\s+(\w+)", pg, re.I)
+        if m and m.group(1) in self._con_id and "RETURNING" not in pg.upper():
+            cur = self._con.execute(pg + " RETURNING id", tuple(params))
+            fila = cur.fetchone() if cur.rowcount else None
+            return _CursorPG(cur, fila["id"] if fila else None)
+        return _CursorPG(self._con.execute(pg, tuple(params)))
+
+    def executescript(self, script: str):
+        raise NotImplementedError(
+            "executescript no se usa con Postgres: el esquema lo aplica "
+            "pg_schema.sentencias() una a una.")
+
+    def commit(self):
+        self._con.commit()
+
+    def rollback(self):
+        self._con.rollback()
+
+    def close(self):
+        self._con.close()
+
+
 # --------------------------------------------------------------------------- #
 # Contraseñas
 # --------------------------------------------------------------------------- #
@@ -352,16 +467,38 @@ class DatabaseManager:
     """Persistencia SQLite, segura entre hilos (uvicorn corre endpoints sync en un
     threadpool). Conexión compartida con check_same_thread=False + un Lock."""
 
-    def __init__(self, db_path: str = DB_PATH) -> None:
-        self.conn = sqlite3.connect(db_path, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        self.conn.execute("PRAGMA foreign_keys = ON;")
+    def __init__(self, db_path: str = DB_PATH, url_pg: str | None = None) -> None:
+        """Abre SQLite (un fichero) o Postgres, según haya DATABASE_URL.
+
+        En tu portátil es SQLite, que no necesita nada instalado. En producción
+        es Postgres, porque un servidor gratuito borra su disco al reiniciarse.
+        """
+        url = url_pg if url_pg is not None else url_de_postgres()
+        self.es_postgres = bool(url)
+        if self.es_postgres:
+            self.conn = ConexionPostgres(url)
+        else:
+            self.conn = sqlite3.connect(db_path, check_same_thread=False)
+            self.conn.row_factory = sqlite3.Row
+            self.conn.execute("PRAGMA foreign_keys = ON;")
         self._lock = threading.Lock()
         self._apply_schema()
 
     def _apply_schema(self) -> None:
         if not os.path.exists(SCHEMA_PATH):
             raise FileNotFoundError(f"No se encontró el esquema: {SCHEMA_PATH}")
+        if self.es_postgres:
+            # En Postgres el esquema nace ya en su forma final: las cinco
+            # migraciones existen para sortear que SQLite no sabe cambiar una
+            # clave primaria ni un default, y Postgres sí sabe. Correrlas aquí
+            # no arreglaría nada y rompería, porque van llenas de PRAGMA.
+            import pg_schema
+            with self._lock:
+                for sentencia in pg_schema.sentencias():
+                    self.conn.execute(sentencia)
+                self.conn.commit()
+            self._sembrar_admin()
+            return
         with open(SCHEMA_PATH, "r", encoding="utf-8") as fh:
             script = fh.read()
         with self._lock:
@@ -372,6 +509,14 @@ class DatabaseManager:
         self._migrate_deck_progress()
         self._migrate_chapter_done()
         self._migrate_fechas_locales()
+
+    def _sembrar_admin(self) -> None:
+        """La cuenta del admin. En SQLite la siembra _migrate; en Postgres, esto."""
+        with self._lock:
+            self.conn.execute(
+                "INSERT OR IGNORE INTO users (id, username, role, status) "
+                "VALUES (?, ?, 'admin', 'active')", (ADMIN_USER_ID, ADMIN_USERNAME))
+            self.conn.commit()
 
     def _migrate(self) -> None:
         """Añade columnas nuevas a DBs ya existentes (SQLite no tiene ADD COLUMN IF NOT EXISTS)."""
@@ -1423,7 +1568,8 @@ class DatabaseManager:
         self.conn.execute(
             "INSERT INTO new_intro (user_id, day, scope, count) "
             "VALUES (?, date('now','localtime'), ?, 1) "
-            "ON CONFLICT(user_id, day, scope) DO UPDATE SET count = count + 1",
+            "ON CONFLICT(user_id, day, scope) DO UPDATE SET "
+            "count = new_intro.count + 1",
             (user_id, scope))
 
     def _new_intro_today_locked(self, scope, user_id: int = ADMIN_USER_ID) -> int:
@@ -1439,7 +1585,8 @@ class DatabaseManager:
         self.conn.execute(
             "INSERT INTO study_log (user_id, day, reviews) "
             "VALUES (?, date('now','localtime'), 1) "
-            "ON CONFLICT(user_id, day) DO UPDATE SET reviews = reviews + 1", (user_id,)
+            "ON CONFLICT(user_id, day) DO UPDATE SET "
+            "reviews = study_log.reviews + 1", (user_id,)
         )
 
     def get_streak(self, user_id: int = ADMIN_USER_ID) -> dict:
@@ -2011,14 +2158,16 @@ class DatabaseManager:
                 self.conn.execute(
                     "INSERT INTO activity_log (user_id, day, module, seconds) "
                     "VALUES (?, date('now','localtime'), ?, ?) "
-                    "ON CONFLICT(user_id, day, module) DO UPDATE SET seconds = seconds + ?",
+                    "ON CONFLICT(user_id, day, module) DO UPDATE SET "
+                    "seconds = activity_log.seconds + ?",
                     (user_id, module, int(active_seconds), int(active_seconds)),
                 )
             if open_seconds > 0:
                 self.conn.execute(
                     "INSERT INTO session_log (user_id, day, open_seconds) "
                     "VALUES (?, date('now','localtime'), ?) "
-                    "ON CONFLICT(user_id, day) DO UPDATE SET open_seconds = open_seconds + ?",
+                    "ON CONFLICT(user_id, day) DO UPDATE SET "
+                    "open_seconds = session_log.open_seconds + ?",
                     (user_id, int(open_seconds), int(open_seconds)),
                 )
             self.conn.commit()

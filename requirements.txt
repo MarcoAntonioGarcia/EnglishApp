@@ -9,5 +9,9 @@ google-genai
 genanki
 pyttsx3
 
+# Postgres, solo para producción: en local la base es SQLite y este
+# paquete no se usa. Render lo instala al desplegar.
+psycopg[binary]
+
 # --- App de escritorio (versión previa, main.py) ---
 PyQt6
