@@ -741,7 +741,8 @@ def grade_vocab(vid: int, payload: dict = Body(...), uid: int = Depends(current_
     grade = payload.get("grade", "good")
     if grade not in ("again", "hard", "good", "easy"):
         raise HTTPException(400, "grade inválido")
-    db.grade_vocab(vid, grade, user_id=uid)
+    if not db.grade_vocab(vid, grade, user_id=uid):
+        raise HTTPException(404, "Esa palabra no existe")
     return db.vocab_stats(user_id=uid)
 
 

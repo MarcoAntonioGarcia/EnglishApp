@@ -1302,7 +1302,15 @@ class DatabaseManager:
                     ).fetchall()
         return [dict(r) for r in list(reviews) + list(new) + list(extra)]
 
-    def grade_vocab(self, vid: int, grade: str, user_id: int = ADMIN_USER_ID) -> None:
+    def grade_vocab(self, vid: int, grade: str,
+                    user_id: int = ADMIN_USER_ID) -> bool:
+        """False si esa palabra no es tuya o no existe, para que la API dé 404.
+
+        Antes devolvía None siempre y el endpoint contestaba 200: eso le
+        confirmaba a un extraño que ese id existe, y además le mentía, porque no
+        se había calificado nada. El filtro por user_id ya impedía el daño; lo
+        que faltaba era decirlo.
+        """
         with self._lock:
             # el user_id no es solo para leer lo tuyo: impide calificar una
             # palabra de otro usuario pasando su id
@@ -1311,7 +1319,7 @@ class DatabaseManager:
                 "WHERE id = ? AND user_id = ?", (vid, user_id)
             ).fetchone()
             if not row:
-                return
+                return False
             ease, interval, reps = _sm2(row["ease"], row["interval_days"], row["reps"], grade)
             self.conn.execute(
                 "UPDATE vocabulary SET ease=?, interval_days=?, reps=?, "
@@ -1323,6 +1331,7 @@ class DatabaseManager:
                 self._bump_new_intro_locked("vocab", user_id)
             self._log_review_locked(user_id)
             self.conn.commit()
+            return True
 
     def _bump_new_intro_locked(self, scope, user_id: int = ADMIN_USER_ID) -> None:
         self.conn.execute(
