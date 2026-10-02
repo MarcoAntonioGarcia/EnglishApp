@@ -50,6 +50,14 @@ TTS_CACHE_DIR = os.path.join(ASSETS_DIR, "tts_cache")
 LIBRARY_DIR = os.path.join(BASE_DIR, "library")           # archivos subidos
 CONVERTED_DIR = os.path.join(ASSETS_DIR, "converted")     # EPUBs generados desde PDF
 PIPER_DIR = os.path.join(ASSETS_DIR, "piper")             # modelos de voz neural (Piper)
+# Audio PRE-GENERADO de las tarjetas, con la voz neural, para el servidor: allí
+# no existe ninguna voz del sistema. Va versionado en el repo, al contrario que
+# tts_cache, que es caché de usar y tirar.
+# Se indexa SOLO por el texto -- no por voz ni velocidad, como la caché -- para
+# que cualquier petición lo encuentre sea cual sea la voz que pida el navegador.
+PREGEN_DIR = os.path.join(ASSETS_DIR, "tts_pregen")
+VOZ_PREGEN = "piper:en_US-amy-medium"
+RITMO_PREGEN = 145
 
 # Cuenta del administrador. Mientras no exista login (Fase 1) TODO el contenido
 # personal pertenece a este usuario: es el unico que hay.
@@ -319,6 +327,26 @@ def url_del_fichero_env() -> str:
     except OSError:
         pass
     return ""
+
+
+def clave_pregen(texto: str) -> str:
+    """Nombre del fichero pre-generado para un texto. Normaliza espacios para que
+    'hello  world' y 'hello world' no acaben en dos ficheros distintos."""
+    limpio = re.sub(r"\s+", " ", (texto or "").strip())
+    return hashlib.md5(limpio.encode("utf-8")).hexdigest() + ".m4a"
+
+
+def audio_pregenerado(texto: str) -> str | None:
+    """La ruta del audio pre-generado de ese texto, o None si no existe."""
+    ruta = os.path.join(PREGEN_DIR, clave_pregen(texto))
+    return ruta if os.path.exists(ruta) and os.path.getsize(ruta) > 0 else None
+
+
+def hay_audio_pregenerado() -> bool:
+    try:
+        return any(n.endswith(".m4a") for n in os.listdir(PREGEN_DIR))
+    except OSError:
+        return False
 
 
 def _tablas_con_id() -> frozenset:

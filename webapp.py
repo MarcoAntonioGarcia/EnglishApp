@@ -1158,9 +1158,20 @@ def deck_study(deck_id: int, uid: int = Depends(current_user)) -> list[dict]:
     return _with_cloze(cards)
 
 
+# Si el servidor no tiene voces del sistema pero sí audio pre-generado, lo
+# anuncia como una voz. Sin esto el navegador daba por perdido el audio del
+# servidor y no volvía a pedirlo, dejando los ficheros pre-generados sin usar.
+VOZ_PREGENERADA = {"name": "pregen", "display": "Amy · voz neural",
+                   "accent": "🇺🇸 pre-generada", "pregenerada": True}
+
+
 @app.get("/api/voices")
 def voices(lang: str = "en", uid: int = Depends(current_user)) -> list[dict]:
-    return core.list_voices(lang)
+    del_sistema = core.list_voices(lang)
+    if del_sistema:
+        return del_sistema
+    # sin voces del sistema (servidor Linux): se ofrece la pre-generada si la hay
+    return [VOZ_PREGENERADA] if core.hay_audio_pregenerado() else []
 
 
 @app.get("/api/tts")
@@ -1176,6 +1187,12 @@ def tts(text: str, voice: str = "", rate: int = 0, lang: str = "en", uid: int = 
     # haria que todas las tarjetas sonaran igual sin decir por que, asi que se
     # responde 503 y el navegador usa su propia voz.
     if os.path.realpath(path) == os.path.realpath(core.SAMPLE_WAV):
+        # No pudo generarlo. Antes de rendirse: las tarjetas tienen su audio
+        # pre-generado con la voz neural, que es mejor que cualquiera del
+        # navegador. Las frases de los libros no, y esas sí caen al navegador.
+        pre = core.audio_pregenerado(text)
+        if pre:
+            return FileResponse(pre, media_type="audio/mp4")
         raise HTTPException(503, "Este servidor no puede generar audio; "
                                  "usa la voz del navegador.")
     return FileResponse(path, media_type="audio/wav")

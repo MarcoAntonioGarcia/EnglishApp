@@ -1400,7 +1400,11 @@ function hablar(texto,lang,alAcabar){
   if(!TTS_SERVIDOR)return vozDelNavegador(texto,lang,alAcabar);
   const a=audioEl();
   a.onended=alAcabar||null;
-  a.onerror=()=>{TTS_SERVIDOR=false;a.onerror=null;vozDelNavegador(texto,lang,alAcabar);};
+  // El fallo es POR FRASE, no definitivo: en producción el servidor tiene el
+  // audio pre-generado de las tarjetas pero no el de las frases de los libros.
+  // Si al primer fallo apagáramos el servidor para toda la sesión, las tarjetas
+  // perderían su voz neural solo por haber leído antes un libro.
+  a.onerror=()=>{a.onerror=null;vozDelNavegador(texto,lang,alAcabar);};
   a.src=ttsUrl(texto,lang);
   a.play().catch(e=>{});
 }
@@ -2882,9 +2886,17 @@ function cerrarCajones(){
 function mostrarEstudio(){
   if(window.matchMedia("(max-width:900px)").matches) cajon("rail");
 }
-// elegir un libro cierra el cajón: ya tienes lo que buscabas
+// Cualquier cosa que te LLEVE a otro sitio cierra el cajón: ya tienes lo que
+// buscabas y el panel solo estorba. Son los módulos (Decks, Writing, Stats...),
+// elegir un libro y el buscador del catálogo.
+// Se excluyen los botones de admin de cada libro (renombrar, borrar, publicar):
+// ahí sigues gestionando la biblioteca y cerrar el panel seria molesto.
 document.addEventListener("click",e=>{
-  if(e.target.closest(".bookitem")) cerrarCajones();
+  // dentro del cajón izquierdo, cualquier boton o libro te lleva a otra vista
+  const dentro=e.target.closest(".sidebar");
+  if(!dentro)return;
+  if(e.target.closest(".ren"))return;          // gestionar un libro, no navegar
+  if(e.target.closest("button, a, .bookitem")) cerrarCajones();
 },true);
 
 // --- cuenta: quién ha entrado, panel de admin y salir ---------------------
