@@ -214,6 +214,73 @@ def probar_api_key(key: str) -> tuple[str, str]:
 
 
 # --------------------------------------------------------------------------- #
+# Dialecto SQL: el mismo código contra SQLite y contra PostgreSQL
+# --------------------------------------------------------------------------- #
+# En local la base es un fichero SQLite; en producción, PostgreSQL, porque un
+# servidor gratuito no conserva ficheros entre reinicios.
+#
+# Las consultas se escriben UNA vez en dialecto SQLite -- que es el que ya tiene
+# todo el código -- y se traducen aquí al vuelo cuando toca hablar con Postgres.
+# La alternativa era editar 291 llamadas a mano, con un bug silencioso por cada
+# descuido; esto concentra el riesgo en un sitio que se puede probar entero.
+#
+# Lo que cambia entre los dos:
+#   ?                       -> %s
+#   date('now','localtime') -> CURRENT_DATE          (la zona la fija la sesión)
+#   datetime(...)           -> LOCALTIMESTAMP
+#   date(...,'+N days')     -> CURRENT_DATE + N * INTERVAL '1 day'
+#   IFNULL                  -> COALESCE
+#   INSERT OR IGNORE        -> INSERT ... ON CONFLICT DO NOTHING
+_RE_DIAS = re.compile(
+    r"date\('now','localtime','\+' \|\| \? \|\| ' days'\)")
+_RE_DIAS_DT = re.compile(
+    r"datetime\('now','localtime','\+' \|\| \? \|\| ' days'\)")
+_RE_DESPLAZA = re.compile(
+    r"date\('now','localtime','(-\d+) days'\)")
+
+_LITERALES = (
+    ("date('now','localtime','start of month')", "date_trunc('month', LOCALTIMESTAMP)::date"),
+    ("datetime('now','localtime')", "LOCALTIMESTAMP"),
+    ("date('now','localtime')", "CURRENT_DATE"),
+    ("datetime('now')", "LOCALTIMESTAMP"),
+    ("date('now')", "CURRENT_DATE"),
+    ("IFNULL(", "COALESCE("),
+)
+
+
+def a_postgres(sql: str) -> str:
+    """Traduce una consulta escrita en dialecto SQLite a PostgreSQL.
+
+    Solo se usa cuando la base es Postgres. Con SQLite la consulta va tal cual,
+    así que el camino local no cambia ni corre riesgo.
+    """
+    # los intervalos primero: contienen un '?' que no hay que confundir con un
+    # placeholder, porque allí es parte de la expresión de fecha
+    sql = _RE_DIAS.sub("(CURRENT_DATE + (%s) * INTERVAL '1 day')", sql)
+    sql = _RE_DIAS_DT.sub("(LOCALTIMESTAMP + (%s) * INTERVAL '1 day')", sql)
+    sql = _RE_DESPLAZA.sub(lambda m: "(CURRENT_DATE - %d * INTERVAL '1 day')::date"
+                           % abs(int(m.group(1))), sql)
+    for viejo, nuevo in _LITERALES:
+        sql = sql.replace(viejo, nuevo)
+    # OR IGNORE no se puede traducir solo quitando las palabras: en Postgres
+    # haria FALLAR el duplicado en vez de ignorarlo. Hay que anadir la clausula.
+    if re.search(r"INSERT\s+OR\s+IGNORE\s+INTO", sql, re.I):
+        sql = re.sub(r"INSERT\s+OR\s+IGNORE\s+INTO", "INSERT INTO", sql, flags=re.I)
+        sql = sql.rstrip().rstrip(";") + " ON CONFLICT DO NOTHING"
+    # OR REPLACE tampoco: Postgres necesita saber SOBRE QUE columnas choca y qué
+    # hacer, y eso no se puede adivinar desde aquí. La única del código está
+    # traducida a mano en cache_translation(), así que si aparece otra es un
+    # descuido y conviene enterarse ahora y no en producción.
+    if re.search(r"INSERT\s+OR\s+REPLACE", sql, re.I):
+        raise NotImplementedError(
+            "INSERT OR REPLACE no tiene traducción genérica a Postgres: "
+            "escribe el ON CONFLICT a mano para esta consulta.\n" + sql[:160])
+    # los '?' que queden ya son placeholders de verdad
+    sql = sql.replace("?", "%s")
+    return sql
+
+
+# --------------------------------------------------------------------------- #
 # Contraseñas
 # --------------------------------------------------------------------------- #
 # scrypt viene en la librería estándar: no hace falta bcrypt ni argon2, que
@@ -1229,8 +1296,12 @@ class DatabaseManager:
     def cache_translation(self, source_text: str, result: str, target_lang: str, kind: str) -> None:
         with self._lock:
             self.conn.execute(
-                "INSERT OR REPLACE INTO translations (source_text, target_lang, kind, result) "
-                "VALUES (?, ?, ?, ?)",
+                # ON CONFLICT en vez de INSERT OR REPLACE: funciona igual en
+                # SQLite y en Postgres, y deja explícito sobre qué choca.
+                "INSERT INTO translations (source_text, target_lang, kind, result) "
+                "VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(source_text, target_lang, kind) DO UPDATE SET "
+                "result = excluded.result",
                 (source_text, target_lang, kind, result),
             )
             self.conn.commit()
