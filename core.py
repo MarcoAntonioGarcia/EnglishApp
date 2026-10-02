@@ -238,12 +238,23 @@ _RE_DIAS_DT = re.compile(
 _RE_DESPLAZA = re.compile(
     r"date\('now','localtime','(-\d+) days'\)")
 
+# Las columnas de fecha son TEXT en las dos bases, y el codigo las compara como
+# cadenas ('2026-10-02' <= '2026-10-05'). Asi que las funciones de Postgres
+# tienen que devolver TEXTO CON EL MISMO FORMATO que da SQLite, no un timestamp:
+#   * sin el cast, Postgres rechaza comparar text con date;
+#   * y LOCALTIMESTAMP::text trae microsegundos, que romperian el orden
+#     lexicografico frente a las filas que ya guardo SQLite.
+# De ahi el to_char explicito. El formato es el de SQLite: 'YYYY-MM-DD HH:MM:SS'.
+_AHORA_FECHA = "CURRENT_DATE::text"
+_AHORA_HORA = "to_char(LOCALTIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')"
+
 _LITERALES = (
-    ("date('now','localtime','start of month')", "date_trunc('month', LOCALTIMESTAMP)::date"),
-    ("datetime('now','localtime')", "LOCALTIMESTAMP"),
-    ("date('now','localtime')", "CURRENT_DATE"),
-    ("datetime('now')", "LOCALTIMESTAMP"),
-    ("date('now')", "CURRENT_DATE"),
+    ("date('now','localtime','start of month')",
+     "date_trunc('month', LOCALTIMESTAMP)::date::text"),
+    ("datetime('now','localtime')", _AHORA_HORA),
+    ("date('now','localtime')", _AHORA_FECHA),
+    ("datetime('now')", _AHORA_HORA),
+    ("date('now')", _AHORA_FECHA),
     ("IFNULL(", "COALESCE("),
 )
 
@@ -256,10 +267,14 @@ def a_postgres(sql: str) -> str:
     """
     # los intervalos primero: contienen un '?' que no hay que confundir con un
     # placeholder, porque allí es parte de la expresión de fecha
-    sql = _RE_DIAS.sub("(CURRENT_DATE + (%s) * INTERVAL '1 day')", sql)
-    sql = _RE_DIAS_DT.sub("(LOCALTIMESTAMP + (%s) * INTERVAL '1 day')", sql)
-    sql = _RE_DESPLAZA.sub(lambda m: "(CURRENT_DATE - %d * INTERVAL '1 day')::date"
-                           % abs(int(m.group(1))), sql)
+    sql = _RE_DIAS.sub(
+        "((CURRENT_DATE + (%s) * INTERVAL '1 day')::date)::text", sql)
+    sql = _RE_DIAS_DT.sub(
+        "to_char(LOCALTIMESTAMP + (%s) * INTERVAL '1 day', "
+        "'YYYY-MM-DD HH24:MI:SS')", sql)
+    sql = _RE_DESPLAZA.sub(
+        lambda m: "((CURRENT_DATE - %d * INTERVAL '1 day')::date)::text"
+        % abs(int(m.group(1))), sql)
     for viejo, nuevo in _LITERALES:
         sql = sql.replace(viejo, nuevo)
     # OR IGNORE no se puede traducir solo quitando las palabras: en Postgres
