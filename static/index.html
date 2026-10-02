@@ -361,6 +361,21 @@
     .topbar h1{font-size:19px;}
     .toolbar{flex-wrap:wrap;gap:7px;}
     .toolbar .btn{flex:1 1 auto;}
+
+    /* Las secciones -- Decks, Writing, Statistics, Lessons, Test -- son
+       superposiciones colocadas con left:270px, que es el ancho de la barra
+       lateral de ESCRITORIO. En un telefono de 390 px eso dejaba 120 px de
+       contenido pegado al borde derecho: el cajon se cerraba y aun asi no
+       quedaba sitio donde leer. Aqui ocupan la pantalla entera. */
+    .overlay{left:0;padding:0;align-items:stretch;justify-content:stretch;}
+    .learn-panel{max-width:none;height:100%;border-radius:0;}
+    /* recuadros de estadisticas: tres columnas en un telefono son ilegibles */
+    .tiles{grid-template-columns:repeat(2,1fr);gap:10px;}
+    .tile{padding:13px;}
+    .tile .n{font-size:27px;}
+    .statshead{padding:13px 15px;gap:10px;}
+    .fullpanel{padding-top:env(safe-area-inset-top,0px);
+      padding-bottom:env(safe-area-inset-bottom,0px);}
   }
   .solo-movil{display:none;}
   /* ---- Lessons (método contrastivo) ---- */
