@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Lira · Lector de Idiomas</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23c9a86a'/%3E%3Ctext x='50' y='72' font-size='64' font-family='Georgia' text-anchor='middle' fill='%23241800'%3EL%3C/text%3E%3C/svg%3E" />
 <style>
@@ -330,6 +330,39 @@
   .navbtn.alert{position:relative;}
   .navbtn.alert::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--gold);margin-left:auto;box-shadow:0 0 0 2px var(--sidebar);}
   @media(max-width:1100px){ .app{grid-template-columns:230px 1fr;} .rail{display:none;} }
+
+  /* ---------- Móvil y tablet estrecha ----------
+     La rejilla son tres columnas FIJAS (270 + contenido + 330). En un teléfono
+     de 390 px no caben, y la barra lateral se comía el texto. Por debajo de
+     900 px se pasa a UNA columna y los dos paneles se vuelven cajones que se
+     abren desde la barra superior.
+     El panel derecho no se puede simplemente esconder: dentro está «Study»,
+     que es donde aparece la traducción al tocar una palabra. Sin él, tocabas y
+     no pasaba nada visible. */
+  @media(max-width:900px){
+    .app{grid-template-columns:1fr;}
+    .sidebar,.rail{
+      position:fixed;top:0;bottom:0;z-index:60;width:min(86vw,300px);
+      transition:transform .22s ease;will-change:transform;
+      padding-top:env(safe-area-inset-top,0px);
+      padding-bottom:env(safe-area-inset-bottom,0px);
+    }
+    .sidebar{left:0;transform:translateX(-100%);}
+    .rail{right:0;display:block;transform:translateX(100%);
+      border-left:1px solid var(--line);box-shadow:-8px 0 24px rgba(40,33,20,.14);}
+    .sidebar.abierto{transform:none;}
+    .rail.abierto{transform:none;}
+    #velo{position:fixed;inset:0;background:rgba(20,16,10,.42);z-index:55;display:none;}
+    #velo.on{display:block;}
+    .solo-movil{display:inline-flex !important;}
+    /* el texto del libro necesita todo el ancho */
+    .reader-wrap{min-width:0;}
+    .topbar{padding:12px 14px;gap:8px;}
+    .topbar h1{font-size:19px;}
+    .toolbar{flex-wrap:wrap;gap:7px;}
+    .toolbar .btn{flex:1 1 auto;}
+  }
+  .solo-movil{display:none;}
   /* ---- Lessons (método contrastivo) ---- */
   .lessoncard{cursor:pointer;transition:transform .08s,box-shadow .15s;margin-bottom:12px;}
   .lessoncard:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.06);}
@@ -474,6 +507,10 @@
         </div>
         <span class="count-pill" id="bookPct" style="display:none">0%</span>
         <div class="chapnav">
+          <button class="iconbtn solo-movil" onclick="cajon('sidebar')"
+            title="Biblioteca" aria-label="Biblioteca">☰</button>
+          <button class="iconbtn solo-movil" onclick="cajon('rail')"
+            title="Estudio e índice" aria-label="Estudio e índice">▤</button>
           <button class="iconbtn" id="optBtn" onclick="toggleOpts()" title="Reading options">⚙</button>
           <button class="iconbtn" id="prevCh" onclick="changeChapter(-1)" title="Previous section">‹</button>
           <button class="iconbtn" id="nextCh" onclick="changeChapter(1)" title="Next section">›</button>
@@ -1262,7 +1299,7 @@ document.getElementById("reader").addEventListener("mouseup",()=>{
   if(sel!==S.lastLookup){S.lastLookup=sel;lookupWord(sel);}
 });
 async function lookupWord(word){
-  const st=document.getElementById("study");st.innerHTML='<div class="term">'+escapeHtml(word)+'</div><span class="muted">Looking up…</span>';
+  const st=document.getElementById("study");st.innerHTML='<div class="term">'+escapeHtml(word)+'</div><span class="muted">Looking up…</span>';mostrarEstudio();
   try{const res=await api("/api/llm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:word,kind:"lookup"})});
     st.innerHTML='<div class="term">'+escapeHtml(word)+'</div>'+escapeHtml(res.result);
   }catch(e){st.textContent="Error: "+e.message;}
@@ -1312,7 +1349,23 @@ async function loadVoices(){
   const fill=id=>{const s=document.getElementById(id);if(!s)return;s.innerHTML="";
     vs.forEach(v=>{const o=document.createElement("option");o.value=v.name;o.textContent=(v.display||v.name)+" — "+v.accent;s.appendChild(o);});};
   fill("voiceSel");fill("deckVoiceSel");
-  if(!vs.find(v=>v.name===S.voice)) S.voice=(vs[0]&&vs[0].name)||S.voice;
+  if(!vs.find(v=>v.name===S.voice)){
+    // Se prefiere una voz LOCAL de inglés estadounidense: las "remotas" del
+    // navegador necesitan red y cortan a media frase cuando la conexión flojea.
+    // Antes se cogía la primera de la lista, que en Android suele ser la peor.
+    const vn=(window.speechSynthesis&&window.speechSynthesis.getVoices)?
+      window.speechSynthesis.getVoices():[];
+    const puntos=v=>{
+      const o=vn.find(x=>x.name===v.name)||{};
+      let p=0;
+      if(o.localService)p+=4;
+      if((o.lang||v.accent||"").toLowerCase().startsWith("en-us"))p+=2;
+      if(/samantha|aria|jenny|google us/i.test(v.name))p+=1;
+      return p;
+    };
+    const mejor=[...vs].sort((x,y)=>puntos(y)-puntos(x))[0];
+    S.voice=(mejor&&mejor.name)||S.voice;
+  }
   ["voiceSel","deckVoiceSel"].forEach(id=>{const s=document.getElementById(id);if(s)s.value=S.voice;});
   ["rateSel","deckRateSel"].forEach(id=>{const s=document.getElementById(id);if(s)s.value=String(S.rate);});
 }
@@ -1388,7 +1441,7 @@ function jumpTo(i){stopSpeech();S.sentenceIndex=i;saveState();if(S.isPlaying)spe
 const LABELS={translation:"Translation",grammar:"Grammar",example:"Examples"};
 async function askLLM(kind){
   if(!S.sentences.length)return;const text=S.sentences[S.sentenceIndex];
-  const st=document.getElementById("study");st.innerHTML='<div class="term">'+LABELS[kind]+'</div><span class="muted">…</span>';
+  const st=document.getElementById("study");st.innerHTML='<div class="term">'+LABELS[kind]+'</div><span class="muted">…</span>';mostrarEstudio();
   try{const res=await api("/api/llm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,kind})});
     st.innerHTML='<div class="term">'+LABELS[kind]+'</div>'+escapeHtml(res.result);
   }catch(e){st.textContent="Error: "+e.message;}
@@ -1665,7 +1718,7 @@ async function addVocab(){
   const sel=(window.getSelection().toString().trim())||S.selWord;
   if(!sel){document.getElementById("study").textContent="Select a word in the text and press ＋ Vocabulary.";return;}
   const example=(sel===S.selWord&&S.selExample)?S.selExample:(S.sentences[S.sentenceIndex]||"");
-  const st=document.getElementById("study");st.innerHTML='<div class="term">'+escapeHtml(sel)+'</div><span class="muted">Saving…</span>';
+  const st=document.getElementById("study");st.innerHTML='<div class="term">'+escapeHtml(sel)+'</div><span class="muted">Saving…</span>';mostrarEstudio();
   let translation="";
   try{const res=await api("/api/llm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:sel,kind:"translation"})});translation=res.result;}
   catch(e){translation="(no translation)";}
@@ -2807,7 +2860,33 @@ loadNavAlerts();
 refreshAiDot();
 window.addEventListener("beforeunload",saveState);
 </script>
+<div id="velo" onclick="cerrarCajones()"></div>
 <script>
+// --- cajones del móvil ----------------------------------------------------
+// En pantalla estrecha la barra lateral y el panel de estudio se superponen al
+// texto en vez de robarle ancho. Se abren de uno en uno: con los dos abiertos
+// no quedaría libro que leer.
+function cajon(cual){
+  const el=document.querySelector("."+cual);
+  if(!el)return;
+  const abierto=el.classList.contains("abierto");
+  cerrarCajones();
+  if(!abierto){el.classList.add("abierto");document.getElementById("velo").classList.add("on");}
+}
+function cerrarCajones(){
+  document.querySelectorAll(".sidebar,.rail").forEach(e=>e.classList.remove("abierto"));
+  document.getElementById("velo").classList.remove("on");
+}
+// Al tocar una palabra, la traducción aparece en el panel derecho. En el móvil
+// ese panel está cerrado, así que se abre solo: si no, tocabas y no pasaba nada.
+function mostrarEstudio(){
+  if(window.matchMedia("(max-width:900px)").matches) cajon("rail");
+}
+// elegir un libro cierra el cajón: ya tienes lo que buscabas
+document.addEventListener("click",e=>{
+  if(e.target.closest(".bookitem")) cerrarCajones();
+},true);
+
 // --- cuenta: quién ha entrado, panel de admin y salir ---------------------
 let YO = null;
 async function miCuenta(){
