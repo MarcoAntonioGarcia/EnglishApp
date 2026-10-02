@@ -8,7 +8,14 @@ services:
     name: english-app
     runtime: python
     plan: free
-    region: oregon
+    # MISMA region que la base en Neon (us-east-2, Ohio). Cada consulta viaja
+    # entre Render y Neon: con la app en Oregon y la base en Ohio, serian ~60 ms
+    # de ida y vuelta POR CONSULTA, y algunas paginas hacen una docena.
+    region: ohio
+    # Se despliega desde la rama de trabajo, NO desde main: main sigue con la
+    # version de un solo usuario que ya funciona, y el codigo de autenticacion
+    # no se fusiona hasta que este revisado.
+    branch: feature/multiusuario
     buildCommand: pip install -r requirements-web.txt
     startCommand: uvicorn webapp:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /entrar
