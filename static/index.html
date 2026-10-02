@@ -1279,10 +1279,33 @@ let APP_VOICES=[];
 function langOf(){return (S.bookLang||"en").split("-")[0].toLowerCase();}
 const LANG_NAMES={en:"English",es:"Spanish",fr:"French",de:"German",it:"Italian",pt:"Portuguese"};
 function ttsUrl(text,lang){return "/api/tts?text="+encodeURIComponent(text)+"&voice="+encodeURIComponent(S.voice||"")+"&rate="+(S.rate||145)+"&lang="+(lang||"en");}
+// Las voces del NAVEGADOR. Se usan cuando el servidor no tiene ninguna, que es
+// lo que pasa en el servidor Linux: alli no existe la voz del sistema. Ojo:
+// getVoices() suele venir VACIA en la primera llamada porque el navegador las
+// carga despues, y avisa con el evento 'voiceschanged'.
+function vocesDelNavegador(){
+  try{
+    return (window.speechSynthesis.getVoices()||[])
+      .filter(v=>(v.lang||"").toLowerCase().startsWith("en"))
+      .map(v=>({name:v.name, display:v.name, accent:v.lang, navegador:true}));
+  }catch(e){ return []; }
+}
+
 async function loadVoices(){
   let vs=[];
   // silencio a propósito: sin voces del servidor se usan las del navegador
   try{vs=await api("/api/voices");}catch(e){}
+  if(!vs.length){
+    // Si el servidor no lista voces tampoco puede generar audio, asi que se
+    // decide ya y no se gasta una peticion fallida por cada frase.
+    TTS_SERVIDOR=false;
+    vs=vocesDelNavegador();
+    if(!vs.length){
+      // todavia no las ha cargado el navegador: se reintenta cuando avise
+      try{window.speechSynthesis.onvoiceschanged=()=>{
+        window.speechSynthesis.onvoiceschanged=null; loadVoices();};}catch(e){}
+    }
+  }
   APP_VOICES=vs;
   const pl=document.getElementById("practiceLang");
   if(pl) pl.textContent="Practicing: "+(LANG_NAMES[langOf()]||langOf().toUpperCase());
@@ -1310,7 +1333,10 @@ function vozDelNavegador(texto,lang,alAcabar){
   try{
     window.speechSynthesis.cancel();
     const u=new SpeechSynthesisUtterance(texto);
-    u.lang=(lang||"en")==="en"?"en-US":lang;
+    // respeta la voz elegida en Ajustes, si es una del navegador
+    const elegida=(window.speechSynthesis.getVoices()||[]).find(v=>v.name===S.voice);
+    if(elegida)u.voice=elegida;
+    u.lang=elegida?elegida.lang:((lang||"en")==="en"?"en-US":lang);
     u.rate=Math.max(.5,Math.min(1.5,(S.rate||145)/145));
     if(alAcabar)u.onend=alAcabar;
     window.speechSynthesis.speak(u);
