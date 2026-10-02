@@ -1,0 +1,25 @@
+# Configuración del despliegue en Render.
+#
+# La base de datos NO está aquí: vive en Neon. El disco de un servicio gratuito
+# de Render se borra en cada reinicio, así que una base en fichero perdería el
+# progreso de todos cada vez que la app se duerme.
+services:
+  - type: web
+    name: english-app
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements-web.txt
+    startCommand: uvicorn webapp:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /entrar
+    envVars:
+      # La cadena de conexión de Neon. Se pega en el panel de Render, NUNCA
+      # aquí: este fichero sí va a GitHub.
+      - key: DATABASE_URL
+        sync: false
+      # Obliga a que la cookie de sesión viaje solo por HTTPS. Sin esto, viaja
+      # en claro y cualquiera en la misma red puede copiarla y entrar como tú.
+      - key: COOKIE_SEGURA
+        value: "1"
+      - key: PYTHON_VERSION
+        value: "3.11.9"

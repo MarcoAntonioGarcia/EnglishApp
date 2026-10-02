@@ -1,0 +1,19 @@
+# Dependencias de PRODUCCIÓN (Render). Deliberadamente más corta que
+# requirements.txt:
+#
+#   * PyQt6 es de main.py, la versión de escritorio anterior. Pesa ~100 MB y la
+#     web no la usa: instalarla solo alargaría cada despliegue.
+#   * pyttsx3 genera audio con la voz del sistema, que en un servidor Linux no
+#     existe. Se queda fuera y el navegador pone su propia voz (ver hablar()
+#     en index.html). core.py no la importa al arrancar, solo dentro de un
+#     subproceso, así que su ausencia no rompe nada.
+
+fastapi
+uvicorn[standard]
+python-multipart
+pdfminer.six
+ebooklib
+beautifulsoup4
+google-genai
+genanki
+psycopg[binary]

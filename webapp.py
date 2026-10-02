@@ -1171,6 +1171,13 @@ def tts(text: str, voice: str = "", rate: int = 0, lang: str = "en", uid: int = 
     if not text:
         raise HTTPException(400, "Falta 'text'")
     path = core.synthesize(text, lang, rate=rate or None, voice=voice or None)
+    # synthesize devuelve el fichero de MUESTRA cuando no pudo generar nada --
+    # p. ej. en el servidor Linux, donde no existe el `say` de macOS. Servirlo
+    # haria que todas las tarjetas sonaran igual sin decir por que, asi que se
+    # responde 503 y el navegador usa su propia voz.
+    if os.path.realpath(path) == os.path.realpath(core.SAMPLE_WAV):
+        raise HTTPException(503, "Este servidor no puede generar audio; "
+                                 "usa la voz del navegador.")
     return FileResponse(path, media_type="audio/wav")
 
 
@@ -1234,4 +1241,10 @@ if os.path.isdir(STATIC_DIR):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8080)
+    # En local se escucha solo en el portátil (127.0.0.1), que es lo seguro.
+    # En producción hay que escuchar en todas las interfaces y en el puerto que
+    # diga el servidor: Render lo pasa en la variable PORT y mata el proceso si
+    # no lo usa.
+    puerto = int(os.environ.get("PORT", "8080"))
+    host = os.environ.get("HOST") or ("0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")
+    uvicorn.run(app, host=host, port=puerto)

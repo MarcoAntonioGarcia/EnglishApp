@@ -1301,7 +1301,31 @@ function setRate(r){S.rate=parseInt(r);localStorage.setItem("lira_rate",String(S
   ["rateSel","deckRateSel"].forEach(id=>{const s=document.getElementById(id);if(s)s.value=String(S.rate);});}
 let AUDIO=null;
 function audioEl(){if(!AUDIO)AUDIO=document.getElementById("readAudio");return AUDIO;}
-function speakText(text,lang){if(!text)return;const a=audioEl();a.onended=null;a.src=ttsUrl(text,lang);a.play().catch(e=>{});}
+// El servidor genera el audio con la voz del sistema, que en macOS suena muy
+// bien. Pero en un servidor Linux ese programa no existe, asi que /api/tts
+// contesta 503 y aqui se pasa a la voz del navegador -- la misma que ya usa el
+// lector de libros. Se decide UNA vez: en cuanto falla, no se reintenta.
+let TTS_SERVIDOR = true;
+function vozDelNavegador(texto,lang,alAcabar){
+  try{
+    window.speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(texto);
+    u.lang=(lang||"en")==="en"?"en-US":lang;
+    u.rate=Math.max(.5,Math.min(1.5,(S.rate||145)/145));
+    if(alAcabar)u.onend=alAcabar;
+    window.speechSynthesis.speak(u);
+  }catch(e){}
+}
+function hablar(texto,lang,alAcabar){
+  if(!texto)return;
+  if(!TTS_SERVIDOR)return vozDelNavegador(texto,lang,alAcabar);
+  const a=audioEl();
+  a.onended=alAcabar||null;
+  a.onerror=()=>{TTS_SERVIDOR=false;a.onerror=null;vozDelNavegador(texto,lang,alAcabar);};
+  a.src=ttsUrl(texto,lang);
+  a.play().catch(e=>{});
+}
+function speakText(text,lang){hablar(text,lang);}
 function testVoice(){speakText("This is how the reading voice sounds.");}
 
 function stopSpeech(){/* cancel() lanza en algunos navegadores si no hay nada sonando */
@@ -1315,11 +1339,14 @@ function speakCurrent(){
   render();const text=S.sentences[S.sentenceIndex];if(!text)return;
   const a=audioEl();
   a.onended=()=>{if(S.isPlaying)advance();};
-  a.src=ttsUrl(text,S.bookLang||"en");a.play().catch(e=>{});
+  hablar(text,S.bookLang||"en",a.onended);
   prefetchNext();  // adelanta el audio de la siguiente oración (se cachea)
 }
 // precarga del audio siguiente: si falla, se generará al llegar. Silencio correcto.
-function prefetchNext(){const n=S.sentenceIndex+1;if(n<S.sentences.length){try{fetch(ttsUrl(S.sentences[n],S.bookLang||"en"));}catch(e){}}}
+function prefetchNext(){ // solo tiene sentido si el audio lo da el servidor
+  if(!TTS_SERVIDOR)return;
+  const n=S.sentenceIndex+1;
+  if(n<S.sentences.length){try{fetch(ttsUrl(S.sentences[n],S.bookLang||"en"));}catch(e){}}}
 function advance(){
   S.sentenceIndex++;
   if(S.sentenceIndex>=S.sentences.length){
@@ -2703,11 +2730,11 @@ function showDeckCard(){
 }
 function playDeckAudio(){
   const c=S.deck.queue[S.deck.pos];if(!c)return;
-  const a=audioEl();a.onended=null;a.src=ttsUrl(c.front,"en");a.play().catch(e=>{});
+  hablar(c.front,"en");
 }
 function playDeckExample(){
   const c=S.deck.queue[S.deck.pos];if(!c)return;const en=noteEnglish(c.note);
-  if(en){const a=audioEl();a.onended=null;a.src=ttsUrl(en,"en");a.play().catch(e=>{});}
+  if(en){hablar(en,"en");}
 }
 function deckReveal(){
   document.getElementById("dBack").style.display="";
