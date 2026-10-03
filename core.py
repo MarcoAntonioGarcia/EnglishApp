@@ -505,6 +505,24 @@ _RE_USUARIO = re.compile(r"^[A-Za-z0-9._-]{3,32}$")
 LONGITUD_MINIMA_USUARIO = 3
 
 
+LARGO_MAXIMO_NOMBRE = 60
+
+
+def problema_con_el_nombre(nombre: str) -> str:
+    """El nombre visible es texto libre, pero no cualquier cosa.
+
+    Se rechazan los signos de HTML aunque la pantalla ya escape al pintar: si
+    nunca entran en la base, un descuido futuro en otra pantalla no se convierte
+    en un agujero. Dos barreras en vez de una.
+    """
+    nombre = (nombre or "").strip()
+    if len(nombre) > LARGO_MAXIMO_NOMBRE:
+        return f"El nombre no puede pasar de {LARGO_MAXIMO_NOMBRE} caracteres."
+    if any(ch in nombre for ch in "<>"):
+        return "El nombre no puede llevar los signos < ni >."
+    return ""
+
+
 def problema_con_el_usuario(nombre: str) -> str:
     """Mensaje de error si el nombre no vale, o cadena vacia si vale."""
     nombre = (nombre or "").strip()
@@ -1175,7 +1193,9 @@ class DatabaseManager:
         ya existe.
         """
         username = (username or "").strip()
-        problema = problema_con_el_usuario(username) or problema_con_la_clave(password)
+        problema = (problema_con_el_usuario(username)
+                    or problema_con_la_clave(password)
+                    or problema_con_el_nombre(nombre))
         if problema:
             raise ValueError(problema)
         email = (email or "").strip()
@@ -1235,6 +1255,9 @@ class DatabaseManager:
             campos.append("username = ?")
             valores.append(username)
         if nombre is not None:
+            problema = problema_con_el_nombre(nombre)
+            if problema:
+                raise ValueError(problema)
             campos.append("nombre = ?")
             valores.append(nombre.strip())
         if not campos:
@@ -3133,7 +3156,8 @@ def ocr_image(data: bytes, mime: str) -> str:
     """OCR de una foto (incl. manuscrito) con Gemini vision. Requiere GEMINI_API_KEY."""
     api_key = get_api_key()
     if not api_key:
-        raise AIUnavailable("Falta la API key de Gemini para leer fotos.")
+        raise AIUnavailable("Para leer fotos hace falta tu clave de Gemini. "
+                            "Ponla en ⚙ Ajustes.")
     from google import genai
     from google.genai import types
     client = genai.Client(api_key=api_key)
@@ -3288,7 +3312,8 @@ def _gemini_json(prompt: str, max_tokens: int | None = None,
     """
     api_key = get_api_key()
     if not api_key:
-        raise AIUnavailable("Falta la API key de Gemini (config.local.json o GEMINI_API_KEY).")
+        raise AIUnavailable("No tienes clave de Gemini. Ponla en ⚙ Ajustes "
+                            "para activar la IA.")
     from google import genai
     from google.genai import types
     client = genai.Client(api_key=api_key)
@@ -3670,7 +3695,8 @@ def writing_upgrade(text: str, level: str = "B2", from_level: str = "") -> str:
 def _plain_gemini(prompt: str, prefer: str = "") -> str:
     api_key = get_api_key()
     if not api_key:
-        raise AIUnavailable("Falta la API key de Gemini (config.local.json o GEMINI_API_KEY).")
+        raise AIUnavailable("No tienes clave de Gemini. Ponla en ⚙ Ajustes "
+                            "para activar la IA.")
     from google import genai
     client = genai.Client(api_key=api_key)
 

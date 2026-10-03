@@ -117,6 +117,15 @@
 const $ = s => document.querySelector(s);
 let yo = null;
 
+// Todo lo que viene de la base y se mete como HTML tiene que pasar por aqui.
+// El nombre de una persona es texto libre: si alguien pusiera
+// <img src=x onerror=alert(1)> como nombre, el navegador lo EJECUTARIA al
+// pintar la tabla. Hoy solo el admin pone nombres, pero el dia que alguien
+// pueda cambiarse el suyo esto deja de ser autoinfligido.
+const esc = s => String(s == null ? "" : s)
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
 const ETIQUETA = {pending:"Pendiente", active:"Activo", blocked:"Bloqueado"};
 
 function decir(texto, tipo){
@@ -155,15 +164,15 @@ function pintar(usuarios){
   $("#filas").innerHTML = usuarios.map(u => `
     <tr>
       <td>
-        <div class="correo">${u.nombre || u.username}</div>
+        <div class="correo">${esc(u.nombre || u.username)}</div>
         <div class="sub">
           ${u.role === "admin" ? '<span class="chip admin">Administrador</span> ' : ""}
-          entra como <code>${u.username}</code>
+          entra como <code>${esc(u.username)}</code>
         </div>
       </td>
       <td><span class="chip ${u.status}">${ETIQUETA[u.status] || u.status}</span></td>
-      <td class="sub">${u.tiene_clave_gemini ? u.pista_clave_gemini : "—"}</td>
-      <td class="sub">${(u.created_at || "").slice(0, 10)}</td>
+      <td class="sub">${esc(u.tiene_clave_gemini ? u.pista_clave_gemini : "—")}</td>
+      <td class="sub">${esc((u.created_at || "").slice(0, 10))}</td>
       <td><div class="acciones">${acciones(u)}</div></td>
     </tr>`).join("");
   $("#vacio").hidden = usuarios.length > 1;
@@ -236,8 +245,8 @@ $("#btnCrear").onclick = async () => {
       email: $("#nuevoCorreo").value.trim()});
     // se muestran los datos UNA vez, para poder copiarlos y pasarlos
     ficha.innerHTML = "Cuenta creada. Pásale estos datos:<br><br>" +
-      "Usuario: <code>" + d.username + "</code><br>" +
-      "Contraseña: <code>" + clave.replace(/[&<>]/g, "") + "</code>" +
+      "Usuario: <code>" + esc(d.username) + "</code><br>" +
+      "Contraseña: <code>" + esc(clave) + "</code>" +
       "<br><br><span class=\"sub\">No se vuelven a mostrar. " +
       "Si se pierde la contraseña, resetéala desde la tabla.</span>";
     ficha.className = "ficha on";
