@@ -30,3 +30,6 @@ venv/
 
 # Copias de seguridad de la BD antes de migraciones. Locales, nunca al repo.
 backups/
+
+# Audio pre-generado: se descarto. En el servidor la voz la pone el navegador.
+assets/tts_pregen/

@@ -1335,6 +1335,37 @@ function ttsUrl(text,lang){return "/api/tts?text="+encodeURIComponent(text)+"&vo
 // lo que pasa en el servidor Linux: alli no existe la voz del sistema. Ojo:
 // getVoices() suele venir VACIA en la primera llamada porque el navegador las
 // carga despues, y avisa con el evento 'voiceschanged'.
+// iOS y macOS exponen, junto a las voces buenas, un montón de voces de BROMA
+// (Fred, Zarvox, Bubbles, Bells, Trinoids...) y las "Eloquence", que suenan a
+// robot de los noventa. Si el selector cogía cualquiera -- o la primera de la
+// lista -- el resultado era la voz fea. Esta es la lista explícita.
+// En ORDEN de preferencia. Samantha primero porque es la que Marco usa en el
+// Mac: asi el telefono suena como su escritorio. Las siguientes son las voces
+// decentes de Apple, Microsoft y Google, por calidad.
+const VOCES_PREFERIDAS=["samantha","ava","allison","alex","nicky","tom","susan",
+  "karen","daniel","moira","tessa","serena","aria","jenny","guy","google us","google uk"];
+const VOCES_MALAS=/fred|albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|eloquence|good news|grandma|grandpa|jester|junior|kathy|organ|ralph|reed|rocko|sandy|shelley|superstar|trinoids|whisper|wobble|zarvox|flo|compact|novelty/i;
+
+function mejorVoz(lista){
+  const vn=(window.speechSynthesis&&window.speechSynthesis.getVoices)?
+    window.speechSynthesis.getVoices():[];
+  const puntos=v=>{
+    const o=vn.find(x=>x.name===v.name)||{};
+    const idioma=(o.lang||v.accent||"").toLowerCase();
+    let p=0;
+    if(VOCES_MALAS.test(v.name))return -100;      // descartada
+    const pos=VOCES_PREFERIDAS.findIndex(n=>v.name.toLowerCase().includes(n));
+    if(pos>=0)p+=40-pos;        // cuanto antes en la lista, mejor
+    if(o.localService)p+=4;    // las remotas cortan a media frase sin red
+    if(idioma.startsWith("en-us"))p+=2;
+    else if(idioma.startsWith("en"))p+=1;
+    return p;
+  };
+  const ordenadas=[...lista].sort((x,y)=>puntos(y)-puntos(x));
+  const mejor=ordenadas[0];
+  return (mejor && puntos(mejor)>-100) ? mejor.name : (lista[0]&&lista[0].name);
+}
+
 function vocesDelNavegador(){
   try{
     return (window.speechSynthesis.getVoices()||[])
@@ -1364,23 +1395,7 @@ async function loadVoices(){
   const fill=id=>{const s=document.getElementById(id);if(!s)return;s.innerHTML="";
     vs.forEach(v=>{const o=document.createElement("option");o.value=v.name;o.textContent=(v.display||v.name)+" — "+v.accent;s.appendChild(o);});};
   fill("voiceSel");fill("deckVoiceSel");
-  if(!vs.find(v=>v.name===S.voice)){
-    // Se prefiere una voz LOCAL de inglés estadounidense: las "remotas" del
-    // navegador necesitan red y cortan a media frase cuando la conexión flojea.
-    // Antes se cogía la primera de la lista, que en Android suele ser la peor.
-    const vn=(window.speechSynthesis&&window.speechSynthesis.getVoices)?
-      window.speechSynthesis.getVoices():[];
-    const puntos=v=>{
-      const o=vn.find(x=>x.name===v.name)||{};
-      let p=0;
-      if(o.localService)p+=4;
-      if((o.lang||v.accent||"").toLowerCase().startsWith("en-us"))p+=2;
-      if(/samantha|aria|jenny|google us/i.test(v.name))p+=1;
-      return p;
-    };
-    const mejor=[...vs].sort((x,y)=>puntos(y)-puntos(x))[0];
-    S.voice=(mejor&&mejor.name)||S.voice;
-  }
+  if(!vs.find(v=>v.name===S.voice)) S.voice=mejorVoz(vs)||S.voice;
   ["voiceSel","deckVoiceSel"].forEach(id=>{const s=document.getElementById(id);if(s)s.value=S.voice;});
   ["rateSel","deckRateSel"].forEach(id=>{const s=document.getElementById(id);if(s)s.value=String(S.rate);});
 }

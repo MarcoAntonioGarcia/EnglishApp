@@ -61,6 +61,16 @@ PREGEN_DIR = os.path.join(ASSETS_DIR, "tts_pregen")
 # deja pasar uno y los demas esperan. Mas lento que fallar, pero no se cae.
 _SEMAFORO_PIPER = threading.Semaphore(1)
 ESPERA_PIPER = 25        # segundos esperando turno antes de rendirse
+
+# ¿Genera audio este proceso?
+#
+# En el Mac sí: `say` y Piper tardan ~1,8 s y suenan muy bien.
+# En el servidor NO. Medido en Render: la misma frase con Piper tarda 24,6 s,
+# catorce veces más, porque su CPU gratuita es mucho más lenta. Esperar 24
+# segundos para oír una palabra no es una opción, y bloquea el proceso para los
+# demás. Allí se apaga con TTS_SERVIDOR=0 y la voz la pone el NAVEGADOR, que en
+# iPhone y en Mac son las voces de Apple -- las mismas de siempre, al instante.
+TTS_SERVIDOR_ACTIVO = os.environ.get("TTS_SERVIDOR", "1") != "0"
 VOZ_PREGEN = "piper:en_US-amy-medium"
 RITMO_PREGEN = 145
 
@@ -2934,6 +2944,8 @@ def _piper_voices(lang: str = "en") -> list[dict]:
 
 
 def list_voices(lang: str = "en") -> list[dict]:
+    if not TTS_SERVIDOR_ACTIVO:
+        return []                # sin voces del servidor: manda el navegador
     """Voces disponibles para el idioma: primero las NEURALES (Piper, más humanas),
     luego las de `say` (curadas, sin las de broma), con acento."""
     lang = (lang or "en")[:2]
@@ -3560,6 +3572,8 @@ _TTS_SUBPROCESS = (
 
 def synthesize(text: str, lang: str = "en", rate: int | None = None,
                voice: str | None = None) -> str:
+    if not TTS_SERVIDOR_ACTIVO:
+        return SAMPLE_WAV        # el navegador pondrá la voz
     """TTS con `say` (macOS): voz NATIVA del idioma y ritmo configurable → pronunciación
     correcta y natural. `rate` en palabras/min (más bajo = más lento); `voice` fuerza una
     voz concreta (p.ej. 'Samantha'). Fuera de macOS cae a pyttsx3. Cachea por

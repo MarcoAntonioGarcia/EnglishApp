@@ -17,8 +17,3 @@ beautifulsoup4
 google-genai
 genanki
 psycopg[binary]
-
-# Voz neural, para que el servidor genere el audio al vuelo como hace tu Mac.
-# Es codigo que corre en la CPU: no llama a ningun servicio ni tiene cuota.
-# El modelo de 63 MB lo baja build.sh, no va en el repo.
-piper-tts

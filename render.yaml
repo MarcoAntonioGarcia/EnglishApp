@@ -26,5 +26,11 @@ services:
       # en claro y cualquiera en la misma red puede copiarla y entrar como tú.
       - key: COOKIE_SEGURA
         value: "1"
+      # El servidor NO genera audio: medido en Render, una frase tarda 24,6 s
+      # frente a 1,8 s en un portatil, porque su CPU gratuita es mucho mas
+      # lenta. Esperar eso para oir una palabra no sirve de nada. La voz la
+      # pone el navegador, que en iPhone y Mac son las voces de Apple.
+      - key: TTS_SERVIDOR
+        value: "0"
       - key: PYTHON_VERSION
         value: "3.11.9"

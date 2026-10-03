@@ -4,25 +4,12 @@ set -euo pipefail
 
 pip install -r requirements-web.txt
 
-# --- Voz neural Piper -------------------------------------------------------
-# El servidor es Linux y no tiene NINGUNA voz: ni el `say` de macOS, ni espeak.
-# Sin esto, la app pediría audio al servidor, no podría generarlo y el navegador
-# pondría su propia voz, que suena bastante peor.
+# NO se baja la voz neural de Piper, aunque funcione: medido en Render, generar
+# una frase tarda 24,6 s frente a 1,8 s en un portatil. La CPU del plan gratuito
+# es ~14 veces mas lenta y esperar eso para oir una palabra no sirve de nada.
+# El audio lo pone el navegador (TTS_SERVIDOR=0 en render.yaml), que en iPhone y
+# en Mac usa las voces de Apple: las mismas de siempre y al instante.
 #
-# El modelo pesa 63 MB y NO va en el repo (está en .gitignore): se baja aquí, en
-# cada construcción, desde el repositorio oficial de voces de Piper.
-MODELO_DIR=assets/piper
-MODELO=en_US-amy-medium
-BASE=https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium
-
-mkdir -p "$MODELO_DIR"
-if [ ! -s "$MODELO_DIR/$MODELO.onnx" ]; then
-  echo "Bajando la voz $MODELO (63 MB)..."
-  curl -sfL --retry 3 -o "$MODELO_DIR/$MODELO.onnx"      "$BASE/$MODELO.onnx"
-  curl -sfL --retry 3 -o "$MODELO_DIR/$MODELO.onnx.json" "$BASE/$MODELO.onnx.json"
-fi
-
-# Si la descarga falla, mejor enterarse AQUÍ que servir audio roto en producción.
-test -s "$MODELO_DIR/$MODELO.onnx"
-test -s "$MODELO_DIR/$MODELO.onnx.json"
-echo "Voz lista: $(du -h "$MODELO_DIR/$MODELO.onnx" | cut -f1)"
+# Si algun dia se paga un plan con mas CPU, basta con quitar TTS_SERVIDOR=0 y
+# volver a bajar el modelo aqui.
+echo "Construccion lista (sin voz en el servidor: la pone el navegador)."
