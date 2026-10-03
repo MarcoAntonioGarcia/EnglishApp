@@ -56,6 +56,11 @@ PIPER_DIR = os.path.join(ASSETS_DIR, "piper")             # modelos de voz neura
 # Se indexa SOLO por el texto -- no por voz ni velocidad, como la caché -- para
 # que cualquier petición lo encuentre sea cual sea la voz que pida el navegador.
 PREGEN_DIR = os.path.join(ASSETS_DIR, "tts_pregen")
+# Piper corre en un SUBPROCESO y cada uno gasta ~276 MB. El plan gratuito de
+# Render da 512 MB en total, asi que dos a la vez lo tumbarian: este semaforo
+# deja pasar uno y los demas esperan. Mas lento que fallar, pero no se cae.
+_SEMAFORO_PIPER = threading.Semaphore(1)
+ESPERA_PIPER = 25        # segundos esperando turno antes de rendirse
 VOZ_PREGEN = "piper:en_US-amy-medium"
 RITMO_PREGEN = 145
 
@@ -3567,11 +3572,19 @@ def synthesize(text: str, lang: str = "en", rate: int | None = None,
         return out_path
 
     # Motor NEURAL Piper (voz más humana). voice = 'piper:<modelo>'.
+    # Si no se pide una voz concreta pero HAY un modelo de Piper, se usa: en el
+    # servidor es el único motor que existe, y es mejor que la voz del navegador.
+    if not voice:
+        por_defecto = os.path.join(PIPER_DIR, VOZ_PREGEN.split("piper:", 1)[1] + ".onnx")
+        if os.path.exists(por_defecto):
+            voice = VOZ_PREGEN
     if voice and voice.startswith("piper:"):
         model = os.path.join(PIPER_DIR, voice.split("piper:", 1)[1] + ".onnx")
         if os.path.exists(model):
             # length_scale: >1 = más lento. Mapea el 'rate' (palabras/min) a la escala.
             length_scale = round(max(0.8, min(1.7, 150.0 / max(60, r))), 2)
+            if not _SEMAFORO_PIPER.acquire(timeout=ESPERA_PIPER):
+                return SAMPLE_WAV       # servidor ocupado: el navegador pondrá voz
             try:
                 subprocess.run(
                     [sys.executable, "-m", "piper", "-m", model,
@@ -3583,6 +3596,8 @@ def synthesize(text: str, lang: str = "en", rate: int | None = None,
                     return out_path
             except Exception:
                 pass  # cae a `say`
+            finally:
+                _SEMAFORO_PIPER.release()
 
     if sys.platform == "darwin":
         try:

@@ -14,7 +14,7 @@ services:
     region: ohio
     # Sin 'branch': se despliega desde main, que es la rama que corre. El
     # trabajo en curso vive en ramas aparte y solo llega aqui al fusionarse.
-    buildCommand: pip install -r requirements-web.txt
+    buildCommand: ./build.sh
     startCommand: uvicorn webapp:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /entrar
     envVars:
