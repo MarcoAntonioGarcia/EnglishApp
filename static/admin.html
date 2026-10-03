@@ -45,6 +45,21 @@
   .aviso{margin-bottom:16px;padding:10px 13px;border-radius:8px;font-size:13.5px;display:none}
   .aviso.error{background:#fdeeec;border:1px solid #f0cfca;color:var(--danger);display:block}
   .aviso.ok{background:#eaf3f0;border:1px solid #c8e0d8;color:var(--accent);display:block}
+  .crear{background:var(--card);border:1px solid var(--line);border-radius:14px;
+         box-shadow:var(--shadow);padding:18px;margin-bottom:18px}
+  .crear h2{margin:0 0 4px;font-size:16px;font-weight:600}
+  .crear p{margin:0 0 14px;color:var(--muted);font-size:13px}
+  .campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+  .campos label{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-bottom:4px}
+  .campos input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;
+                font:inherit;font-size:14px;background:#fff;color:var(--ink)}
+  .campos input:focus{outline:2px solid var(--gold);outline-offset:-1px;border-color:var(--gold)}
+  .crear .pie2{margin:12px 0 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .ficha{background:#f6f1e7;border:1px solid var(--line);border-radius:9px;padding:11px 13px;
+         margin-top:12px;font-size:13.5px;display:none}
+  .ficha.on{display:block}
+  .ficha code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#fff;
+              border:1px solid var(--line);border-radius:5px;padding:1px 6px}
 </style>
 </head>
 <body>
@@ -55,6 +70,32 @@
   </header>
 
   <div class="aviso" id="aviso" role="status"></div>
+
+  <div class="crear">
+    <h2>Crear una cuenta</h2>
+    <p>Nace activa: si la creas tú, ya has decidido que esa persona entra.
+       La contraseña es temporal — pásasela y que la cambie desde ⚙ Ajustes.</p>
+    <div class="campos">
+      <div>
+        <label for="nuevoUsuario">Usuario</label>
+        <input id="nuevoUsuario" placeholder="luis" autocapitalize="none" spellcheck="false">
+      </div>
+      <div>
+        <label for="nuevaClave">Contraseña temporal</label>
+        <input id="nuevaClave" placeholder="mínimo 10 caracteres">
+      </div>
+      <div>
+        <label for="nuevoCorreo">Correo (opcional)</label>
+        <input id="nuevoCorreo" placeholder="no se usa para nada" autocapitalize="none">
+      </div>
+    </div>
+    <div class="pie2">
+      <button class="ok" id="btnCrear">Crear cuenta</button>
+      <button id="btnSugerir" type="button">Sugerir contraseña</button>
+      <span class="sub" id="crearMsg"></span>
+    </div>
+    <div class="ficha" id="ficha"></div>
+  </div>
 
   <div class="tarjeta">
     <div class="scroll"><table>
@@ -150,6 +191,44 @@ $("#filas").addEventListener("click", async e => {
     b.disabled = false;
   }
 });
+
+// Una contraseña temporal decente, para no tener que inventarla cada vez.
+// Se genera en el NAVEGADOR con el generador criptográfico: no pasa por el
+// servidor hasta que se pulsa Crear.
+$("#btnSugerir").onclick = () => {
+  const abc = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const n = new Uint32Array(14);
+  crypto.getRandomValues(n);
+  $("#nuevaClave").value = [...n].map(x => abc[x % abc.length]).join("");
+};
+
+$("#btnCrear").onclick = async () => {
+  const b = $("#btnCrear"), m = $("#crearMsg"), ficha = $("#ficha");
+  const usuario = $("#nuevoUsuario").value.trim();
+  const clave = $("#nuevaClave").value;
+  m.textContent = "";
+  ficha.className = "ficha";
+  b.disabled = true;
+  try{
+    const d = await llamar("/api/admin/users", {
+      username: usuario, password: clave,
+      email: $("#nuevoCorreo").value.trim()});
+    // se muestran los datos UNA vez, para poder copiarlos y pasarlos
+    ficha.innerHTML = "Cuenta creada. Pásale estos datos:<br><br>" +
+      "Usuario: <code>" + d.username + "</code><br>" +
+      "Contraseña: <code>" + clave.replace(/[&<>]/g, "") + "</code>" +
+      "<br><br><span class=\"sub\">No se vuelven a mostrar. " +
+      "Si se pierde la contraseña, resetéala desde la tabla.</span>";
+    ficha.className = "ficha on";
+    ["nuevoUsuario","nuevaClave","nuevoCorreo"].forEach(i => $("#"+i).value = "");
+    await cargar();
+  }catch(err){
+    m.textContent = err.message;
+    m.style.color = "var(--danger)";
+  }finally{
+    b.disabled = false;
+  }
+};
 
 fetch("/api/auth/me").then(r => r.json()).then(u => { yo = u; cargar(); });
 </script>

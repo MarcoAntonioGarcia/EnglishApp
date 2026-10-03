@@ -498,6 +498,27 @@ def problema_con_la_clave(plain: str) -> str:
 
 _RE_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+# Letras, numeros, punto, guion y guion bajo. Sin espacios -- un nombre con
+# espacios se teclea mal y se copia peor -- y sin acentos, para que nadie se
+# quede fuera por no saber si lo escribio con tilde.
+_RE_USUARIO = re.compile(r"^[A-Za-z0-9._-]{3,32}$")
+LONGITUD_MINIMA_USUARIO = 3
+
+
+def problema_con_el_usuario(nombre: str) -> str:
+    """Mensaje de error si el nombre no vale, o cadena vacia si vale."""
+    nombre = (nombre or "").strip()
+    if not nombre:
+        return "Hace falta un nombre de usuario."
+    if len(nombre) < LONGITUD_MINIMA_USUARIO:
+        return f"El nombre debe tener al menos {LONGITUD_MINIMA_USUARIO} caracteres."
+    if len(nombre) > 32:
+        return "El nombre no puede pasar de 32 caracteres."
+    if not _RE_USUARIO.match(nombre):
+        return ("Solo letras sin acentos, números, punto, guion y guion bajo. "
+                "Sin espacios.")
+    return ""
+
 
 def email_valido(email: str) -> bool:
     return bool(_RE_EMAIL.match((email or "").strip()))
@@ -1081,32 +1102,39 @@ class DatabaseManager:
                 (login, login)).fetchone()
         return dict(row) if row else None
 
-    def create_user(self, email: str, password: str, username: str = "",
-                    role: str = "user", status: str = "pending") -> int:
+    def create_user(self, username: str, password: str, email: str = "",
+                    role: str = "user", status: str = "active") -> int:
         """Alta de usuario. Devuelve el id nuevo.
 
-        Lanza ValueError si el correo o la contraseña no valen, o si ya existe
-        una cuenta con ese correo.
+        Las cuentas las crea el ADMIN, así que nacen ya activas: no hay cola de
+        aprobaciones que revisar. El correo es opcional y no se usa para nada --
+        no se verifica ni se le manda nada -- porque la clave de Gemini la
+        consigue cada uno con su cuenta de Google, que es asunto suyo.
+
+        Lanza ValueError si el nombre o la contraseña no valen, o si ese nombre
+        ya existe.
         """
-        email = (email or "").strip()
-        if not email_valido(email):
-            raise ValueError("Ese correo no tiene un formato válido.")
-        problema = problema_con_la_clave(password)
+        username = (username or "").strip()
+        problema = problema_con_el_usuario(username) or problema_con_la_clave(password)
         if problema:
             raise ValueError(problema)
-        # para un usuario normal el username ES su correo: entra con lo que
-        # escribió al registrarse, sin inventarse un alias
-        username = (username or email).strip()
+        email = (email or "").strip()
+        if email and not email_valido(email):
+            raise ValueError("Ese correo no tiene un formato válido.")
         with self._lock:
+            # el nombre no distingue mayusculas: 'Luis' y 'luis' serian la misma
+            # persona intentando entrar y fallando sin entender por que
             ya = self.conn.execute(
-                "SELECT 1 FROM users WHERE username = ? OR email = ?",
-                (username, email)).fetchone()
+                "SELECT 1 FROM users WHERE username = ?", (username,)).fetchone()
             if ya:
+                raise ValueError(f"Ya existe un usuario «{username}».")
+            if email and self.conn.execute(
+                    "SELECT 1 FROM users WHERE email = ?", (email,)).fetchone():
                 raise ValueError("Ya hay una cuenta con ese correo.")
             cur = self.conn.execute(
                 "INSERT INTO users (username, email, password_hash, role, status) "
                 "VALUES (?,?,?,?,?)",
-                (username, email, hash_password(password), role, status))
+                (username, email or None, hash_password(password), role, status))
             self.conn.commit()
             return cur.lastrowid
 

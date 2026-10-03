@@ -159,27 +159,11 @@ def _poner_cookie(respuesta: Response, token: str) -> None:
 # --------------------------------------------------------------------------- #
 # Alta, entrada y salida
 # --------------------------------------------------------------------------- #
-@app.post("/api/auth/register")
-def registro(peticion: Request, payload: dict = Body(...)) -> dict:
-    """Alta de un usuario normal. Queda PENDIENTE hasta que el admin lo apruebe:
-    el registro está abierto, pero el acceso no.
-
-    Se cuentan las altas CONSEGUIDAS, no los intentos: lo que hay que frenar es
-    que alguien cree cuentas en serie, no que se equivoque al teclear su correo.
-    """
-    ip = _ip(peticion)
-    if _demasiados_intentos("registro", ip):
-        raise HTTPException(429, "Demasiadas cuentas creadas desde aquí. "
-                                 "Inténtalo dentro de un rato.")
-    try:
-        db.create_user(email=(payload.get("email") or ""),
-                       password=(payload.get("password") or ""))
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    _apuntar_intento("registro", ip)
-    return {"ok": True,
-            "mensaje": "Cuenta creada. Un administrador tiene que aprobarla "
-                       "antes de que puedas entrar."}
+# No hay registro público: las cuentas las crea el admin en /admin. Para un
+# grupo cerrado es mas simple y mas seguro -- nadie se da de alta solo, no hay
+# cola de aprobaciones, y en la tabla de usuarios aparecen nombres que
+# reconoces en vez de correos sin verificar.
+# El endpoint vive ahora en POST /api/admin/users.
 
 
 @app.post("/api/auth/login")
@@ -277,6 +261,30 @@ def guardar_mi_key(payload: dict = Body(...), uid: int = Depends(current_user)) 
 # --------------------------------------------------------------------------- #
 # Panel de administración
 # --------------------------------------------------------------------------- #
+@app.post("/api/admin/users")
+def admin_crear_usuario(payload: dict = Body(...),
+                        uid: int = Depends(current_admin)) -> dict:
+    """Crea una cuenta. Solo el admin.
+
+    Nace ACTIVA: si la creas tú, ya has decidido que esa persona entra. La
+    contraseña que pongas es temporal y se la pasas por donde quieras; ella la
+    cambia luego desde Ajustes.
+    """
+    try:
+        nuevo = db.create_user(
+            username=(payload.get("username") or ""),
+            password=(payload.get("password") or ""),
+            email=(payload.get("email") or ""),
+            role="admin" if payload.get("role") == "admin" else "user",
+            status="active")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    ficha = db.get_user(nuevo) or {}
+    return {"ok": True, "id": nuevo, "username": ficha.get("username"),
+            "mensaje": "Cuenta creada y activa. Pásale el usuario y la "
+                       "contraseña; podrá cambiarla desde Ajustes."}
+
+
 @app.get("/api/admin/users")
 def admin_usuarios(uid: int = Depends(current_admin)) -> list[dict]:
     return db.list_users()
