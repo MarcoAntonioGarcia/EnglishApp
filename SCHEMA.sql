@@ -18,7 +18,10 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT    NOT NULL DEFAULT '',       -- vacio hasta la Fase 2
     role          TEXT    NOT NULL DEFAULT 'user',   -- 'admin' | 'user'
     status        TEXT    NOT NULL DEFAULT 'pending',-- 'pending' | 'active' | 'blocked'
-    email         TEXT    COLLATE NOCASE,          -- alta por correo (Fase 2)
+    -- Como se llama la persona, para mostrarlo en la app. El username es para
+    -- teclear ('marco.sanchez'); esto es para leer ('Marco Sánchez').
+    nombre        TEXT    NOT NULL DEFAULT '',
+    email         TEXT    COLLATE NOCASE,          -- opcional y sin usar
     -- Key de Gemini PROPIA de cada usuario: la cuota del free tier es por
     -- cuenta, asi que cada uno pone la suya. Es SU credencial: no se escribe
     -- en logs y al mostrarla de vuelta solo se enseñan los ultimos 4 caracteres.

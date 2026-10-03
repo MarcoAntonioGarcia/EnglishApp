@@ -561,6 +561,7 @@ class DatabaseManager:
                 for sentencia in pg_schema.sentencias():
                     self.conn.execute(sentencia)
                 self.conn.commit()
+            self._alinear_columnas_postgres()
             self._sembrar_admin()
             return
         with open(SCHEMA_PATH, "r", encoding="utf-8") as fh:
@@ -573,6 +574,56 @@ class DatabaseManager:
         self._migrate_deck_progress()
         self._migrate_chapter_done()
         self._migrate_fechas_locales()
+
+    def _alinear_columnas_postgres(self) -> None:
+        """Añade a Postgres las columnas que SCHEMA.sql declara y la tabla no tiene.
+
+        El esquema se crea con CREATE TABLE IF NOT EXISTS, así que una columna
+        nueva en SCHEMA.sql no llegaría NUNCA a una base ya creada: la tabla ya
+        existe y el CREATE no hace nada. En SQLite eso se resuelve con los ALTER
+        de _migrate; en Postgres no había mecanismo ninguno, y ese es un agujero
+        que se nota el día que se añade un campo y en producción no aparece.
+
+        Aquí es más fácil que en SQLite: Postgres acepta ADD COLUMN IF NOT
+        EXISTS, así que esto es idempotente y no hay que reconstruir nada.
+        """
+        with open(SCHEMA_PATH, "r", encoding="utf-8") as fh:
+            texto = fh.read()
+        anadidas = []
+        with self._lock:
+            for m in re.finditer(
+                    r"CREATE TABLE IF NOT EXISTS (\w+)\s*\((.*?)\n\);", texto, re.S):
+                tabla, cuerpo = m.group(1), m.group(2)
+                existentes = {r["column_name"] for r in self.conn.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = ?", (tabla,))}
+                if not existentes:
+                    continue                      # la tabla acaba de nacer
+                for linea in cuerpo.split("\n"):
+                    linea = linea.strip().rstrip(",")
+                    if not linea or linea.startswith("--"):
+                        continue
+                    # las restricciones de tabla no son columnas
+                    if re.match(r"(PRIMARY KEY|FOREIGN KEY|UNIQUE|CHECK)\b",
+                                linea, re.I):
+                        continue
+                    partes = linea.split(None, 1)
+                    if len(partes) < 2:
+                        continue
+                    nombre, definicion = partes[0], partes[1].split("--")[0].strip()
+                    if nombre.lower() in {c.lower() for c in existentes}:
+                        continue
+                    definicion = re.sub(r"\s+COLLATE\s+NOCASE", "", definicion,
+                                        flags=re.I)
+                    definicion = re.sub(r"\bREAL\b", "DOUBLE PRECISION",
+                                        definicion, flags=re.I)
+                    self.conn.execute(
+                        f"ALTER TABLE {tabla} ADD COLUMN IF NOT EXISTS "
+                        f"{nombre} {a_postgres(definicion)}")
+                    anadidas.append(f"{tabla}.{nombre}")
+            self.conn.commit()
+        if anadidas:
+            print("Postgres: columnas añadidas -> " + ", ".join(anadidas))
 
     def _sembrar_admin(self) -> None:
         """La cuenta del admin. En SQLite la siembra _migrate; en Postgres, esto."""
@@ -661,6 +712,14 @@ class DatabaseManager:
             # "Restaurante"). Estaba metida en 'note', que es el campo del
             # EJEMPLO, así que la tarjeta mostraba "Tiendas" donde debía ir una
             # frase de uso — y sin ejemplo no se puede construir el cloze.
+            # nombre visible del usuario
+            ucols = {r["name"] for r in self.conn.execute("PRAGMA table_info(users)")}
+            if "nombre" not in ucols:
+                try:
+                    self.conn.execute(
+                        "ALTER TABLE users ADD COLUMN nombre TEXT NOT NULL DEFAULT ''")
+                except sqlite3.OperationalError:
+                    pass
             # visible en books: libros privados del admin
             bcols = {r["name"] for r in self.conn.execute("PRAGMA table_info(books)")}
             if "visible" not in bcols:
@@ -1103,7 +1162,8 @@ class DatabaseManager:
         return dict(row) if row else None
 
     def create_user(self, username: str, password: str, email: str = "",
-                    role: str = "user", status: str = "active") -> int:
+                    role: str = "user", status: str = "active",
+                    nombre: str = "") -> int:
         """Alta de usuario. Devuelve el id nuevo.
 
         Las cuentas las crea el ADMIN, así que nacen ya activas: no hay cola de
@@ -1132,9 +1192,10 @@ class DatabaseManager:
                     "SELECT 1 FROM users WHERE email = ?", (email,)).fetchone():
                 raise ValueError("Ya hay una cuenta con ese correo.")
             cur = self.conn.execute(
-                "INSERT INTO users (username, email, password_hash, role, status) "
-                "VALUES (?,?,?,?,?)",
-                (username, email or None, hash_password(password), role, status))
+                "INSERT INTO users (username, email, password_hash, role, status, nombre) "
+                "VALUES (?,?,?,?,?,?)",
+                (username, email or None, hash_password(password), role, status,
+                 (nombre or "").strip()))
             self.conn.commit()
             return cur.lastrowid
 
@@ -1149,6 +1210,41 @@ class DatabaseManager:
                               (hash_password(password), user_id))
             self._revocar_sesiones_locked(user_id)
             self.conn.commit()
+
+    def set_user_identity(self, user_id: int, username: str = None,
+                          nombre: str = None) -> bool:
+        """Cambia el nombre de entrada y/o el nombre visible.
+
+        Renombrar NO afecta a nada de lo que esa persona haya hecho: su
+        vocabulario, sus redacciones y su clave de Gemini van atados a su id,
+        no a su nombre. Pero sí le cambia con qué teclea al entrar, así que hay
+        que avisarle.
+        """
+        campos, valores = [], []
+        if username is not None:
+            username = username.strip()
+            problema = problema_con_el_usuario(username)
+            if problema:
+                raise ValueError(problema)
+            with self._lock:
+                choca = self.conn.execute(
+                    "SELECT 1 FROM users WHERE username = ? AND id <> ?",
+                    (username, user_id)).fetchone()
+            if choca:
+                raise ValueError(f"Ya existe un usuario «{username}».")
+            campos.append("username = ?")
+            valores.append(username)
+        if nombre is not None:
+            campos.append("nombre = ?")
+            valores.append(nombre.strip())
+        if not campos:
+            return False
+        with self._lock:
+            cur = self.conn.execute(
+                "UPDATE users SET %s WHERE id = ?" % ", ".join(campos),
+                (*valores, user_id))
+            self.conn.commit()
+            return cur.rowcount > 0
 
     def set_user_status(self, user_id: int, status: str) -> bool:
         """'pending' | 'active' | 'blocked'. Bloquear cierra sus sesiones."""

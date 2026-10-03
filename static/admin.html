@@ -77,8 +77,12 @@
        La contraseña es temporal — pásasela y que la cambie desde ⚙ Ajustes.</p>
     <div class="campos">
       <div>
-        <label for="nuevoUsuario">Usuario</label>
-        <input id="nuevoUsuario" placeholder="luis" autocapitalize="none" spellcheck="false">
+        <label for="nuevoNombre">Nombre</label>
+        <input id="nuevoNombre" placeholder="Luis Pérez">
+      </div>
+      <div>
+        <label for="nuevoUsuario">Usuario (para entrar)</label>
+        <input id="nuevoUsuario" placeholder="luis.perez" autocapitalize="none" spellcheck="false">
       </div>
       <div>
         <label for="nuevaClave">Contraseña temporal</label>
@@ -100,7 +104,7 @@
   <div class="tarjeta">
     <div class="scroll"><table>
       <thead><tr>
-        <th>Cuenta</th><th>Estado</th><th>Clave IA</th><th>Alta</th>
+        <th>Persona</th><th>Estado</th><th>Clave IA</th><th>Alta</th>
         <th style="text-align:right">Acciones</th>
       </tr></thead>
       <tbody id="filas"></tbody>
@@ -142,6 +146,7 @@ function acciones(u){
     b.push(`<button class="mal" data-a="blocked" data-id="${u.id}">Bloquear</button>`);
   if(u.status === "blocked")
     b.push(`<button class="ok" data-a="active" data-id="${u.id}">Reactivar</button>`);
+  b.push(`<button data-a="nombre" data-id="${u.id}">Renombrar</button>`);
   b.push(`<button data-a="clave" data-id="${u.id}">Resetear contraseña</button>`);
   return b.join("");
 }
@@ -150,8 +155,11 @@ function pintar(usuarios){
   $("#filas").innerHTML = usuarios.map(u => `
     <tr>
       <td>
-        <div class="correo">${u.email || u.username}</div>
-        <div class="sub">${u.role === "admin" ? '<span class="chip admin">Administrador</span>' : u.username}</div>
+        <div class="correo">${u.nombre || u.username}</div>
+        <div class="sub">
+          ${u.role === "admin" ? '<span class="chip admin">Administrador</span> ' : ""}
+          entra como <code>${u.username}</code>
+        </div>
       </td>
       <td><span class="chip ${u.status}">${ETIQUETA[u.status] || u.status}</span></td>
       <td class="sub">${u.tiene_clave_gemini ? u.pista_clave_gemini : "—"}</td>
@@ -174,6 +182,18 @@ $("#filas").addEventListener("click", async e => {
   const id = Number(b.dataset.id);
   b.disabled = true;
   try{
+    if(b.dataset.a === "nombre"){
+      const fila = (await (await fetch("/api/admin/users")).json()).find(x => x.id === id) || {};
+      const nombre = prompt("Nombre visible dentro de la app:", fila.nombre || "");
+      if(nombre === null) return;
+      const usuario = prompt("Usuario con el que entra (ojo: hay que avisarle):",
+                             fila.username || "");
+      if(usuario === null) return;
+      await llamar(`/api/admin/users/${id}/identidad`, {nombre, username: usuario});
+      decir("Renombrado. Avísale del usuario nuevo si lo cambiaste.", "ok");
+      await cargar();
+      return;
+    }
     if(b.dataset.a === "clave"){
       const clave = prompt("Contraseña nueva para este usuario (mínimo 10 caracteres).\n" +
                            "Se le cerrarán las sesiones abiertas.");
@@ -212,6 +232,7 @@ $("#btnCrear").onclick = async () => {
   try{
     const d = await llamar("/api/admin/users", {
       username: usuario, password: clave,
+      nombre: $("#nuevoNombre").value.trim(),
       email: $("#nuevoCorreo").value.trim()});
     // se muestran los datos UNA vez, para poder copiarlos y pasarlos
     ficha.innerHTML = "Cuenta creada. Pásale estos datos:<br><br>" +
@@ -220,7 +241,7 @@ $("#btnCrear").onclick = async () => {
       "<br><br><span class=\"sub\">No se vuelven a mostrar. " +
       "Si se pierde la contraseña, resetéala desde la tabla.</span>";
     ficha.className = "ficha on";
-    ["nuevoUsuario","nuevaClave","nuevoCorreo"].forEach(i => $("#"+i).value = "");
+    ["nuevoNombre","nuevoUsuario","nuevaClave","nuevoCorreo"].forEach(i => $("#"+i).value = "");
     await cargar();
   }catch(err){
     m.textContent = err.message;

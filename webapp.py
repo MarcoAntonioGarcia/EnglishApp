@@ -276,7 +276,8 @@ def admin_crear_usuario(payload: dict = Body(...),
             password=(payload.get("password") or ""),
             email=(payload.get("email") or ""),
             role="admin" if payload.get("role") == "admin" else "user",
-            status="active")
+            status="active",
+            nombre=(payload.get("nombre") or ""))
     except ValueError as e:
         raise HTTPException(400, str(e))
     ficha = db.get_user(nuevo) or {}
@@ -288,6 +289,22 @@ def admin_crear_usuario(payload: dict = Body(...),
 @app.get("/api/admin/users")
 def admin_usuarios(uid: int = Depends(current_admin)) -> list[dict]:
     return db.list_users()
+
+
+@app.post("/api/admin/users/{user_id}/identidad")
+def admin_renombrar(user_id: int, payload: dict = Body(...),
+                    uid: int = Depends(current_admin)) -> dict:
+    """Cambia el usuario de entrada y/o el nombre visible de una cuenta."""
+    if not db.get_user(user_id):
+        raise HTTPException(404, "No existe ese usuario.")
+    try:
+        db.set_user_identity(
+            user_id,
+            username=payload.get("username") if "username" in payload else None,
+            nombre=payload.get("nombre") if "nombre" in payload else None)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True, **(db.get_user(user_id) or {})}
 
 
 @app.post("/api/admin/users/{user_id}/status")

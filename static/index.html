@@ -2942,7 +2942,8 @@ async function miCuenta(){
 async function cargarCuenta(){
   const u = await miCuenta();
   if(!u) return;
-  document.getElementById("cuentaNombre").textContent = u.email || u.username;
+  // se muestra el NOMBRE de la persona; el username es para teclear, no para leer
+  document.getElementById("cuentaNombre").textContent = u.nombre || u.username;
   document.getElementById("cuentaRol").textContent =
     (u.role === "admin" ? "Administrador" : "Sesión iniciada");
   if(u.role === "admin") document.getElementById("enlaceAdmin").hidden = false;
