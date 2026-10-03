@@ -328,6 +328,18 @@ def admin_cambiar_estado(user_id: int, payload: dict = Body(...),
     return {"ok": True, "status": estado}
 
 
+@app.post("/api/admin/users/{user_id}/sesiones/cerrar")
+def admin_cerrar_sesiones(user_id: int, uid: int = Depends(current_admin)) -> dict:
+    """Echa a esa persona de todos sus dispositivos, sin tocar su contraseña.
+
+    Antes la única forma de cerrarle sesión era bloquearla o cambiarle la
+    contraseña: las dos hacen más de lo que a veces se quiere.
+    """
+    if not db.get_user(user_id):
+        raise HTTPException(404, "No existe ese usuario.")
+    return {"ok": True, "cerradas": db.cerrar_sesiones(user_id)}
+
+
 @app.post("/api/admin/users/{user_id}/password")
 def admin_resetear_clave(user_id: int, payload: dict = Body(...),
                          uid: int = Depends(current_admin)) -> dict:

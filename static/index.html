@@ -1044,7 +1044,15 @@ const S={bookId:null,bookLang:"en",chapterIndex:0,sentenceIndex:0,sentences:[],c
   test:{form_id:0,questions:[],pos:0,answers:[]},
   adaptive:{answers:[]}};
 
-async function api(url,opts){const r=await fetch(url,opts);if(!r.ok){let m;try{m=(await r.json()).detail;}catch(e){m=r.statusText;}throw new Error(m);}return r.json();}
+async function api(url,opts){
+  const r=await fetch(url,opts);
+  // 401 = la sesión ya no vale. Pasa al entrar en otro dispositivo (solo se
+  // permite una a la vez), al caducar, o si el admin la cierra. Sin esto el
+  // navegador se quedaba dando errores sueltos sin explicar por qué.
+  if(r.status===401){location.href="/entrar";throw new Error("Sesión cerrada");}
+  if(!r.ok){let m;try{m=(await r.json()).detail;}catch(e){m=r.statusText;}throw new Error(m);}
+  return r.json();
+}
 
 /* ---------- Biblioteca ---------- */
 async function loadBooks(){

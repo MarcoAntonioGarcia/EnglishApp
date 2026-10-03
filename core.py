@@ -79,6 +79,10 @@ RITMO_PREGEN = 145
 ADMIN_USER_ID = 1
 ADMIN_USERNAME = "marco.garcia"
 
+# Una sola sesión abierta por persona: entrar en un sitio cierra el anterior.
+# Ponlo en False si resulta incómodo cambiar de dispositivo a menudo.
+UNA_SESION_POR_USUARIO = True
+
 # Voces neurales Piper (más humanas). value 'piper:<modelo>'. Solo se listan las
 # que tengan su .onnx descargado en assets/piper/.
 _PIPER_MODELS = {
@@ -1282,11 +1286,21 @@ class DatabaseManager:
             return cur.rowcount > 0
 
     def list_users(self) -> list[dict]:
+        """Las cuentas, con cuántas sesiones tiene abiertas cada una.
+
+        Sin ese dato, cerrar sesiones era a ciegas: no se sabía si alguien
+        estaba dentro ni desde cuándo.
+        """
         with self._lock:
             rows = self.conn.execute(
-                "SELECT * FROM users ORDER BY "
-                "CASE status WHEN 'pending' THEN 0 WHEN 'active' THEN 1 ELSE 2 END, "
-                "created_at").fetchall()
+                "SELECT u.*, "
+                "(SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id "
+                " AND s.expires_at > datetime('now','localtime')) AS sesiones, "
+                "(SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id = u.id "
+                " AND s.expires_at > datetime('now','localtime')) AS sesion_desde "
+                "FROM users u ORDER BY "
+                "CASE u.status WHEN 'pending' THEN 0 WHEN 'active' THEN 1 ELSE 2 END, "
+                "u.created_at").fetchall()
         return [self._publico(r) for r in rows]
 
     def count_admins(self) -> int:
@@ -1319,9 +1333,17 @@ class DatabaseManager:
 
         En la tabla se guarda su SHA-256: quien leyera la base no podría
         suplantar a nadie con lo que encuentre allí.
+
+        Con UNA_SESION_POR_USUARIO, entrar cierra las demás sesiones de esa
+        persona. Lo valioso no es la seguridad del dispositivo: es que compartir
+        una cuenta se vuelve incómodo y se nota -- dos personas con el mismo
+        usuario se van echando. El precio es que uno mismo tiene que volver a
+        entrar al cambiar de móvil a portátil.
         """
         token = secrets.token_urlsafe(32)
         with self._lock:
+            if UNA_SESION_POR_USUARIO:
+                self._revocar_sesiones_locked(user_id)
             self.conn.execute(
                 "INSERT INTO sessions (token_hash, user_id, expires_at) "
                 "VALUES (?, ?, datetime('now','localtime','+' || ? || ' days'))",
@@ -1355,6 +1377,16 @@ class DatabaseManager:
 
     def _revocar_sesiones_locked(self, user_id: int) -> None:
         self.conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+
+    def cerrar_sesiones(self, user_id: int) -> int:
+        """Echa a esa persona de todos sus dispositivos. Devuelve cuántas cerró."""
+        with self._lock:
+            n = self.conn.execute(
+                "SELECT COUNT(*) n FROM sessions WHERE user_id = ?",
+                (user_id,)).fetchone()["n"]
+            self._revocar_sesiones_locked(user_id)
+            self.conn.commit()
+            return n
 
     def purge_expired_sessions(self) -> int:
         with self._lock:

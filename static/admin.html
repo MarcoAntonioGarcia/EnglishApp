@@ -104,7 +104,7 @@
   <div class="tarjeta">
     <div class="scroll"><table>
       <thead><tr>
-        <th>Persona</th><th>Estado</th><th>Clave IA</th><th>Alta</th>
+        <th>Persona</th><th>Estado</th><th>Sesión</th><th>Clave IA</th><th>Alta</th>
         <th style="text-align:right">Acciones</th>
       </tr></thead>
       <tbody id="filas"></tbody>
@@ -155,6 +155,7 @@ function acciones(u){
     b.push(`<button class="mal" data-a="blocked" data-id="${u.id}">Bloquear</button>`);
   if(u.status === "blocked")
     b.push(`<button class="ok" data-a="active" data-id="${u.id}">Reactivar</button>`);
+  if(u.sesiones) b.push(`<button class="mal" data-a="cerrar" data-id="${u.id}">Cerrar sesión</button>`);
   b.push(`<button data-a="nombre" data-id="${u.id}">Renombrar</button>`);
   b.push(`<button data-a="clave" data-id="${u.id}">Resetear contraseña</button>`);
   return b.join("");
@@ -171,6 +172,9 @@ function pintar(usuarios){
         </div>
       </td>
       <td><span class="chip ${u.status}">${ETIQUETA[u.status] || u.status}</span></td>
+      <td class="sub">${u.sesiones
+        ? "dentro desde " + esc((u.sesion_desde || "").slice(5, 16))
+        : "fuera"}</td>
       <td class="sub">${esc(u.tiene_clave_gemini ? u.pista_clave_gemini : "—")}</td>
       <td class="sub">${esc((u.created_at || "").slice(0, 10))}</td>
       <td><div class="acciones">${acciones(u)}</div></td>
@@ -191,6 +195,12 @@ $("#filas").addEventListener("click", async e => {
   const id = Number(b.dataset.id);
   b.disabled = true;
   try{
+    if(b.dataset.a === "cerrar"){
+      const d = await llamar(`/api/admin/users/${id}/sesiones/cerrar`, {});
+      decir("Sesiones cerradas: " + d.cerradas + ". Tendrá que volver a entrar.", "ok");
+      await cargar();
+      return;
+    }
     if(b.dataset.a === "nombre"){
       const fila = (await (await fetch("/api/admin/users")).json()).find(x => x.id === id) || {};
       const nombre = prompt("Nombre visible dentro de la app:", fila.nombre || "");
