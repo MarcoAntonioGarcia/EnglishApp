@@ -424,16 +424,52 @@ class ConexionPostgres:
     """
 
     def __init__(self, url: str) -> None:
-        import psycopg
-        from psycopg.rows import dict_row
-        self._con = psycopg.connect(url, row_factory=dict_row, connect_timeout=30)
+        self._url = url
+        self._con = self._abrir()
         self._con_id = _tablas_con_id()
         # el código asigna estos dos; aquí no significan nada pero tienen que
         # existir para no reventar
         self.row_factory = None
         self.isolation_level = ""
 
+    def _abrir(self):
+        import psycopg
+        from psycopg.rows import dict_row
+        return psycopg.connect(self._url, row_factory=dict_row, connect_timeout=30)
+
+    def _reconectar(self) -> None:
+        """Abre una conexión nueva, tirando la anterior.
+
+        El plan gratuito de Neon SUSPENDE la base tras unos minutos sin uso, y
+        al suspenderse mata las conexiones abiertas. Con una sola conexión viva
+        para todo el proceso -- que es como funciona SQLite, de donde se copió
+        este diseño -- eso dejaba la app rota para siempre: todas las consultas
+        fallaban hasta que alguien reiniciara el servidor. Y la unica pagina que
+        seguia respondiendo era la de entrada, porque no toca la base: parecia
+        que la app funcionaba y simplemente nadie podia entrar.
+        """
+        try:
+            self._con.close()
+        except Exception:
+            pass
+        self._con = self._abrir()
+
     def execute(self, sql: str, params=()):
+        import psycopg
+        try:
+            return self._ejecutar(sql, params)
+        except (psycopg.OperationalError, psycopg.InterfaceError):
+            # la conexión está muerta: se reabre y se reintenta UNA vez. Si
+            # vuelve a fallar, el error sube -- no tiene sentido insistir.
+            self._reconectar()
+            return self._ejecutar(sql, params)
+        except psycopg.errors.InFailedSqlTransaction:
+            # una consulta anterior rompió la transacción y deja la conexión
+            # inservible hasta el rollback
+            self.rollback()
+            return self._ejecutar(sql, params)
+
+    def _ejecutar(self, sql: str, params=()):
         pg = a_postgres(sql)
         m = re.match(r"\s*INSERT\s+INTO\s+(\w+)", pg, re.I)
         if m and m.group(1) in self._con_id and "RETURNING" not in pg.upper():
@@ -448,10 +484,18 @@ class ConexionPostgres:
             "pg_schema.sentencias() una a una.")
 
     def commit(self):
-        self._con.commit()
+        import psycopg
+        try:
+            self._con.commit()
+        except (psycopg.OperationalError, psycopg.InterfaceError):
+            self._reconectar()
 
     def rollback(self):
-        self._con.rollback()
+        import psycopg
+        try:
+            self._con.rollback()
+        except (psycopg.OperationalError, psycopg.InterfaceError):
+            self._reconectar()
 
     def close(self):
         self._con.close()
