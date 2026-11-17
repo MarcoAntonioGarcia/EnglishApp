@@ -42,7 +42,8 @@ import threading
 import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "database.db")
+# APP_DB_PATH solo lo usan las pruebas, para no tocar nunca la base de verdad.
+DB_PATH = os.environ.get("APP_DB_PATH") or os.path.join(BASE_DIR, "database.db")
 SCHEMA_PATH = os.path.join(BASE_DIR, "SCHEMA.sql")
 ASSETS_DIR = os.path.join(BASE_DIR, "assets")
 SAMPLE_WAV = os.path.join(ASSETS_DIR, "sample.wav")
@@ -511,6 +512,8 @@ class ConexionPostgres:
 _SCRYPT_N, _SCRYPT_R, _SCRYPT_P = 2 ** 14, 8, 1
 _SCRYPT_MAXMEM = 64 * 1024 * 1024
 LONGITUD_MINIMA_CLAVE = 10
+# Sin tope, scrypt tendría que procesar una "contraseña" de megas en cada intento.
+LONGITUD_MAXIMA_CLAVE = 256
 
 
 def hash_password(plain: str) -> str:
@@ -539,6 +542,8 @@ def problema_con_la_clave(plain: str) -> str:
     """Mensaje de error si la contraseña no vale, o cadena vacía si vale."""
     if len(plain or "") < LONGITUD_MINIMA_CLAVE:
         return f"La contraseña debe tener al menos {LONGITUD_MINIMA_CLAVE} caracteres."
+    if len(plain) > LONGITUD_MAXIMA_CLAVE:
+        return f"La contraseña puede tener como mucho {LONGITUD_MAXIMA_CLAVE} caracteres."
     if plain.strip() != plain:
         return "La contraseña no puede empezar ni acabar con espacios."
     return ""
@@ -3072,6 +3077,9 @@ _LLM_PROMPTS = {
     ),
 }
 _LANG_NAMES = {"es": "español", "en": "inglés", "fr": "francés", "de": "alemán"}
+# Lo único que la web acepta como tipo de petición y como idioma de la IA.
+TIPOS_IA = frozenset(_LLM_PROMPTS)
+IDIOMAS_IA = frozenset(_LANG_NAMES)
 
 
 def llm_generate(text: str, kind: str = "translation", target_lang: str = "es",
@@ -3847,7 +3855,7 @@ def synthesize(text: str, lang: str = "en", rate: int | None = None,
                 cmd += ["-v", v]
             cmd += ["-r", str(r),
                     "--file-format=WAVE", "--data-format=LEI16@22050",
-                    "-o", out_path, text]
+                    "-o", out_path, "--", text]
             subprocess.run(cmd, check=True, timeout=60,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             if os.path.exists(out_path) and os.path.getsize(out_path) > 0:

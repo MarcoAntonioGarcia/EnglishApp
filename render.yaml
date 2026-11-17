@@ -15,7 +15,9 @@ services:
     # Sin 'branch': se despliega desde main, que es la rama que corre. El
     # trabajo en curso vive en ramas aparte y solo llega aqui al fusionarse.
     buildCommand: ./build.sh
-    startCommand: uvicorn webapp:app --host 0.0.0.0 --port $PORT
+    # --no-proxy-headers: la IP del cliente la decide la app (IP_DE_CABECERA),
+    # nunca X-Forwarded-For, que cualquiera puede inventar.
+    startCommand: uvicorn webapp:app --host 0.0.0.0 --port $PORT --no-proxy-headers
     healthCheckPath: /entrar
     envVars:
       # La cadena de conexión de Neon. Se pega en el panel de Render, NUNCA
@@ -26,6 +28,16 @@ services:
       # en claro y cualquiera en la misma red puede copiarla y entrar como tú.
       - key: COOKIE_SEGURA
         value: "1"
+      # De que cabecera sale la IP real del cliente para el tope de intentos.
+      # Render va detras de Cloudflare, que pone True-Client-IP. NO usar
+      # X-Forwarded-For: el proxy de Render la deja pasar y se puede inventar.
+      # Tras desplegar, compruebalo en /api/admin/diagnostico/ip.
+      - key: IP_DE_CABECERA
+        value: "true-client-ip"
+      # Firma la cookie de "dispositivo conocido". Render la genera al azar la
+      # primera vez y la guarda; no se escribe aqui ni hay que copiarla.
+      - key: SECRETO_APP
+        generateValue: true
       # El servidor NO genera audio: medido en Render, una frase tarda 24,6 s
       # frente a 1,8 s en un portatil, porque su CPU gratuita es mucho mas
       # lenta. Esperar eso para oir una palabra no sirve de nada. La voz la

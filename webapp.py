@@ -19,21 +19,36 @@ Ejecutar:
 
 from __future__ import annotations
 
+import glob
+import hashlib
+import hmac
+import ipaddress
 import os
 import re
+import secrets
 import tempfile
+import threading
 import time
+from collections import OrderedDict
 
 import uvicorn
 from fastapi import (Body, Depends, FastAPI, File, HTTPException, Request,
                      Response, UploadFile)
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.background import BackgroundTask
 
 import catalog
 import core
 
-app = FastAPI(title="Lector de Idiomas")
+# La documentación automática de FastAPI (/docs, /openapi.json) lista todos los
+# endpoints, los del admin incluidos. En producción no se sirve; en local se
+# activa con DOCS=1.
+_DOCS = os.environ.get("DOCS", "") == "1"
+app = FastAPI(title="Lector de Idiomas",
+              docs_url="/docs" if _DOCS else None,
+              redoc_url=None,
+              openapi_url="/openapi.json" if _DOCS else None)
 db = core.DatabaseManager()
 core.ensure_sample_wav()
 
@@ -62,24 +77,243 @@ COOKIE_SEGURA = os.environ.get("COOKIE_SEGURA", "") == "1"
 #   login: 10 fallos por cuarto de hora, contra la fuerza bruta.
 #   registro: 5 altas por hora. El registro esta abierto a proposito, pero sin
 #   tope un bot llena la tabla de usuarios y el panel de aprobaciones de basura.
-TOPES = {"login": (10, 15 * 60), "registro": (5, 60 * 60)}
-_intentos: dict[tuple[str, str], list[float]] = {}
+#   login_cuenta: 20 fallos por cuarto de hora contra UNA cuenta, vengan de la
+#   IP que vengan. Es el tope que de verdad frena la fuerza bruta: el de IP se
+#   esquiva cambiando de IP; este no.
+#   login_dispositivo: el mismo tope, aparte, para quien entra desde un aparato
+#   donde ya entró bien antes (cookie 'dispositivo'). Así un desconocido que
+#   machaca tu cuenta no te deja fuera a ti: tus intentos no cuentan con los suyos.
+TOPES = {"login": (10, 15 * 60), "login_cuenta": (20, 15 * 60),
+         "login_dispositivo": (20, 15 * 60), "registro": (5, 60 * 60)}
+# Claves vigiladas, de la más vieja a la más nueva. Con tope: sin él, un bot que
+# prueba nombres inventados haría crecer el diccionario hasta agotar la memoria.
+_intentos: "OrderedDict[tuple[str, str], list[float]]" = OrderedDict()
+_MAX_CLAVES_INTENTOS = 20000
+# Los endpoints sync corren en varios hilos a la vez: sin candado, una ráfaga
+# simultánea pasaría la comprobación antes de que se anotara ningún fallo.
+_candado_intentos = threading.Lock()
+
+# De qué cabecera sale la IP del cliente. Detrás del proxy de Render,
+# client.host es la IP del PROXY, la misma para todos: un tope por IP sería
+# entonces un tope para todo el mundo (10 fallos de un desconocido dejarían
+# fuera a todos). Render va detrás de Cloudflare, que pone True-Client-IP con la
+# IP real y la sobrescribe si el cliente la manda. X-Forwarded-For NO sirve: el
+# proxy de Render la deja pasar tal cual llega y cualquiera puede inventarla.
+# En local va vacía y se usa client.host.
+IP_DE_CABECERA = os.environ.get("IP_DE_CABECERA", "").strip().lower()
+
+
+def _agrupar_ip(valor: str) -> str | None:
+    """La IP como clave del tope. Una IPv6 se agrupa por su /64: cada conexión
+    doméstica recibe millones de direcciones y, si no, cada una contaría aparte."""
+    try:
+        ip = ipaddress.ip_address(valor.strip())
+    except ValueError:
+        return None
+    if ip.version == 6:
+        if ip.ipv4_mapped:
+            return str(ip.ipv4_mapped)
+        return str(ipaddress.ip_network(f"{ip}/64", strict=False))
+    return str(ip)
 
 
 def _ip(peticion: Request) -> str:
-    return (peticion.client.host if peticion.client else "?")
+    if IP_DE_CABECERA:
+        agrupada = _agrupar_ip(peticion.headers.get(IP_DE_CABECERA) or "")
+        if agrupada:
+            return agrupada
+    socket = peticion.client.host if peticion.client else ""
+    return _agrupar_ip(socket) or socket or "?"
 
 
-def _demasiados_intentos(accion: str, ip: str) -> bool:
+def _clave_intento(accion: str, quien: str) -> tuple[str, str]:
+    # se guarda un hash: el login tecleado puede ser largo y no hace falta tenerlo
+    return accion, hashlib.sha256(quien.encode("utf-8")).hexdigest()[:32]
+
+
+def _reservar_intento(accion: str, quien: str) -> float | None:
+    """Comprueba el tope y apunta el intento en un solo paso, bajo el candado.
+    Devuelve la marca apuntada, o None si ya no quedan intentos. Hacerlo en dos
+    pasos dejaba que una ráfaga simultánea pasara entera la comprobación."""
     tope, ventana = TOPES[accion]
+    clave = _clave_intento(accion, quien)
     ahora = time.time()
-    recientes = [t for t in _intentos.get((accion, ip), []) if ahora - t < ventana]
-    _intentos[(accion, ip)] = recientes
-    return len(recientes) >= tope
+    with _candado_intentos:
+        recientes = [t for t in _intentos.get(clave, []) if ahora - t < ventana]
+        if len(recientes) >= tope:
+            _intentos[clave] = recientes
+            return None
+        recientes.append(ahora)
+        _intentos[clave] = recientes
+        _intentos.move_to_end(clave)
+        while len(_intentos) > _MAX_CLAVES_INTENTOS:
+            _intentos.popitem(last=False)
+        return ahora
 
 
-def _apuntar_intento(accion: str, ip: str) -> None:
-    _intentos.setdefault((accion, ip), []).append(time.time())
+def _devolver_intento(accion: str, quien: str, marca: float) -> None:
+    """Quita SOLO la marca de este intento (el que salió bien), no las demás."""
+    clave = _clave_intento(accion, quien)
+    with _candado_intentos:
+        lista = _intentos.get(clave)
+        if lista and marca in lista:
+            lista.remove(marca)
+
+
+def _olvidar_intentos(accion: str, quien: str) -> None:
+    with _candado_intentos:
+        _intentos.pop(_clave_intento(accion, quien), None)
+
+
+# Cookie de "dispositivo conocido" (patrón de OWASP contra el bloqueo de
+# cuentas). Va firmada con un secreto del servidor: no se puede fabricar.
+# En Render, SECRETO_APP lo genera el propio Render (render.yaml). Sin él, se
+# inventa uno al arrancar y las cookies valen hasta el siguiente reinicio.
+COOKIE_DISPOSITIVO = "dispositivo"
+DIAS_DISPOSITIVO = 180
+_SECRETO = (os.environ.get("SECRETO_APP") or "").encode("utf-8") or secrets.token_bytes(32)
+
+
+def _firma_dispositivo(uid: int, emitida: int) -> str:
+    return hmac.new(_SECRETO, f"dispositivo:{uid}:{emitida}".encode(), hashlib.sha256).hexdigest()
+
+
+def _cookie_dispositivo(uid: int) -> str:
+    emitida = int(time.time())
+    return f"{uid}.{emitida}.{_firma_dispositivo(uid, emitida)}"
+
+
+def _dispositivo_conocido(valor: str, uid: int) -> bool:
+    try:
+        cuenta, emitida, firma = valor.split(".")
+        cuenta, emitida = int(cuenta), int(emitida)
+    except (ValueError, AttributeError):
+        return False
+    if cuenta != uid or time.time() - emitida > DIAS_DISPOSITIVO * 86400:
+        return False
+    return hmac.compare_digest(firma, _firma_dispositivo(uid, emitida))
+
+
+# --------------------------------------------------------------------------- #
+# Límites de tamaño y cabeceras de seguridad
+# --------------------------------------------------------------------------- #
+# Sin tope, una subida de 1 GB se carga entera en la memoria (512 MB en el plan
+# gratuito) y tumba la app para todos. Cada ruta tiene el suyo; el resto, 1 MB,
+# que sobra para cualquier JSON de la app.
+LIMITE_CUERPO = 1 * 1024 * 1024
+# (tope, quién puede usarlo). Se decide con la sesión ANTES de leer el cuerpo:
+# FastAPI lee el formulario entero antes de comprobar quién llama, así que sin
+# esto cualquiera sin cuenta podría hacer subir 60 MB al servidor para nada.
+LIMITES_POR_RUTA = {
+    "/api/upload": (60 * 1024 * 1024, "admin"),           # libros
+    "/api/writing/extract": (10 * 1024 * 1024, "user"),   # foto o documento de una redacción
+}
+
+
+def _limite_de(scope) -> int:
+    tope, quien = LIMITES_POR_RUTA.get(scope.get("path", ""), (LIMITE_CUERPO, "user"))
+    usuario = (scope.get("state") or {}).get("usuario") or {}
+    if not usuario or (quien == "admin" and usuario.get("role") != "admin"):
+        return LIMITE_CUERPO
+    return tope
+MAX_TEXTO_IA = 3000          # una palabra, una frase o una selección del libro
+MAX_REDACCION = 10000        # una redacción para «Check my writing»
+MAX_ITEMS_ANKI = 2000
+
+# Política de contenido: la página solo carga lo suyo, no se puede meter en un
+# iframe ajeno (clickjacking) y no habla con otros dominios. 'unsafe-inline' se
+# queda mientras el JavaScript y el CSS vivan dentro del HTML.
+CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; "
+       "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+       "media-src 'self' blob: data:; connect-src 'self'; font-src 'self' data:; "
+       "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+
+
+class _CuerpoDemasiadoGrande(Exception):
+    pass
+
+
+class SeguridadMiddleware:
+    """Corta los cuerpos demasiado grandes y añade las cabeceras de seguridad.
+
+    El tope se mira dos veces: por Content-Length (rechazo inmediato, sin leer
+    nada) y contando lo que llega, porque una subida 'chunked' no lo declara.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        limite = _limite_de(scope)
+        empezada = False
+        excedido = False        # el cuerpo pasó del tope mientras se leía
+        tapada = False          # ya se mandó el 413 en lugar de la respuesta
+
+        async def enviar(mensaje):
+            nonlocal empezada, tapada
+            # FastAPI convierte cualquier fallo al leer el cuerpo en un 400
+            # genérico. Si fue por el tope, se responde 413 con un mensaje claro.
+            if excedido and not empezada and mensaje["type"] == "http.response.start":
+                tapada = True
+                await rechazar()
+                return
+            if tapada:
+                return
+            if mensaje["type"] == "http.response.start":
+                empezada = True
+                cabeceras = list(mensaje.get("headers", []))
+                extra = [
+                    (b"content-security-policy", CSP.encode()),
+                    (b"x-content-type-options", b"nosniff"),
+                    (b"x-frame-options", b"DENY"),
+                    (b"referrer-policy", b"same-origin"),
+                    (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
+                ]
+                if COOKIE_SEGURA:
+                    extra.append((b"strict-transport-security",
+                                  b"max-age=31536000; includeSubDomains"))
+                mensaje = {**mensaje, "headers": cabeceras + extra}
+            await send(mensaje)
+
+        async def rechazar():
+            nonlocal empezada
+            empezada = True
+            cuerpo = '{"detail":"El archivo o el texto es demasiado grande."}'.encode()
+            await send({"type": "http.response.start", "status": 413,
+                        "headers": [(b"content-type", b"application/json"),
+                                    (b"content-length", str(len(cuerpo)).encode()),
+                                    (b"content-security-policy", CSP.encode()),
+                                    (b"x-content-type-options", b"nosniff"),
+                                    (b"x-frame-options", b"DENY")]})
+            await send({"type": "http.response.body", "body": cuerpo})
+
+        for nombre, valor in scope.get("headers", []):
+            if nombre == b"content-length":
+                try:
+                    if int(valor) > limite:
+                        return await rechazar()
+                except ValueError:
+                    return await rechazar()
+
+        recibido = 0
+
+        async def recibir():
+            nonlocal recibido, excedido
+            mensaje = await receive()
+            if mensaje["type"] == "http.request":
+                recibido += len(mensaje.get("body", b""))
+                if recibido > limite:
+                    excedido = True
+                    raise _CuerpoDemasiadoGrande()
+            return mensaje
+
+        try:
+            await self.app(scope, recibir, enviar)
+        except _CuerpoDemasiadoGrande:
+            if not empezada:
+                await rechazar()
 
 
 class SesionMiddleware:
@@ -113,6 +347,9 @@ class SesionMiddleware:
             core.soltar_api_key(token)
 
 
+# La última que se añade es la más externa. La sesión va por fuera para que los
+# topes de tamaño sepan quién llama antes de leer nada del cuerpo.
+app.add_middleware(SeguridadMiddleware)
 app.add_middleware(SesionMiddleware)
 
 
@@ -169,11 +406,26 @@ def _poner_cookie(respuesta: Response, token: str) -> None:
 @app.post("/api/auth/login")
 def login(peticion: Request, respuesta: Response, payload: dict = Body(...)) -> dict:
     ip = _ip(peticion)
-    if _demasiados_intentos("login", ip):
+    login_pedido = str(payload.get("login") or "").strip()[:200]
+    marca_ip = _reservar_intento("login", ip)
+    if marca_ip is None:
+        raise HTTPException(429, "Demasiados intentos. Prueba dentro de un rato.")
+    fila = db.find_user(login_pedido)
+    # La cuenta se identifica por su id: entrar alternando usuario y correo no
+    # debe duplicar los intentos permitidos. Desde un aparato donde ya entraste
+    # bien, tus intentos van aparte y no los agota quien ataque tu cuenta.
+    dispositivo = peticion.cookies.get(COOKIE_DISPOSITIVO, "")
+    if fila and _dispositivo_conocido(dispositivo, fila["id"]):
+        accion, quien = "login_dispositivo", dispositivo
+    else:
+        accion = "login_cuenta"
+        quien = f"id:{fila['id']}" if fila else "login:" + login_pedido.lower()
+    if _reservar_intento(accion, quien) is None:
         raise HTTPException(429, "Demasiados intentos. Prueba dentro de un rato.")
 
-    fila = db.find_user(payload.get("login") or "")
-    clave = payload.get("password") or ""
+    clave = str(payload.get("password") or "")
+    if len(clave) > core.LONGITUD_MAXIMA_CLAVE:
+        clave = ""        # ninguna cuenta puede tenerla: se trata como incorrecta
     # se comprueba la contraseña AUNQUE el usuario no exista, contra un hash de
     # mentira: si no, el tiempo de respuesta delataría qué correos están dados
     # de alta.
@@ -181,14 +433,20 @@ def login(peticion: Request, respuesta: Response, payload: dict = Body(...)) -> 
     correcta = core.verify_password(clave, guardado)
 
     if not fila or not correcta:
-        _apuntar_intento("login", ip)
         raise HTTPException(401, "Correo o contraseña incorrectos.")
     if fila["status"] == "pending":
         raise HTTPException(403, "Tu cuenta todavía está pendiente de aprobación.")
     if fila["status"] == "blocked":
         raise HTTPException(403, "Tu cuenta está bloqueada.")
 
-    _intentos.pop(("login", ip), None)
+    # Entró bien: no cuenta este intento de la IP, pero sí los fallos de antes.
+    # Si se borraran, quien tenga una cuenta podría probar 9 claves ajenas,
+    # entrar con la suya para limpiar el contador, y repetir sin fin.
+    _devolver_intento("login", ip, marca_ip)
+    _olvidar_intentos(accion, quien)
+    respuesta.set_cookie(COOKIE_DISPOSITIVO, _cookie_dispositivo(fila["id"]),
+                         max_age=DIAS_DISPOSITIVO * 86400, httponly=True,
+                         samesite="lax", secure=COOKIE_SEGURA, path="/api/auth/login")
     _poner_cookie(respuesta, db.create_session(fila["id"], DIAS_DE_SESION))
     db.purge_expired_sessions()
     return {"ok": True, "role": fila["role"],
@@ -289,6 +547,16 @@ def admin_crear_usuario(payload: dict = Body(...),
 @app.get("/api/admin/users")
 def admin_usuarios(uid: int = Depends(current_admin)) -> list[dict]:
     return db.list_users()
+
+
+@app.get("/api/admin/diagnostico/ip")
+def admin_diagnostico_ip(peticion: Request, uid: int = Depends(current_admin)) -> dict:
+    """Qué IP ve el servidor para ti. Sirve para comprobar, ya desplegado, que
+    el tope de intentos usa tu IP real y no la del proxy de Render."""
+    return {"ip_usada": _ip(peticion),
+            "ip_del_socket": peticion.client.host if peticion.client else "",
+            "cabecera_configurada": IP_DE_CABECERA or "(ninguna)",
+            "cabecera_presente": bool(IP_DE_CABECERA and peticion.headers.get(IP_DE_CABECERA))}
 
 
 @app.post("/api/admin/users/{user_id}/identidad")
@@ -637,11 +905,17 @@ def set_state(book_id: int, payload: dict = Body(...), uid: int = Depends(curren
 # --------------------------------------------------------------------------- #
 @app.post("/api/llm")
 def llm(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
-    text = (payload.get("text") or "").strip()
+    text = str(payload.get("text") or "").strip()
     kind = payload.get("kind", "translation")
     lang = payload.get("target_lang", "es")
     if not text:
         raise HTTPException(400, "Falta 'text'")
+    if len(text) > MAX_TEXTO_IA:
+        raise HTTPException(413, f"Selecciona menos texto (máximo {MAX_TEXTO_IA} caracteres).")
+    # solo los tipos y los idiomas que existen: cualquier otro valor iría tal
+    # cual dentro del prompt y llenaría la caché compartida de basura
+    if kind not in core.TIPOS_IA or lang not in core.IDIOMAS_IA:
+        raise HTTPException(400, "Petición de IA no válida.")
     cached = db.get_cached_translation(text, lang, kind)
     if cached is not None:
         return {"result": cached, "cached": True}
@@ -688,9 +962,12 @@ def set_config(payload: dict = Body(...), uid: int = Depends(current_user)) -> d
 # --------------------------------------------------------------------------- #
 @app.post("/api/vocab")
 def add_vocab(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
-    term = (payload.get("term") or "").strip()
+    term = str(payload.get("term") or "").strip()
     if not term:
         raise HTTPException(400, "Falta 'term'")
+    if (len(term) > 200 or len(str(payload.get("translation") or "")) > 2000
+            or len(str(payload.get("example") or "")) > MAX_TEXTO_IA):
+        raise HTTPException(413, "La palabra o su ejemplo son demasiado largos.")
     # nunca guardar un texto de relleno como si fuera la traducción: mejor
     # vacío (se puede reintentar) que una tarjeta permanentemente errónea
     if core.is_placeholder(payload.get("translation") or ""):
@@ -1059,9 +1336,11 @@ async def writing_extract(file: UploadFile = File(...),
 
 @app.post("/api/writing/check")
 def writing_check(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
-    text = (payload.get("text") or "").strip()
+    text = str(payload.get("text") or "").strip()
     if not text:
         raise HTTPException(400, "Falta 'text'")
+    if len(text) > MAX_REDACCION:
+        raise HTTPException(413, f"La redacción es demasiado larga (máximo {MAX_REDACCION} caracteres).")
     try:
         result = core.writing_check(text)
     except core.AIUnavailable as exc:
@@ -1080,10 +1359,12 @@ def writing_check(payload: dict = Body(...), uid: int = Depends(current_user)) -
 
 @app.post("/api/writing/upgrade")
 def writing_upgrade(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
-    text = (payload.get("text") or "").strip()
+    text = str(payload.get("text") or "").strip()
     level = payload.get("level", "B2")
     if not text:
         raise HTTPException(400, "Falta 'text'")
+    if len(text) > MAX_REDACCION:
+        raise HTTPException(413, f"La redacción es demasiado larga (máximo {MAX_REDACCION} caracteres).")
     wid = payload.get("writing_id")
     # el upgrade parte del nivel evaluado: primero hay que saber en qué nivel escribes
     record = db.get_writing(int(wid), user_id=uid) if wid else None
@@ -1247,9 +1528,26 @@ def grade_deck_card(card_id: int, payload: dict = Body(...), uid: int = Depends(
 # --------------------------------------------------------------------------- #
 # Export a Anki (.apkg) — genera audio server-side y lo empaqueta
 # --------------------------------------------------------------------------- #
+def _barrer_exportaciones_viejas(edad: int = 3600) -> None:
+    """Si alguien corta la descarga a medias, Starlette no llega a borrar su
+    .apkg. Cada exportación nueva barre los de más de una hora."""
+    limite = time.time() - edad
+    for ruta in glob.glob(os.path.join(tempfile.gettempdir(), "anki-*.apkg")):
+        try:
+            if os.path.getmtime(ruta) < limite:
+                os.unlink(ruta)
+        except OSError:
+            pass
+
+
 @app.post("/api/export/anki")
 def export_anki(payload: dict = Body(...), uid: int = Depends(current_user)) -> FileResponse:
     items = payload.get("items") or []
+    if not isinstance(items, list) or len(items) > MAX_ITEMS_ANKI:
+        raise HTTPException(413, f"Exporta como mucho {MAX_ITEMS_ANKI} palabras a la vez.")
+    if not all(isinstance(it, dict) for it in items):
+        raise HTTPException(400, "Formato de exportación no válido.")
+    _barrer_exportaciones_viejas()
     if not items:
         # sin items -> exporta TODO el vocabulario guardado
         items = [
@@ -1276,12 +1574,21 @@ def export_anki(payload: dict = Body(...), uid: int = Depends(current_user)) -> 
         })
     if not enriched:
         raise HTTPException(400, "No hay vocabulario válido para exportar")
-    out_path = os.path.join(tempfile.gettempdir(), "vocabulario_appidiomas.apkg")
-    core.AnkiExporter.export(enriched, deck_name, out_path)
+    # Un fichero propio por petición, que se borra al terminar de enviarlo. Con
+    # una ruta fija para todos, dos personas exportando a la vez podían
+    # descargarse el vocabulario la una de la otra.
+    fd, out_path = tempfile.mkstemp(prefix="anki-", suffix=".apkg")
+    os.close(fd)
+    try:
+        core.AnkiExporter.export(enriched, str(deck_name)[:100], out_path)
+    except Exception:
+        os.unlink(out_path)
+        raise
     return FileResponse(
         out_path,
         media_type="application/octet-stream",
         filename="vocabulario_appidiomas.apkg",
+        background=BackgroundTask(os.unlink, out_path),
     )
 
 
@@ -1301,4 +1608,5 @@ if __name__ == "__main__":
     # no lo usa.
     puerto = int(os.environ.get("PORT", "8080"))
     host = os.environ.get("HOST") or ("0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")
-    uvicorn.run(app, host=host, port=puerto)
+    # proxy_headers=False: la IP la decide _ip(), nunca X-Forwarded-For.
+    uvicorn.run(app, host=host, port=puerto, proxy_headers=False)

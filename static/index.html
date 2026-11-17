@@ -1327,7 +1327,7 @@ async function lookupWord(word){
     st.innerHTML='<div class="term">'+escapeHtml(word)+'</div>'+escapeHtml(res.result);
   }catch(e){st.textContent="Error: "+e.message;}
 }
-function escapeHtml(s){return s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 
 /* ---------- Estado ---------- */
 function saveState(){if(S.bookId===null)return;
@@ -2161,12 +2161,14 @@ function setWMode(m){
 function renderMdPreview(){document.getElementById("wPreview").innerHTML=mdToHtml(document.getElementById("wMd").value||"");}
 function writingSourceText(){return (S.writing.mode==="md"?document.getElementById("wMd").value:document.getElementById("wEditor").innerText)||"";}
 function mdToHtml(md){
-  const esc=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const esc=escapeHtml;
+  // solo enlaces http(s): un [texto](javascript:...) no debe poder ejecutar nada
+  const enlace=(m,t,u)=>/^https?:\/\//i.test(u.replace(/&amp;/g,"&"))?'<a href="'+u+'" target="_blank" rel="noopener noreferrer">'+t+'</a>':t;
   const inline=s=>esc(s)
     .replace(/\*\*(.+?)\*\*/g,"<b>$1</b>")
     .replace(/(^|[^*])\*([^*]+?)\*/g,"$1<i>$2</i>")
     .replace(/`(.+?)`/g,"<code>$1</code>")
-    .replace(/\[(.+?)\]\((.+?)\)/g,'<a href="$2" target="_blank">$1</a>');
+    .replace(/\[(.+?)\]\((.+?)\)/g,enlace);
   let html="",list=null;const close=()=>{if(list){html+="</"+list+">";list=null;}};
   (md||"").split(/\r?\n/).forEach(raw=>{
     const line=raw.replace(/\s+$/,"");let m;
