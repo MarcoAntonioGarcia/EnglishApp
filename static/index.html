@@ -21,7 +21,11 @@
 
   /* ---------- Sidebar: the cockpit's left console ---------- */
   .sidebar{background:var(--s1);border-right:1px solid var(--line);color:var(--ink);display:flex;flex-direction:column;
-    padding:18px 14px 14px;gap:14px;overflow:hidden;}
+    padding:18px 14px 14px;gap:14px;overflow-x:hidden;overflow-y:auto;scrollbar-width:thin;}
+  /* on short screens the library keeps a usable height and the console scrolls */
+  .sidebar > *{flex-shrink:0}
+  #readingNav{flex:1 0 auto}
+  .side-list{min-height:96px}
   .brand{display:flex;align-items:center;gap:11px;padding:2px 4px;min-width:0;}
   .brand .logo{width:34px;height:34px;flex:0 0 auto;display:grid;place-items:center;border-radius:10px;
     background:var(--bg);border:1px solid var(--cyan-line);color:var(--cyan);}
@@ -250,7 +254,7 @@
   .navbtn:hover{background:var(--s2);color:var(--ink)}
   .navbtn.active{background:var(--s3);color:var(--ink);box-shadow:inset 2px 0 0 var(--cyan);}
   .navbtn.active .ico{color:var(--cyan)}
-  #readingNav{display:flex;flex-direction:column;gap:8px;flex:1;min-height:0;margin-top:2px;}
+  #readingNav{display:flex;flex-direction:column;gap:8px;flex:1 0 auto;margin-top:2px;}
   .learn-panel{background:var(--bg);width:100%;max-width:940px;height:88vh;border-radius:var(--r-lg);border:1px solid var(--line-2);
     box-shadow:var(--shadow-pop);display:flex;flex-direction:column;overflow:hidden;}
   .learn-head{display:flex;align-items:center;gap:16px;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--s1);}
@@ -360,7 +364,41 @@
   .heatlegend .c{width:12px;height:12px;border-radius:3px;display:inline-block;}
   .navbtn.alert{position:relative;}
   .navbtn.alert::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--cyan);margin-left:auto;box-shadow:0 0 0 3px var(--cyan-wash);}
-  @media(max-width:1100px){ .app{grid-template-columns:var(--side-w) 1fr;} .rail{display:none;} }
+  @media(max-width:1100px){ .app{grid-template-columns:var(--side-w) 1fr;} .rail{display:none;} .solo-escritorio{display:none} }
+
+  /* ---------- Folding panels (desktop): the learner decides how much chrome to see ----------
+     The left console folds to a slim strip of icons (streak number, sections,
+     account); the right rail hides completely. The reader and every section
+     take the freed space. Remembered per device. */
+  :root{--rail-w:336px}
+  .brand .fold{margin-left:auto;flex:0 0 auto;width:32px;height:32px;display:grid;place-items:center;border:0;border-radius:8px;
+    background:transparent;color:var(--ink-3);cursor:pointer;transition:background .15s,color .15s}
+  .brand .fold:hover{background:var(--s2);color:var(--ink)}
+  @media(min-width:1101px){
+    .app{grid-template-columns:var(--side-w) 1fr var(--rail-w);transition:grid-template-columns .3s var(--ease)}
+    body.rail-off{--rail-w:0px}
+    body.rail-off .rail{display:none}
+  }
+  @media(min-width:901px){
+    .overlay{transition:left .3s var(--ease)}
+    body.left-min{--side-w:68px}
+    body.left-min .sidebar{padding:16px 10px 12px;align-items:center}
+    body.left-min .brand{flex-direction:column;gap:10px;padding:0}
+    body.left-min .brand .name,body.left-min #readingNav,body.left-min .side-cuenta,
+    body.left-min .side-foot .who,body.left-min #aiDot,body.left-min .gauge .glbl,
+    body.left-min .gauge .segs,body.left-min #goalBox{display:none}
+    body.left-min .brand .fold{margin:0}
+    body.left-min .brand .fold svg{transform:rotate(180deg)}
+    body.left-min .gauge{padding:8px 6px;width:48px}
+    body.left-min .gauge-top{flex-direction:column;gap:4px}
+    body.left-min .gauge #streakNum{font-size:18px}
+    body.left-min .nav{width:100%}
+    body.left-min .navbtn{justify-content:center;padding:10px 0;font-size:0;gap:0}
+    body.left-min .navbtn .ico{width:20px;height:20px}
+    body.left-min .navbtn.alert::after{position:absolute;top:8px;right:8px;margin:0}
+    body.left-min .side-foot{flex-direction:column;border-top:0;margin-top:auto;padding:8px 0 0}
+  }
+  @media(max-width:900px){ .brand .fold{display:none} }
 
   /* ---------- Phone and narrow tablet ----------
      Below 900 px the grid becomes one column and both side panels become
@@ -637,6 +675,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <div class="brand">
       <div class="logo"><svg class="ico"><use href="#i-gauge"/></svg></div>
       <div class="name">Daily English Habit<small>A little every day</small></div>
+      <button type="button" class="tb fold" id="leftBtn" onclick="foldLeft()" aria-label="Collapse the sidebar" title="Collapse the sidebar" aria-expanded="true"><svg class="ico"><use href="#i-left"/></svg></button>
     </div>
     <div id="streakBox" class="gauge" title="Study streak">
       <div class="gauge-top">
@@ -700,6 +739,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             title="Library and sections" aria-label="Library and sections"><svg class="ico"><use href="#i-menu"/></svg></button>
           <button class="iconbtn solo-movil" onclick="cajon('rail')"
             title="Study and contents" aria-label="Study and contents"><svg class="ico"><use href="#i-panel"/></svg></button>
+          <button class="iconbtn solo-escritorio" id="railBtn" onclick="foldRail()" aria-label="Hide the study panel" title="Hide the study panel" aria-pressed="true"><svg class="ico"><use href="#i-panel"/></svg></button>
           <button class="iconbtn" id="optBtn" onclick="toggleOpts()" title="Reading options" aria-label="Reading options"><svg class="ico"><use href="#i-sliders"/></svg></button>
           <button class="iconbtn" id="prevCh" onclick="changeChapter(-1)" title="Previous section" aria-label="Previous section"><svg class="ico"><use href="#i-left"/></svg></button>
           <button class="iconbtn" id="nextCh" onclick="changeChapter(1)" title="Next section" aria-label="Next section"><svg class="ico"><use href="#i-right"/></svg></button>
@@ -3220,6 +3260,8 @@ function cerrarCajones(){
 // ese panel está cerrado, así que se abre solo: si no, tocabas y no pasaba nada.
 function mostrarEstudio(){
   if(window.matchMedia("(max-width:900px)").matches) cajon("rail");
+  // a hidden study panel comes back when there is something to show in it
+  else if(document.body.classList.contains("rail-off")&&window.matchMedia("(min-width:1101px)").matches) foldRail();
 }
 // Cualquier cosa que te LLEVE a otro sitio cierra el cajón: ya tienes lo que
 // buscabas y el panel solo estorba. Son los módulos (Decks, Writing, Stats...),
@@ -3288,6 +3330,24 @@ document.addEventListener("keydown",e=>{
   if((e.key===" "||e.key==="Enter")&&reveal){if(t&&t.tagName==="BUTTON"&&e.key==="Enter")return;e.preventDefault();reveal();}
   else if(grade&&/^[1-4]$/.test(e.key)){e.preventDefault();grade(G[+e.key-1]);}
 });
+
+/* ---------- Folding panels ---------- */
+function _panelState(){
+  const left=document.body.classList.contains("left-min"),rail=!document.body.classList.contains("rail-off");
+  const lb=document.getElementById("leftBtn");
+  if(lb){const t=left?"Expand the sidebar":"Collapse the sidebar";lb.title=t;lb.setAttribute("aria-label",t);lb.setAttribute("aria-expanded",left?"false":"true");}
+  const rb=document.getElementById("railBtn");
+  if(rb){const t=rail?"Hide the study panel":"Show the study panel";rb.title=t;rb.setAttribute("aria-label",t);rb.setAttribute("aria-pressed",rail?"true":"false");}
+  // a folded console shows icons only: each section keeps its name as a tooltip
+  document.querySelectorAll(".navbtn").forEach(b=>{b.title=left?b.textContent.trim():"";});
+  try{localStorage.setItem("lira_left",left?"min":"open");localStorage.setItem("lira_rail",rail?"on":"off");}catch(e){}
+}
+function foldLeft(){document.body.classList.toggle("left-min");_panelState();}
+function foldRail(){document.body.classList.toggle("rail-off");_panelState();}
+(function(){try{
+  if(localStorage.getItem("lira_left")==="min")document.body.classList.add("left-min");
+  if(localStorage.getItem("lira_rail")==="off")document.body.classList.add("rail-off");
+}catch(e){} _panelState();})();
 
 cargarCuenta();
 </script>
