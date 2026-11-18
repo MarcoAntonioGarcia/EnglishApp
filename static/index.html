@@ -541,7 +541,7 @@
   /* ---------- Decks as a tower: hover lights a floor, click zooms into it ----------
      Each deck is a floor. Its "windows" are its cards: lit cyan = due today,
      dim = learning or known, dark = never seen. Pick a floor and the camera
-     moves in (up to 6x) before the cards appear; going back zooms out to the
+     moves in (up to 2.5x) before the cards appear; going back zooms out to the
      same floor. Reduced motion: no zoom, just the cut. */
   .tower{position:relative;border:1px solid var(--line-2);border-radius:var(--r-lg);background:var(--s1);overflow:hidden;
     transform-origin:50% 50%;transition:transform .7s var(--ease),filter .7s var(--ease),opacity .7s var(--ease)}
@@ -583,7 +583,7 @@
   .windows i.due{background:var(--cyan)}
   .windows i.seen{background:rgba(60,207,230,.3)}
   .fl-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-  .tower.zoom{transform:scale(var(--k,4));}
+  .tower.zoom{transform:scale(var(--k,2.5));}
   .tower.zoom .storey:not(.target),.tower.zoom .tower-roof{opacity:0;filter:blur(4px)}
   .tower.zoom .storey.target .fl-go,.tower.zoom .storey.target .dcap{opacity:0}
   .tower.dim{opacity:0}
