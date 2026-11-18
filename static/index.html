@@ -576,34 +576,27 @@
   @keyframes ignite{0%{transform:scale(1)}30%{transform:scale(1.25);box-shadow:0 0 0 8px var(--amber-wash)}100%{transform:scale(1);box-shadow:0 0 0 0 transparent}}
   @keyframes numPop{0%{transform:none}30%{transform:translateY(-3px) scale(1.12)}100%{transform:none}}
   .ltitle em,.emptystate em{font-family:var(--book);font-style:italic;font-weight:500;color:var(--cyan-ink)}
-  /* ---------- Decks as a tower: hover lights a floor, click zooms into it ----------
-     Each deck is a floor. Its "windows" are its cards: lit cyan = due today,
-     dim = learning or known, dark = never seen. Pick a floor and the camera
-     moves in (up to 2.5x) before the cards appear; going back zooms out to the
-     same floor. Reduced motion: no zoom, just the cut. */
-  .tower{position:relative;border:1px solid var(--line-2);border-radius:var(--r-lg);background:var(--s1);overflow:hidden;
-    transform-origin:50% 50%;transition:transform .7s var(--ease),filter .7s var(--ease),opacity .7s var(--ease)}
-  .tower-roof{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:16px 18px 12px}
-  .tower-roof h2{margin:0;font-size:22px;font-weight:650;letter-spacing:-.02em}
-  .tower-roof h2 em{font-family:var(--book);font-style:italic;font-weight:500;color:var(--cyan-ink)}
-  .tower-roof .num{color:var(--ink-3);font-size:12.5px}
-  .storey{position:relative;display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:14px;
-    padding:15px 18px;border-top:1px solid var(--line);cursor:pointer;transition:opacity .5s var(--ease),filter .5s var(--ease)}
-  .storey::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s var(--ease);
-    background:linear-gradient(90deg,transparent,var(--cyan-wash) 18%,var(--cyan-wash) 82%,transparent);
-    border-top:1px solid var(--cyan-line);border-bottom:1px solid var(--cyan-line)}
-  .storey:hover::before,.storey:focus-within::before,.storey.target::before{opacity:1}
-  .storey > *{position:relative}
-  .fl-no{font-family:var(--num);font-size:13px;color:var(--ink-3);transition:color .25s;width:40px;height:40px;display:grid;place-items:center;
-    border:1px solid var(--line-2);border-radius:10px;background:var(--bg)}
-  .storey:hover .fl-no,.storey:focus-visible .fl-no{border-color:var(--cyan-line)}
-  .fl-sub b{color:var(--cyan-ink);font-weight:600}
-  .fl-go{color:var(--ink-3);transition:transform .25s var(--ease),color .25s}
-  .storey:hover .fl-go,.storey:focus-visible .fl-go{color:var(--cyan);transform:translateX(3px)}
-  .storey:focus-visible{outline:none}
-  .storey:focus-visible::before{opacity:1}
+  /* ---------- Decks as a building ----------
+     Floors are kinds of deck (Words, Phrases, Verbs); rooms are decks; on each
+     room's table lie three stacks (Review, New, All). The camera travels
+     building → floor → room → card: a long zoom through a place with
+     structure. Facade windows are the cards: lit = to review, dim = learned,
+     dark = never seen. Esc steps back out. Reduced motion: cuts, no travel. */
+  #deckHome.tabpanel{max-width:none;width:100%;margin:0}
+  .deck-stage{position:relative;height:calc(100vh - 150px);height:calc(100dvh - 150px);min-height:420px;
+    border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;
+    background:radial-gradient(90% 60% at 50% 100%,rgba(60,207,230,.06),transparent 70%),var(--bg)}
+  .deck-stage svg{display:block;width:100%;height:100%;touch-action:manipulation}
+  .stage-hint{position:absolute;left:16px;top:14px;font-size:13px;color:var(--ink-2);pointer-events:none;
+    background:rgba(10,17,30,.72);padding:6px 10px;border-radius:8px;border:1px solid var(--line)}
+  .stage-hint b{color:var(--ink);font-weight:600}
+  .stage-legend{position:absolute;right:16px;top:14px;display:flex;gap:12px;font-size:12px;color:var(--ink-3);pointer-events:none}
+  .stage-legend i{display:inline-block;width:8px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:var(--s3)}
+  .stage-legend i.due{background:var(--cyan)} .stage-legend i.seen{background:rgba(60,207,230,.3)}
+  .stage-go{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);box-shadow:var(--shadow-pop);white-space:nowrap}
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .pane{position:fixed;z-index:150;pointer-events:none;border-radius:var(--r-lg);transform-origin:0 0;
-    background:var(--cyan);border:1px solid var(--cyan);
+    background:var(--cyan);border:1px solid var(--cyan);display:grid;place-items:center;overflow:hidden;
     transition:transform .45s var(--ease),background .45s var(--ease),opacity .3s var(--ease)}
   .pane.open{background:var(--s1);border-color:var(--line-2)}
   .pane.gone{opacity:0}
@@ -613,22 +606,64 @@
   .startrow{display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:22px}
   .starttitle{flex:1 0 100%;font-size:13px;color:var(--ink-3)}
   .streak-chip .num{font-size:13px}
-  .storey:hover .fl-no,.storey:focus-within .fl-no{color:var(--cyan-ink)}
-  .fl-name{font-weight:650;font-size:15.5px;margin-bottom:3px}
-  .fl-sub{color:var(--ink-2);font-size:13px}
-  .windows{display:flex;gap:3px;margin-top:9px;flex-wrap:wrap}
-  .windows i{width:7px;height:11px;border-radius:2px;background:var(--s3)}
-  .windows i.due{background:var(--cyan)}
-  .windows i.seen{background:rgba(60,207,230,.3)}
-  .fl-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-  .tower.zoom{transform:scale(var(--k,2.5));}
-  .tower.zoom .storey:not(.target),.tower.zoom .tower-roof{opacity:0;filter:blur(4px)}
-  .tower.zoom .storey.target .fl-go,.tower.zoom .storey.target .dcap{opacity:0}
-  .tower.dim{opacity:0}
+  .pane span{font-family:var(--book);font-size:34px;color:var(--ink);opacity:.9;white-space:nowrap}
+  .wfloor:focus-visible .w-band{opacity:1;stroke:var(--cyan);stroke-width:3}
+  .wroom:focus-visible .w-rband{opacity:1;stroke:var(--cyan);stroke-width:3}
+  .stage-legend i:not(.due):not(.seen){background:var(--bg);box-shadow:inset 0 0 0 1px var(--line-2)}
+  .crumbs button[aria-current="location"]{min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .crumbs{display:flex;align-items:center;gap:2px;min-width:0;flex-wrap:nowrap;overflow:hidden}
+  .crumbs button{border:0;background:none;color:var(--ink-2);font:inherit;font-size:14px;font-weight:550;padding:6px 8px;border-radius:8px;cursor:pointer;white-space:nowrap}
+  .crumbs button:hover{background:var(--s2);color:var(--ink)}
+  .crumbs button[aria-current="location"]{color:var(--ink);cursor:default;background:none}
+  .crumbs .sep{color:var(--ink-3);font-size:13px}
+  /* the world (SVG) */
+  .w-sky{fill:transparent}
+  .w-ground{stroke:var(--line-2);stroke-width:2}
+  .w-shadow{fill:rgba(60,207,230,.05)}
+  .w-body{fill:var(--s1);stroke:var(--line-2);stroke-width:2}
+  .w-roof{fill:none;stroke:var(--line-2);stroke-width:2}
+  .w-antenna{stroke:var(--ink-3);stroke-width:2}
+  .w-beacon{fill:var(--amber)}
+  .w-slab{stroke:var(--line-2);stroke-width:2}
+  .w-label{fill:var(--ink);font:650 40px var(--ui);letter-spacing:-.02em}
+  .w-sub{fill:var(--ink-2);font:500 21px var(--ui)}
+  .w-num{fill:var(--ink-3);font:500 18px var(--num)}
+  .w-win{fill:var(--bg);stroke:var(--line-2);stroke-width:1.5} .w-win.due{fill:var(--cyan);stroke:none} .w-win.seen{fill:rgba(60,207,230,.3);stroke:none}
+  .w-band{pointer-events:none;fill:rgba(60,207,230,.09);stroke:var(--cyan-line);stroke-width:2;opacity:0;transition:opacity .25s var(--ease)}
+  .wfloor,.wroom,.wstack{cursor:pointer;outline:none}
+  .wfloor .facade,.wfloor .winside,.wfloor,.wroom{transition:opacity .45s var(--ease)}
+  .wfloor .winside{opacity:0;pointer-events:none}
+  .w-back{fill:var(--s2)}
+  .w-wall{stroke:var(--line-2);stroke-width:3}
+  .w-pane{fill:var(--bg);stroke:var(--line-2);stroke-width:1.5} .w-pane.lit{fill:rgba(60,207,230,.22)}
+  .w-table{fill:var(--s3);stroke:var(--line-2);stroke-width:1.5}
+  .w-card{fill:var(--s1);stroke:var(--line-2);stroke-width:1.5}
+  .w-card.top{stroke:var(--cyan-line)}
+  .wstack .w-card.top{transition:transform .25s var(--ease),stroke .25s}
+  .w-rlabel{fill:var(--ink);font:650 22px var(--ui);letter-spacing:-.01em}
+  .w-rsub{fill:var(--ink-2);font:500 14px var(--ui)}
+  .w-slabel{fill:var(--ink-2);font:600 13px var(--ui)}
+  .w-snum{fill:var(--cyan-ink);font:600 13px var(--num)}
+  .w-rband{pointer-events:none;fill:rgba(60,207,230,.07);stroke:var(--cyan-line);stroke-width:2;opacity:0;transition:opacity .25s var(--ease)}
+  .wstack{pointer-events:none}
+  /* building level */
+  .lv-building .wfloor:hover .w-band,.lv-building .wfloor:focus-visible .w-band{opacity:1}
+  /* floor level: the chosen floor opens, the rest of the tower dims */
+  .lv-floor .wfloor:not(.cur),.lv-room .wfloor:not(.cur){opacity:.18}
+  .lv-floor .wfloor.cur .facade,.lv-room .wfloor.cur .facade{opacity:0;pointer-events:none}
+  .lv-floor .wfloor.cur .winside,.lv-room .wfloor.cur .winside{opacity:1;pointer-events:auto}
+  .lv-floor .wfloor.cur .wroom:hover .w-rband,.lv-floor .wfloor.cur .wroom:focus-visible .w-rband{opacity:1}
+  /* room level: the chosen room, its table and stacks */
+  .lv-room .wroom:not(.cur){opacity:.2}
+  .lv-room .wroom.cur .wstack{pointer-events:auto}
+  .lv-room .wroom.cur .wstack:hover .w-card.top,.lv-room .wroom.cur .wstack:focus-visible .w-card.top{transform:translateY(-6px);stroke:var(--cyan)}
+  .wstack:focus-visible .w-slabel{fill:var(--cyan-ink)}
   @media(max-width:900px){
-    .storey{grid-template-columns:40px minmax(0,1fr) auto;padding:14px}
+    .deck-stage{height:calc(100dvh - 120px);border-radius:var(--r)}
+    .stage-legend{display:none}
+    #decksOverlay:not(.inside) .statshead .brand{display:none}
   }
-  @media (prefers-reduced-motion:reduce){.tower,.storey{transition:none}}
+  @media (prefers-reduced-motion:reduce){.wfloor .facade,.wfloor .winside,.wfloor,.wroom,.w-band,.w-rband{transition:none}}
 </style>
 </head>
 <body class="deck-grid">
@@ -966,7 +1001,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   <div class="fullpanel" style="position:relative">
     <div class="statshead">
       <div class="brand"><div class="logo">D</div><div class="name" id="deckTitle">Decks</div></div>
-      <span id="deckBack" style="display:none"><button class="tab" onclick="deckList()">‹ All decks</button></span>
+      <nav id="deckCrumbs" class="crumbs" aria-label="Where you are"></nav>
+      <span id="deckBack" style="display:none"><button class="tab" onclick="backToRoom()">‹ Back to the room</button></span>
       <span id="deckModes" class="tabs" style="display:none;flex:0 1 auto" role="group" aria-label="What to study"></span>
       <span class="grow" style="flex:1"></span>
       <span class="muted" id="deckBudget" style="font-size:12px"></span>
@@ -3035,8 +3071,9 @@ function openDecks(){
   loadVoices();deckList();  // misma voz global (Piper) en decks
 }
 function closeDecks(){document.getElementById("decksOverlay").style.display="none";stopSpeech();}
-async function deckList(){
+async function deckList(restore){
   document.getElementById("deckBack").style.display="none";
+  document.getElementById("deckCrumbs").style.display="";
   document.getElementById("deckTitle").textContent="Decks";
   document.getElementById("decksOverlay").classList.remove("inside");
   const md=document.getElementById("deckModes");if(md)md.style.display="none";
@@ -3053,75 +3090,195 @@ async function deckList(){
   let decks=[];
   try{decks=await api("/api/decks");}
   catch(e){home.innerHTML=loadFailHtml("decks");return;}
-  if(!decks.length){home.innerHTML='<div class="soon"><div class="big">No decks yet</div><div>Ready-made decks appear here once they are added. Meanwhile, save words while you read and review them in Flashcards.</div></div>';return;}
-  home.innerHTML="";
+  if(!decks.length){document.getElementById("deckCrumbs").textContent="";home.innerHTML='<div class="soon"><div class="big">No decks yet</div><div>Ready-made decks appear here once they are added. Meanwhile, save words while you read and review them in Flashcards.</div></div>';return;}
   S.deck.list=decks;
-  const tower=document.createElement("div");tower.className="tower";tower.id="tower";
-  const toRev=d=>Math.max(0,(d.due||0)-(d.unseen||0));
-  const allRev=decks.reduce((n,d)=>n+toRev(d),0),allNew=decks.reduce((n,d)=>n+(d.unseen||0),0);
-  tower.innerHTML='<div class="tower-roof"><h2>Your <em>decks</em></h2><span class="num">'+allRev+' to review · '+allNew+' new</span></div>';
-  const NEW_PER_DAY=10;
-  decks.forEach((d,ix)=>{
-    const el=document.createElement("div");el.className="storey";el.dataset.ix=ix;
-    el.tabIndex=0;el.setAttribute("role","button");
-    const rv=toRev(d),nw=d.unseen||0,tot=Math.max(1,d.total||0);
-    el.setAttribute("aria-label",d.name+": "+rv+" to review, "+nw+" new");
-    const capped=(d.new_today||0)>=NEW_PER_DAY&&nw>0;
-    // Sin esto, "Review" dejaba de ofrecer tarjetas nuevas y no había forma de
-    // saber que era el límite diario y no un fallo.
-    const aviso=capped?'<div class="dcap">Daily new-card limit reached ('+d.new_today+' today). '+nw+' still unseen.</div>':'';
-    // 24 windows in proportion: lit = to review today, dim = learned, dark = never seen
-    const W=24;let wl=Math.round(rv/tot*W);if(rv>0&&wl===0)wl=1;
-    let wd=Math.round(nw/tot*W);if(nw>0&&wd===0)wd=1;wd=Math.min(wd,W-wl);
-    const win='<div class="windows" aria-hidden="true">'+'<i class="due"></i>'.repeat(wl)+'<i class="seen"></i>'.repeat(W-wl-wd)+'<i></i>'.repeat(wd)+'</div>';
-    el.innerHTML='<span class="fl-no">'+(DECK_ICON[d.key]||"Aa")+'</span>'+
-      '<div><div class="fl-name">'+escapeHtml(d.name)+'</div>'+
-      '<div class="fl-sub">'+(rv?'<b>'+rv+' to review</b> · ':'')+nw+' new · '+d.total+' cards</div>'+aviso+win+'</div>'+
-      '<svg class="ico fl-go" aria-hidden="true"><use href="#i-right"/></svg>';
-    // the cards are requested at click time, while the camera moves, so a
-    // slow server doesn't leave the zoomed row frozen
-    const go=()=>{const pre=api(deckQueueUrl(d.id,"smart"));pre.catch(()=>{});zoomIntoFloor(el,()=>openDeck(d.id,"smart",pre));};
-    el.onclick=go;
-    el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}};
-    tower.appendChild(el);
+  buildDeckWorld(home,decks,restore);
+}
+/* ---------- The deck building ---------- */
+const FLOOR_OF={words:"words",connectors:"words",vocab:"phrases",phrases:"phrases",verbs:"verbs",phrasal:"verbs",irregular:"verbs"};
+const FLOOR_NAME={words:"Words",phrases:"Phrases",verbs:"Verbs",more:"More decks"};
+const FLOOR_ORDER=["words","phrases","verbs","more"];
+const SVGNS="http://www.w3.org/2000/svg";
+const W_PAD=70,W_BW=640,W_FH=260,W_ROOF=130,W_GROUND=70;
+const DW={level:"building",floor:null,room:null,vb:null,anim:0,floors:[],svg:null};
+function sv(tag,at,parent){const e=document.createElementNS(SVGNS,tag);for(const k in at)e.setAttribute(k,at[k]);if(parent)parent.appendChild(e);return e;}
+function st(parent,x,y,txt,cls,anchor){const t=sv("text",{x,y,class:cls,"text-anchor":anchor||"start"},parent);t.textContent=txt;return t;}
+const _toRev=d=>Math.max(0,(d.due||0)-(d.unseen||0));
+// what "Today" serves: cards due plus what is left of today's new-card allowance
+const _today=d=>_toRev(d)+Math.min(d.unseen||0,Math.max(0,10-(d.new_today||0)));
+function _windows(parent,x,y,w,h,cols,rows,rev,learned,unseen,gap){
+  // proportional windows: lit = to review, dim = learned, dark = never seen
+  const n=cols*rows,tot=Math.max(1,rev+learned+unseen);
+  let lit=Math.round(rev/tot*n);if(rev>0&&lit===0)lit=1;
+  let dark=Math.round(unseen/tot*n);if(unseen>0&&dark===0)dark=1;dark=Math.min(dark,n-lit);
+  const cw=(w-gap*(cols-1))/cols,ch=(h-gap*(rows-1))/rows;let k=0;
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++,k++){
+    const cls=k<lit?"w-win due":(k<n-dark?"w-win seen":"w-win");
+    sv("rect",{x:x+c*(cw+gap),y:y+r*(ch+gap),width:cw,height:ch,rx:2,class:cls},parent);}
+}
+function buildDeckWorld(home,decks,restore){
+  // group decks into floors
+  const map={};decks.forEach(d=>{const f=FLOOR_OF[d.key]||"more";(map[f]=map[f]||[]).push(d);});
+  const floors=FLOOR_ORDER.filter(f=>map[f]).map(f=>({key:f,name:FLOOR_NAME[f],decks:map[f]}));
+  DW.floors=floors;
+  const nF=floors.length,W=W_BW+2*W_PAD,H=W_ROOF+nF*W_FH+W_GROUND;
+  home.innerHTML="";
+  const stage=document.createElement("div");stage.className="deck-stage";
+  const hint=document.createElement("div");hint.className="stage-hint";hint.id="stageHint";
+  const legend=document.createElement("div");legend.className="stage-legend";legend.setAttribute("aria-hidden","true");
+  legend.innerHTML='<span><i class="due"></i>to review</span><span><i class="seen"></i>learned</span><span><i></i>new</span>';
+  const svg=sv("svg",{viewBox:"0 0 "+W+" "+H,preserveAspectRatio:"xMidYMid meet",role:"group","aria-label":"Your decks, as a building"});
+  DW.svg=svg;DW.W=W;DW.H=H;
+  const groundY=W_ROOF+nF*W_FH;
+  sv("ellipse",{cx:W/2,cy:groundY+14,rx:W_BW*.62,ry:22,class:"w-shadow"},svg);
+  sv("line",{x1:0,y1:groundY,x2:W,y2:groundY,class:"w-ground"},svg);
+  sv("rect",{x:W_PAD,y:W_ROOF,width:W_BW,height:nF*W_FH,class:"w-body"},svg);
+  // roof: parapet, antenna and the amber beacon of the habit
+  sv("path",{d:"M"+(W_PAD-10)+" "+W_ROOF+"H"+(W_PAD+W_BW+10)+"M"+(W_PAD+40)+" "+W_ROOF+"v-26h180v26",class:"w-roof"},svg);
+  sv("line",{x1:W_PAD+W_BW-110,y1:W_ROOF,x2:W_PAD+W_BW-110,y2:W_ROOF-90,class:"w-antenna"},svg);
+  sv("circle",{cx:W_PAD+W_BW-110,cy:W_ROOF-96,r:6,class:"w-beacon"},svg);
+  floors.forEach((f,i)=>{
+    const y=W_ROOF+(nF-1-i)*W_FH; f.y=y;
+    const rev=f.decks.reduce((n,d)=>n+_toRev(d),0),nw=f.decks.reduce((n,d)=>n+(d.unseen||0),0);
+    const tot=f.decks.reduce((n,d)=>n+(d.total||0),0),learned=Math.max(0,tot-rev-nw);
+    const g=sv("g",{class:"wfloor",tabindex:"0",role:"button","aria-label":"Floor "+(i+1)+", "+f.name+": "+f.decks.length+" decks, "+rev+" to review, "+nw+" new"},svg);
+    g.dataset.ix=i;
+    // inside (seen once the floor opens): back wall and rooms
+    const inside=sv("g",{class:"winside"},g);
+    sv("rect",{x:W_PAD,y:y,width:W_BW,height:W_FH,class:"w-back"},inside);
+    const rw=W_BW/f.decks.length;
+    f.decks.forEach((d,j)=>{
+      const x0=W_PAD+j*rw,r=sv("g",{class:"wroom",tabindex:"-1",role:"button","aria-label":d.name+": "+_toRev(d)+" to review, "+(d.unseen||0)+" new"},inside);
+      r.dataset.ix=j;
+      sv("rect",{x:x0+4,y:y+4,width:rw-8,height:W_FH-8,rx:6,class:"w-rband"},r);
+      if(j>0)sv("path",{d:"M"+x0+" "+y+"v"+(W_FH-120)+"M"+x0+" "+(y+W_FH-40)+"v40",class:"w-wall"},r); // wall with a doorway
+      st(r,x0+22,y+40,d.name,"w-rlabel");
+      st(r,x0+22,y+62,_toRev(d)+" to review · "+(d.unseen||0)+" new","w-rsub");
+      // back-wall windows: the deck's cards
+      const dl=Math.max(0,(d.total||0)-_toRev(d)-(d.unseen||0));
+      _windows(r,x0+22,y+80,Math.min(rw-44,220),34,8,1,_toRev(d),dl,d.unseen||0,6);
+      // the table with three stacks: Review, New, All
+      const tw=Math.min(rw-36,290),tx=x0+(rw-tw)/2,ty=y+W_FH-62;
+      sv("rect",{x:tx,y:ty,width:tw,height:10,rx:3,class:"w-table"},r);
+      sv("path",{d:"M"+(tx+14)+" "+(ty+10)+"v36M"+(tx+tw-14)+" "+(ty+10)+"v36",class:"w-wall"},r);
+      const modes=[["smart","Today",_today(d)],["new","New",d.unseen||0],["all","All",d.total||0]];
+      const sw=Math.min(64,(tw-40)/3),sgap=(tw-3*sw)/4;
+      modes.forEach(([m,lab,num],k)=>{
+        const sx=tx+sgap+k*(sw+sgap),sy=ty-44;
+        const sg=sv("g",{class:"wstack",tabindex:"-1",role:"button","aria-label":lab+" "+d.name+" ("+num+")"},r);
+        sg.dataset.mode=m;
+        sv("rect",{x:sx+6,y:sy+8,width:sw,height:36,rx:4,class:"w-card"},sg);
+        sv("rect",{x:sx+3,y:sy+4,width:sw,height:36,rx:4,class:"w-card"},sg);
+        sv("rect",{x:sx,y:sy,width:sw,height:36,rx:4,class:"w-card top"},sg);
+        st(sg,sx+sw/2,sy+23,String(num),"w-snum","middle");
+        st(sg,sx+sw/2+3,ty+30,lab,"w-slabel","middle");
+        sg.addEventListener("click",e=>{e.stopPropagation();if(DW.level==="room"&&DW.room===j)startFromStack(sg,d,m);});
+        sg.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();sg.dispatchEvent(new Event("click"));}});
+      });
+      r.addEventListener("click",e=>{e.stopPropagation();if(DW.level==="floor"&&DW.floor===i)goRoom(i,j);});
+      r.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&DW.level==="floor"){e.preventDefault();goRoom(i,j);}});
+    });
+    // facade (what you see from outside)
+    const fac=sv("g",{class:"facade"},g);
+    sv("rect",{x:W_PAD,y:y,width:W_BW,height:W_FH,fill:"transparent"},fac);
+    st(fac,W_PAD+30,y+62,f.name,"w-label");
+    st(fac,W_PAD+30,y+96,rev+" to review · "+nw+" new · "+f.decks.length+" decks","w-sub");
+    st(fac,W_PAD-18,y+62,String(i+1).padStart(2,"0"),"w-num","end");
+    _windows(fac,W_PAD+30,y+124,W_BW-60,W_FH-150,14,3,rev,learned,nw,8);
+    sv("rect",{x:W_PAD+2,y:y+2,width:W_BW-4,height:W_FH-4,rx:4,class:"w-band"},g);
+    sv("line",{x1:W_PAD,y1:y+W_FH,x2:W_PAD+W_BW,y2:y+W_FH,class:"w-slab"},g);
+    g.addEventListener("click",()=>{if(DW.level==="building")goFloor(i);});
+    g.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&DW.level==="building"){e.preventDefault();goFloor(i);}});
   });
-  home.appendChild(tower);
-  zoomOutOfFloor(tower);
+  const go=document.createElement("button");go.type="button";go.className="btn gold stage-go";go.id="stageGo";
+  let best=null;floors.forEach((f,i)=>f.decks.forEach((d,j)=>{const n=_today(d);if(n>0&&(!best||n>best.n))best={i,j,n};}));
+  if(best){go.textContent="Start today · "+best.n+" cards";go.onclick=()=>startToday(best.i,best.j);}else go.hidden=true;
+  const live=document.createElement("div");live.className="sr-only";live.id="stageLive";live.setAttribute("aria-live","polite");
+  stage.append(svg,hint,legend,go,live);home.appendChild(stage);
+  // camera: back where you were (after a review) or the whole building
+  if(restore&&restore.floor!=null&&floors[restore.floor]){
+    DW.floor=restore.floor;DW.room=(restore.room!=null&&floors[restore.floor].decks[restore.room])?restore.room:null;
+    _setLevel(DW.room!=null?"room":"floor");_camera(_boxFor(DW.level),0);
+  }else{DW.floor=null;DW.room=null;_setLevel("building");_camera(_boxFor("building"),0);}
 }
-/* The camera move, calm version. The chosen row grows a little (max 2.5x)
-   with its name still readable, the others fade; then its first lit window
-   opens into the review card, so the motion lands somewhere. Back zooms out
-   to the same row. Reduced motion: the plain cut. */
+function _boxFor(level){
+  if(level==="building")return[0,0,DW.W,DW.H];
+  const f=DW.floors[DW.floor];
+  if(level==="floor")return[W_PAD-24,f.y-40,W_BW+48,W_FH+80];
+  const rw=W_BW/f.decks.length;return[W_PAD+DW.room*rw-12,f.y-14,rw+24,W_FH+28];
+}
+function _fit(b){
+  const el=DW.svg;const cw=el.clientWidth||1,ch=el.clientHeight||1,a=cw/ch;let[x,y,w,h]=b;
+  if(w/h<a){const nw=h*a;x-=(nw-w)/2;w=nw;}else{const nh=w/a;y-=(nh-h)/2;h=nh;}
+  return[x,y,w,h];
+}
+function _camera(box,ms){
+  const to=_fit(box),from=DW.vb||to;cancelAnimationFrame(DW.anim);
+  const set=v=>{DW.vb=v;DW.svg.setAttribute("viewBox",v.map(n=>n.toFixed(2)).join(" "));};
+  if(!ms||_reduceMotion()){set(to);return Promise.resolve();}
+  return new Promise(res=>{const t0=performance.now();
+    const ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+    const step=now=>{const t=Math.min(1,(now-t0)/ms),e=ease(t);set(from.map((v,i)=>v+(to[i]-v)*e));
+      if(t<1)DW.anim=requestAnimationFrame(step);else res();};
+    DW.anim=requestAnimationFrame(step);});
+}
+function _setLevel(level){
+  DW.level=level;const svg=DW.svg;if(!svg)return;
+  svg.classList.remove("lv-building","lv-floor","lv-room");svg.classList.add("lv-"+level);
+  svg.querySelectorAll(".wfloor").forEach(g=>{const cur=+g.dataset.ix===DW.floor;g.classList.toggle("cur",cur&&level!=="building");
+    g.setAttribute("tabindex",level==="building"?"0":"-1");
+    g.querySelectorAll(".wroom").forEach(r=>{const rc=cur&&+r.dataset.ix===DW.room;r.classList.toggle("cur",rc&&level==="room");
+      r.setAttribute("tabindex",cur&&level==="floor"?"0":"-1");
+      r.querySelectorAll(".wstack").forEach(sg=>sg.setAttribute("tabindex",rc&&level==="room"?"0":"-1"));});});
+  const f=DW.floor!=null?DW.floors[DW.floor]:null,d=f&&DW.room!=null?f.decks[DW.room]:null;
+  const live=document.getElementById("stageLive");
+  if(live)live.textContent=level==="building"?"Building, "+DW.floors.length+" floors":level==="floor"?f.name+" floor, "+f.decks.length+" rooms":d.name+" room. Choose Today, New or All.";
+  const go=document.getElementById("stageGo");if(go)go.style.display=level==="building"?"":"none";
+  const hint=document.getElementById("stageHint");
+  if(hint)hint.innerHTML=level==="building"?"<b>Choose a floor</b> · each window is a card":
+    level==="floor"?"<b>"+escapeHtml(f.name)+"</b> · choose a room":"<b>"+escapeHtml(d.name)+"</b> · pick a stack to start";
+  _crumbs();
+}
+function _crumbs(){
+  const c=document.getElementById("deckCrumbs");if(!c)return;c.textContent="";
+  const f=DW.floor!=null?DW.floors[DW.floor]:null,d=f&&DW.room!=null?f.decks[DW.room]:null;
+  const items=[["Building",()=>goBuilding()]];
+  if(f&&DW.level!=="building")items.push([f.name,()=>goFloor(DW.floor)]);
+  if(d&&DW.level==="room")items.push([d.name,null]);
+  items.forEach(([lab,fn],k)=>{
+    if(k){const sp=document.createElement("span");sp.className="sep";sp.textContent="›";sp.setAttribute("aria-hidden","true");c.appendChild(sp);}
+    const b=document.createElement("button");b.type="button";b.textContent=lab;
+    if(k===items.length-1)b.setAttribute("aria-current","location");else b.onclick=fn;c.appendChild(b);
+  });
+}
+async function goBuilding(){DW.room=null;_setLevel("building");await _camera(_boxFor("building"),900);
+  const g=DW.svg.querySelector('.wfloor[data-ix="'+DW.floor+'"]');DW.floor=null;_setLevel("building");if(g)g.focus({preventScroll:true});}
+async function goFloor(i){const from=DW.level;DW.floor=i;DW.room=null;_setLevel("floor");
+  await _camera(_boxFor("floor"),from==="building"?1000:750);
+  const r=DW.svg.querySelector('.wfloor.cur .wroom');if(r)r.focus({preventScroll:true});}
+async function goRoom(i,j){DW.floor=i;DW.room=j;_setLevel("room");await _camera(_boxFor("room"),850);
+  const sg=DW.svg.querySelector('.wroom.cur .wstack');if(sg)sg.focus({preventScroll:true});}
+async function startToday(i,j){
+  DW.floor=i;DW.room=j;_setLevel("room");
+  await _camera(_boxFor("room"),1600);
+  const sg=DW.svg.querySelector('.wroom.cur .wstack');
+  if(sg)startFromStack(sg,DW.floors[i].decks[j],"smart");
+}
+function startFromStack(sg,d,mode){
+  const pre=api(deckQueueUrl(d.id,mode));pre.catch(()=>{});
+  S.deck.fromRect=sg.querySelector(".w-card.top").getBoundingClientRect();
+  openDeck(d.id,mode,pre);
+}
+function backToRoom(){deckList({floor:DW.floor,room:DW.room});}
 const _reduceMotion=()=>window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
-function zoomIntoFloor(floor,then){
-  const tower=floor.closest(".tower");
-  S.deck.fromRect=null;
-  if(!tower||_reduceMotion()){then();return;}
-  const tr=tower.getBoundingClientRect(),fr=floor.getBoundingClientRect();
-  const panel=tower.closest(".fullpanel")||document.body,pr=panel.getBoundingClientRect();
-  const k=Math.max(1.4,Math.min(2.5,(pr.width*.92)/Math.max(1,fr.width),(pr.height*.6)/Math.max(1,fr.height)));
-  tower.style.transformOrigin=(fr.left-tr.left+fr.width/2)+"px "+(fr.top-tr.top+fr.height/2)+"px";
-  tower.style.setProperty("--k",k);
-  S.deck.lastFloor=+floor.dataset.ix;
-  floor.classList.add("target");tower.classList.add("zoom");
-  setTimeout(()=>{
-    const w=floor.querySelector(".windows i.due")||floor.querySelector(".windows i")||floor;
-    S.deck.fromRect=w.getBoundingClientRect();
-    then();
-  },430);
-}
-function zoomOutOfFloor(tower){
-  const ix=S.deck.lastFloor;S.deck.lastFloor=null;
-  if(ix==null||_reduceMotion())return;
-  const floor=tower.querySelector('.storey[data-ix="'+ix+'"]');if(!floor)return;
-  const tr=tower.getBoundingClientRect(),fr=floor.getBoundingClientRect();
-  tower.style.transition="none";
-  tower.style.transformOrigin=(fr.left-tr.left+fr.width/2)+"px "+(fr.top-tr.top+fr.height/2)+"px";
-  tower.style.setProperty("--k",2.2);
-  floor.classList.add("target");tower.classList.add("zoom");
-  void tower.offsetWidth;tower.style.transition="";
-  requestAnimationFrame(()=>{tower.classList.remove("zoom");setTimeout(()=>{floor.classList.remove("target");floor.focus({preventScroll:true});},700);});
-}
+// Esc steps back out: card → room → floor → building
+document.addEventListener("keydown",e=>{
+  if(e.key!=="Escape"||document.querySelector(".dlg-back"))return;
+  const ov=document.getElementById("decksOverlay");if(!ov||ov.style.display==="none")return;
+  if(document.getElementById("deckReview").style.display!=="none"){backToRoom();return;}
+  if(DW.level==="room")goFloor(DW.floor);else if(DW.level==="floor")goBuilding();
+});
+window.addEventListener("resize",()=>{if(DW.svg&&DW.svg.isConnected)_camera(_boxFor(DW.level),0);});
 /* The window becomes the card: a lit pane grows from the window's place to
    the card's place, then hands over to the real card. */
 function openFromWindow(target){
@@ -3129,13 +3286,15 @@ function openFromWindow(target){
   if(!r||!target||_reduceMotion())return;
   const t=target.getBoundingClientRect();if(!t.width)return;
   const g=document.createElement("div");g.className="pane";g.setAttribute("aria-hidden","true");
+  const c0=S.deck.queue&&S.deck.queue[S.deck.pos];
+  if(c0&&c0.front){const w=document.createElement("span");w.textContent=c0.front;g.appendChild(w);}
   Object.assign(g.style,{left:t.left+"px",top:t.top+"px",width:t.width+"px",height:t.height+"px",
     transform:"translate("+(r.left-t.left)+"px,"+(r.top-t.top)+"px) scale("+(r.width/t.width)+","+(r.height/t.height)+")"});
   document.body.appendChild(g);
   target.style.opacity="0";
   void g.offsetWidth;
   g.classList.add("open");g.style.transform="none";
-  setTimeout(()=>{target.style.transition="opacity .25s var(--ease)";target.style.opacity="";g.classList.add("gone");},430);
+  setTimeout(()=>{target.style.transition="opacity .25s var(--ease)";target.style.opacity="";g.classList.add("gone");},360);
   setTimeout(()=>{g.remove();target.style.transition="";},760);
 }
 function deckQueueUrl(id,mode){
@@ -3151,6 +3310,7 @@ async function openDeck(id,mode,pre){
   document.getElementById("decksOverlay").classList.add("inside");
   const dr=document.getElementById("deckReview");dr.classList.toggle("noanim",!!S.deck.fromRect);dr.style.display="";
   document.getElementById("deckBack").style.display="";
+  document.getElementById("deckCrumbs").style.display="none";
   const dk=(S.deck.list||[]).find(x=>x.id===id);
   document.getElementById("deckTitle").textContent=dk?dk.name:"Decks";
   const md=document.getElementById("deckModes");md.style.display="";md.textContent="";
