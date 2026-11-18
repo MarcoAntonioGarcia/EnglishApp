@@ -592,7 +592,8 @@ def problema_con_el_usuario(nombre: str) -> str:
 
 
 def email_valido(email: str) -> bool:
-    return bool(_RE_EMAIL.match((email or "").strip()))
+    email = (email or "").strip()
+    return len(email) <= 254 and bool(_RE_EMAIL.match(email))
 
 
 # --------------------------------------------------------------------------- #
@@ -1227,8 +1228,10 @@ class DatabaseManager:
         """
         login = (login or "").strip()
         with self._lock:
+            # lower(): en Postgres '=' distingue mayúsculas, y "Marco" o un
+            # correo con mayúsculas no podrían entrar (en SQLite lo cubre NOCASE)
             row = self.conn.execute(
-                "SELECT * FROM users WHERE username = ? OR email = ?",
+                "SELECT * FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)",
                 (login, login)).fetchone()
         return dict(row) if row else None
 
@@ -1257,12 +1260,14 @@ class DatabaseManager:
         with self._lock:
             # el nombre no distingue mayusculas: 'Luis' y 'luis' serian la misma
             # persona intentando entrar y fallando sin entender por que
+            # lower() en los dos lados: en Postgres '=' sí distingue mayúsculas,
+            # y el choque llegaría tarde, como error del índice único (un 500)
             ya = self.conn.execute(
-                "SELECT 1 FROM users WHERE username = ?", (username,)).fetchone()
+                "SELECT 1 FROM users WHERE lower(username) = lower(?)", (username,)).fetchone()
             if ya:
                 raise ValueError(f"Ya existe un usuario «{username}».")
             if email and self.conn.execute(
-                    "SELECT 1 FROM users WHERE email = ?", (email,)).fetchone():
+                    "SELECT 1 FROM users WHERE lower(email) = lower(?)", (email,)).fetchone():
                 raise ValueError("Ya hay una cuenta con ese correo.")
             cur = self.conn.execute(
                 "INSERT INTO users (username, email, password_hash, role, status, nombre) "
@@ -1443,6 +1448,94 @@ class DatabaseManager:
                 "DELETE FROM sessions WHERE expires_at <= datetime('now','localtime')")
             self.conn.commit()
             return cur.rowcount
+
+    # --- enlaces por correo (crear cuenta, restablecer contraseña) ------- #
+    @staticmethod
+    def _ahora(desplazamiento_s: int = 0) -> str:
+        return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() + desplazamiento_s))
+
+    def crear_token_correo(self, email: str, proposito: str, minutos: int) -> str:
+        """Token de un solo uso para un enlace por correo. Devuelve el token en
+        claro (va SOLO en el correo); en la base queda su SHA-256."""
+        if proposito not in ("signup", "reset"):
+            raise ValueError("propósito desconocido")
+        token = secrets.token_urlsafe(32)
+        with self._lock:
+            self.conn.execute(
+                "INSERT INTO email_tokens (token_hash, email, purpose, created_at, expires_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (self._hash_token(token), email.strip().lower(), proposito,
+                 self._ahora(), self._ahora(minutos * 60)))
+            self.conn.commit()
+        return token
+
+    def contar_correos(self, segundos: int, email: str | None = None,
+                       proposito: str | None = None) -> int:
+        """Cuántos enlaces se han mandado en los últimos `segundos` (a ese
+        correo y/o de ese tipo, o en total). Es el contador de los topes."""
+        sql = "SELECT COUNT(*) n FROM email_tokens WHERE created_at > ?"
+        args: list = [self._ahora(-segundos)]
+        if email is not None:
+            sql += " AND email = ?"
+            args.append(email.strip().lower())
+        if proposito is not None:
+            sql += " AND purpose = ?"
+            args.append(proposito)
+        with self._lock:
+            fila = self.conn.execute(sql, tuple(args)).fetchone()
+        return int(fila["n"])
+
+    def ver_token_correo(self, token: str, proposito: str) -> str | None:
+        """El correo del token si sigue valiendo (sin usar y sin caducar), o None.
+        No lo gasta."""
+        if not token or len(token) > 200:
+            return None
+        with self._lock:
+            fila = self.conn.execute(
+                "SELECT email FROM email_tokens WHERE token_hash = ? AND purpose = ? "
+                "AND used_at IS NULL AND expires_at > ?",
+                (self._hash_token(token), proposito, self._ahora())).fetchone()
+        return fila["email"] if fila else None
+
+    def gastar_token_correo(self, token: str, proposito: str) -> bool:
+        """Lo marca como usado. Un solo UPDATE condicionado: si dos peticiones
+        llegan a la vez con el mismo enlace, solo una lo consigue."""
+        if not token or len(token) > 200:
+            return False
+        with self._lock:
+            cur = self.conn.execute(
+                "UPDATE email_tokens SET used_at = ? WHERE token_hash = ? AND purpose = ? "
+                "AND used_at IS NULL AND expires_at > ?",
+                (self._ahora(), self._hash_token(token), proposito, self._ahora()))
+            self.conn.commit()
+            return cur.rowcount == 1
+
+    def anular_tokens_correo(self, email: str, proposito: str) -> None:
+        """Deja sin valor los enlaces pendientes de ese correo (p. ej. los demás
+        enlaces de restablecer, una vez usado uno)."""
+        with self._lock:
+            self.conn.execute(
+                "UPDATE email_tokens SET used_at = ? WHERE email = ? AND purpose = ? "
+                "AND used_at IS NULL", (self._ahora(), email.strip().lower(), proposito))
+            self.conn.commit()
+
+    def purgar_tokens_correo(self, dias: int = 2) -> None:
+        """Borra los enlaces viejos. Se guardan dos días: lo justo para que los
+        topes por día cuenten bien."""
+        with self._lock:
+            self.conn.execute("DELETE FROM email_tokens WHERE created_at < ?",
+                              (self._ahora(-dias * 86400),))
+            self.conn.commit()
+
+    def find_user_by_email(self, email: str) -> dict | None:
+        """Fila cruda por correo, sin distinguir mayúsculas."""
+        email = (email or "").strip().lower()
+        if not email:
+            return None
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT * FROM users WHERE lower(email) = ?", (email,)).fetchone()
+        return dict(row) if row else None
 
     # --- libros -------------------------------------------------------- #
     def puede_ver_libro(self, book_id: int, user_id: int) -> bool:

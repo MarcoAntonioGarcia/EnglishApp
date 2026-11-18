@@ -20,6 +20,8 @@ Ejecutar:
 from __future__ import annotations
 
 import glob
+import html as html_mod
+import logging
 import hashlib
 import hmac
 import ipaddress
@@ -40,12 +42,13 @@ from starlette.background import BackgroundTask
 
 import catalog
 import core
+import correo
 
 # La documentación automática de FastAPI (/docs, /openapi.json) lista todos los
 # endpoints, los del admin incluidos. En producción no se sirve; en local se
 # activa con DOCS=1.
 _DOCS = os.environ.get("DOCS", "") == "1"
-app = FastAPI(title="Lector de Idiomas",
+app = FastAPI(title="Daily English Habit",
               docs_url="/docs" if _DOCS else None,
               redoc_url=None,
               openapi_url="/openapi.json" if _DOCS else None)
@@ -83,8 +86,12 @@ COOKIE_SEGURA = os.environ.get("COOKIE_SEGURA", "") == "1"
 #   login_dispositivo: el mismo tope, aparte, para quien entra desde un aparato
 #   donde ya entró bien antes (cookie 'dispositivo'). Así un desconocido que
 #   machaca tu cuenta no te deja fuera a ti: tus intentos no cuentan con los suyos.
+#   alta / olvido: 5 peticiones de correo por hora y por IP (cada una gasta un
+#   envío del cupo gratuito de Brevo).
+#   enlace: 30 usos de enlaces por cuarto de hora y por IP.
 TOPES = {"login": (10, 15 * 60), "login_cuenta": (20, 15 * 60),
-         "login_dispositivo": (20, 15 * 60), "registro": (5, 60 * 60)}
+         "login_dispositivo": (20, 15 * 60), "alta": (5, 60 * 60),
+         "olvido": (5, 60 * 60), "enlace": (30, 15 * 60)}
 # Claves vigiladas, de la más vieja a la más nueva. Con tope: sin él, un bot que
 # prueba nombres inventados haría crecer el diccionario hasta agotar la memoria.
 _intentos: "OrderedDict[tuple[str, str], list[float]]" = OrderedDict()
@@ -367,7 +374,7 @@ def current_user(peticion: Request) -> int:
     """
     u = usuario_de_la_peticion(peticion)
     if not u:
-        raise HTTPException(401, "Necesitas iniciar sesión.")
+        raise HTTPException(401, "Please sign in.")
     return u["id"]
 
 
@@ -376,7 +383,7 @@ def current_admin(peticion: Request) -> int:
     por qué confirmarle a nadie que el panel existe."""
     u = usuario_de_la_peticion(peticion)
     if not u:
-        raise HTTPException(401, "Necesitas iniciar sesión.")
+        raise HTTPException(401, "Please sign in.")
     if u.get("role") != "admin":
         raise HTTPException(404, "No encontrado")
     return u["id"]
@@ -396,11 +403,232 @@ def _poner_cookie(respuesta: Response, token: str) -> None:
 # --------------------------------------------------------------------------- #
 # Alta, entrada y salida
 # --------------------------------------------------------------------------- #
-# No hay registro público: las cuentas las crea el admin en /admin. Para un
-# grupo cerrado es mas simple y mas seguro -- nadie se da de alta solo, no hay
-# cola de aprobaciones, y en la tabla de usuarios aparecen nombres que
-# reconoces en vez de correos sin verificar.
-# El endpoint vive ahora en POST /api/admin/users.
+# Registro público con correo verificado. El admin puede seguir creando cuentas
+# a mano en /admin (POST /api/admin/users).
+#
+# El orden importa: primero se pide SOLO el correo y se manda un enlace; el
+# usuario y la contraseña se eligen DESPUÉS, al abrir ese enlace. Si se pidiera
+# la contraseña antes, alguien podría dar de alta el correo de otra persona con
+# una contraseña suya y esperar a que la víctima pulse "confirmar"
+# (pre-secuestro de cuentas). Así, la contraseña la pone quien lee ese buzón.
+#
+# El token va en el FRAGMENTO del enlace (#t=...), que el navegador no manda al
+# servidor: no queda en los logs de Render ni en ningún proxy.
+APP_NOMBRE = os.environ.get("APP_NOMBRE", "Daily English Habit").strip() or "Daily English Habit"
+# La dirección pública de la app, para los enlaces de los correos. Se fija en la
+# configuración, NUNCA se saca de la cabecera Host de la petición: si no,
+# cualquiera podría pedir un enlace de restablecer para tu correo con un Host
+# suyo, y el enlace que recibirías llevaría tu token a su servidor.
+APP_URL = os.environ.get("APP_URL", "").strip().rstrip("/")
+MINUTOS_ENLACE_ALTA = 60
+MINUTOS_ENLACE_CLAVE = 30
+MAX_CORREOS_HORA_POR_CORREO = 3
+MAX_CORREOS_DIA_POR_CORREO = 5      # nadie recibe más de 5 al día sin pedirlos
+# Por debajo de los ~300 diarios del plan gratuito de Brevo. Las altas tienen
+# su propio cupo, más bajo: un bot que pide altas de correos inventados no
+# puede gastar los envíos que necesitan las cuentas que ya existen para
+# restablecer su contraseña.
+MAX_CORREOS_DIA = int(os.environ.get("MAX_CORREOS_DIA", "250"))
+MAX_ALTAS_DIA = int(os.environ.get("MAX_ALTAS_DIA", "150"))
+RESPUESTA_GENERICA = ("If that address can receive email, we've sent you a link. "
+                      "Check your inbox (and the spam folder).")
+
+
+def _registro_disponible() -> bool:
+    return bool(APP_URL) and correo.disponible()
+
+
+def _plantilla(titulo: str, parrafo: str, boton: str, enlace: str, pie: str) -> tuple[str, str]:
+    texto = f"{titulo}\n\n{parrafo}\n\n{boton}: {enlace}\n\n{pie}\n"
+    html = (
+        '<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:480px;'
+        'margin:0 auto;padding:24px;color:#111">'
+        f'<h2 style="margin:0 0 12px">{titulo}</h2>'
+        f'<p style="line-height:1.5">{parrafo}</p>'
+        f'<p style="margin:24px 0"><a href="{enlace}" style="background:#0e7c86;color:#fff;'
+        f'padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:600">{boton}</a></p>'
+        f'<p style="color:#555;font-size:13px;line-height:1.5">{pie}</p></div>')
+    return texto, html
+
+
+def _mandar_enlace(email: str, proposito: str, ya_tiene_cuenta: bool = False,
+                   usuario: str = "") -> None:
+    """Crea el token y manda el correo. 503 si hoy ya no se puede enviar más o
+    si Brevo falla; nada (en silencio) si ese correo ya recibió 3 en la hora,
+    porque la respuesta a quien lo pide es la misma en todos los casos."""
+    if (db.contar_correos(86400) >= MAX_CORREOS_DIA
+            or (proposito == "signup" and db.contar_correos(86400, proposito="signup") >= MAX_ALTAS_DIA)):
+        raise HTTPException(503, "We can't send more emails today. Please try again tomorrow.")
+    if (db.contar_correos(3600, email) >= MAX_CORREOS_HORA_POR_CORREO
+            or db.contar_correos(86400, email) >= MAX_CORREOS_DIA_POR_CORREO):
+        return
+    nota_usuario = (f"Your username is {html_mod.escape(usuario)}." if usuario else "")
+    if proposito == "signup":
+        token = db.crear_token_correo(email, "signup", MINUTOS_ENLACE_ALTA)
+        enlace = f"{APP_URL}/create-account#t={token}"
+        asunto = f"Confirm your email for {APP_NOMBRE}"
+        texto, html = _plantilla(
+            "Confirm your email", f"Open this link to choose your username and password for "
+            f"{APP_NOMBRE}. It works once and expires in {MINUTOS_ENLACE_ALTA} minutes.",
+            "Create my account", enlace,
+            "If you didn't ask for this, ignore this email: nothing will be created.")
+    else:
+        token = db.crear_token_correo(email, "reset", MINUTOS_ENLACE_CLAVE)
+        enlace = f"{APP_URL}/reset-password#t={token}"
+        if ya_tiene_cuenta:
+            asunto = f"You already have an account on {APP_NOMBRE}"
+            texto, html = _plantilla(
+                "You already have an account",
+                "Someone (hopefully you) tried to sign up with this email, but it already has an "
+                f"account. {nota_usuario} If you forgot your password, you can set a new one. "
+                f"The link expires in {MINUTOS_ENLACE_CLAVE} minutes.",
+                "Set a new password", enlace,
+                "If it wasn't you, ignore this email: your account is unchanged.")
+        else:
+            asunto = f"Reset your {APP_NOMBRE} password"
+            texto, html = _plantilla(
+                "Reset your password",
+                f"{nota_usuario} Open this link to choose a new password. It works once and expires in "
+                f"{MINUTOS_ENLACE_CLAVE} minutes. Signing in with the new password will close your "
+                "other sessions.",
+                "Set a new password", enlace,
+                "If you didn't ask for this, ignore this email: your password stays the same.")
+    try:
+        correo.enviar(email, asunto, texto, html, APP_NOMBRE)
+    except correo.CorreoNoDisponible:
+        raise HTTPException(503, "We couldn't send the email right now. "
+                                 "Please try again in a few minutes.")
+
+
+def _email_de(payload: dict) -> str:
+    email = str(payload.get("email") or "").strip().lower()
+    if not core.email_valido(email):
+        raise HTTPException(400, "That doesn't look like a valid email address.")
+    return email
+
+
+def _entrar(respuesta: Response, uid: int) -> None:
+    _poner_cookie(respuesta, db.create_session(uid, DIAS_DE_SESION))
+    respuesta.set_cookie(COOKIE_DISPOSITIVO, _cookie_dispositivo(uid),
+                         max_age=DIAS_DISPOSITIVO * 86400, httponly=True,
+                         samesite="lax", secure=COOKIE_SEGURA, path="/api/auth/login")
+
+
+@app.post("/api/auth/register")
+def registrarse(peticion: Request, payload: dict = Body(...)) -> dict:
+    """Paso 1: solo el correo. La respuesta es la misma tenga cuenta o no."""
+    if not _registro_disponible():
+        raise HTTPException(503, "Sign-up isn't available right now.")
+    if _reservar_intento("alta", _ip(peticion)) is None:
+        raise HTTPException(429, "Too many requests. Please try again later.")
+    email = _email_de(payload)
+    db.purgar_tokens_correo()
+    existente = db.find_user_by_email(email)
+    if existente is None:
+        _mandar_enlace(email, "signup")
+    elif existente.get("status") == "active":
+        # mismo coste que un alta nueva (un correo), así el tiempo de respuesta
+        # tampoco delata qué correos tienen cuenta
+        _mandar_enlace(email, "reset", ya_tiene_cuenta=True, usuario=existente.get("username") or "")
+    return {"ok": True, "message": RESPUESTA_GENERICA}
+
+
+@app.post("/api/auth/link")
+def ver_enlace(peticion: Request, payload: dict = Body(...)) -> dict:
+    """¿Sigue valiendo este enlace? Para avisar antes de rellenar el formulario.
+    No lo gasta."""
+    if _reservar_intento("enlace", _ip(peticion)) is None:
+        raise HTTPException(429, "Too many requests. Please try again later.")
+    proposito = payload.get("purpose")
+    if proposito not in ("signup", "reset"):
+        raise HTTPException(400, "Invalid link.")
+    email = db.ver_token_correo(str(payload.get("token") or ""), proposito)
+    usuario = ""
+    if email and proposito == "reset":     # quien tiene el enlace es el dueño del buzón
+        usuario = (db.find_user_by_email(email) or {}).get("username") or ""
+    return {"valid": bool(email), "email": email or "", "username": usuario}
+
+
+@app.post("/api/auth/register/complete")
+def completar_alta(peticion: Request, respuesta: Response, payload: dict = Body(...)) -> dict:
+    """Paso 2: con el enlace del correo, elige usuario y contraseña. Entra directo."""
+    if _reservar_intento("enlace", _ip(peticion)) is None:
+        raise HTTPException(429, "Too many requests. Please try again later.")
+    token = str(payload.get("token") or "")
+    email = db.ver_token_correo(token, "signup")
+    if not email:
+        raise HTTPException(400, "This link has expired or was already used. "
+                                 "Request a new one from the sign-up page.")
+    if db.find_user_by_email(email):
+        raise HTTPException(400, "There's already an account with this email. "
+                                 "Sign in, or reset your password.")
+    try:
+        uid = db.create_user(
+            username=str(payload.get("username") or ""),
+            password=str(payload.get("password") or ""),
+            email=email, role="user", status="active",
+            nombre=str(payload.get("nombre") or ""))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    # create_user ya impide dos cuentas con el mismo correo; gastar el enlace
+    # (y anular los demás de alta de ese correo) cierra la puerta a reusarlo
+    db.gastar_token_correo(token, "signup")
+    db.anular_tokens_correo(email, "signup")
+    _entrar(respuesta, uid)
+    return {"ok": True, "necesita_key": True}
+
+
+def _mandar_en_segundo_plano(email: str, usuario: str) -> None:
+    try:
+        _mandar_enlace(email, "reset", usuario=usuario)
+    except HTTPException as exc:
+        logging.getLogger("correo").error("No se mandó el enlace de restablecer: %s", exc.detail)
+
+
+@app.post("/api/auth/password/forgot")
+def olvide_mi_clave(peticion: Request, payload: dict = Body(...)) -> dict:
+    """Manda el enlace de restablecer si hay una cuenta activa con ese correo.
+
+    El envío va en segundo plano y la respuesta es siempre la misma: si se
+    esperara a Brevo solo cuando la cuenta existe, el tiempo de respuesta
+    diría qué correos están dados de alta.
+    """
+    if not _registro_disponible():
+        raise HTTPException(503, "Password reset isn't available right now.")
+    if _reservar_intento("olvido", _ip(peticion)) is None:
+        raise HTTPException(429, "Too many requests. Please try again later.")
+    email = _email_de(payload)
+    db.purgar_tokens_correo()
+    fila = db.find_user_by_email(email)
+    if fila and fila.get("status") == "active":
+        threading.Thread(target=_mandar_en_segundo_plano,
+                         args=(email, fila.get("username") or ""), daemon=True).start()
+    return {"ok": True, "message": RESPUESTA_GENERICA}
+
+
+@app.post("/api/auth/password/reset")
+def restablecer_clave(peticion: Request, respuesta: Response, payload: dict = Body(...)) -> dict:
+    """Con el enlace del correo, pone una contraseña nueva. Cierra todas las
+    sesiones abiertas de esa cuenta y abre una nueva aquí."""
+    if _reservar_intento("enlace", _ip(peticion)) is None:
+        raise HTTPException(429, "Too many requests. Please try again later.")
+    token = str(payload.get("token") or "")
+    clave = str(payload.get("password") or "")
+    caducado = "This link has expired or was already used. Request a new one."
+    email = db.ver_token_correo(token, "reset")
+    fila = db.find_user_by_email(email) if email else None
+    if not fila or fila.get("status") != "active":
+        raise HTTPException(400, caducado)
+    problema = core.problema_con_la_clave(clave)
+    if problema:
+        raise HTTPException(400, problema)
+    if not db.gastar_token_correo(token, "reset"):
+        raise HTTPException(400, caducado)
+    db.set_password(fila["id"], clave)          # cierra todas sus sesiones
+    db.anular_tokens_correo(email, "reset")
+    _olvidar_intentos("login_cuenta", f"id:{fila['id']}")
+    _entrar(respuesta, fila["id"])
+    return {"ok": True}
 
 
 @app.post("/api/auth/login")
@@ -409,7 +637,7 @@ def login(peticion: Request, respuesta: Response, payload: dict = Body(...)) -> 
     login_pedido = str(payload.get("login") or "").strip()[:200]
     marca_ip = _reservar_intento("login", ip)
     if marca_ip is None:
-        raise HTTPException(429, "Demasiados intentos. Prueba dentro de un rato.")
+        raise HTTPException(429, "Too many attempts. Please try again later.")
     fila = db.find_user(login_pedido)
     # La cuenta se identifica por su id: entrar alternando usuario y correo no
     # debe duplicar los intentos permitidos. Desde un aparato donde ya entraste
@@ -421,7 +649,7 @@ def login(peticion: Request, respuesta: Response, payload: dict = Body(...)) -> 
         accion = "login_cuenta"
         quien = f"id:{fila['id']}" if fila else "login:" + login_pedido.lower()
     if _reservar_intento(accion, quien) is None:
-        raise HTTPException(429, "Demasiados intentos. Prueba dentro de un rato.")
+        raise HTTPException(429, "Too many attempts. Please try again later.")
 
     clave = str(payload.get("password") or "")
     if len(clave) > core.LONGITUD_MAXIMA_CLAVE:
@@ -433,21 +661,18 @@ def login(peticion: Request, respuesta: Response, payload: dict = Body(...)) -> 
     correcta = core.verify_password(clave, guardado)
 
     if not fila or not correcta:
-        raise HTTPException(401, "Correo o contraseña incorrectos.")
+        raise HTTPException(401, "Wrong username, email or password.")
     if fila["status"] == "pending":
-        raise HTTPException(403, "Tu cuenta todavía está pendiente de aprobación.")
+        raise HTTPException(403, "Your account is still waiting for approval.")
     if fila["status"] == "blocked":
-        raise HTTPException(403, "Tu cuenta está bloqueada.")
+        raise HTTPException(403, "Your account is blocked.")
 
     # Entró bien: no cuenta este intento de la IP, pero sí los fallos de antes.
     # Si se borraran, quien tenga una cuenta podría probar 9 claves ajenas,
     # entrar con la suya para limpiar el contador, y repetir sin fin.
     _devolver_intento("login", ip, marca_ip)
     _olvidar_intentos(accion, quien)
-    respuesta.set_cookie(COOKIE_DISPOSITIVO, _cookie_dispositivo(fila["id"]),
-                         max_age=DIAS_DISPOSITIVO * 86400, httponly=True,
-                         samesite="lax", secure=COOKIE_SEGURA, path="/api/auth/login")
-    _poner_cookie(respuesta, db.create_session(fila["id"], DIAS_DE_SESION))
+    _entrar(respuesta, fila["id"])
     db.purge_expired_sessions()
     return {"ok": True, "role": fila["role"],
             "necesita_key": not (fila.get("gemini_api_key") or "")}
@@ -640,6 +865,15 @@ def index(peticion: Request) -> HTMLResponse:
 @app.get("/entrar", response_class=HTMLResponse)
 def pagina_login() -> HTMLResponse:
     return _pagina("login.html")
+
+
+@app.get("/signup", response_class=HTMLResponse)
+@app.get("/create-account", response_class=HTMLResponse)
+@app.get("/forgot-password", response_class=HTMLResponse)
+@app.get("/reset-password", response_class=HTMLResponse)
+def paginas_de_cuenta() -> HTMLResponse:
+    """Una sola página para los cuatro pasos; cada uno se elige por la ruta."""
+    return _pagina("account.html")
 
 
 @app.get("/bienvenida", response_class=HTMLResponse)

@@ -6,7 +6,7 @@
 
 # -*- coding: utf-8 -*-
 """
-lessons_data.py — Curso completo de Lira (método contrastivo estilo A. Ghio).
+lessons_data.py — Curso completo de Daily English Habit (método contrastivo estilo A. Ghio).
 
 Se aprende a HABLAR por EXPLICACIÓN clara (español, sin jerga, comparando con
 el español) + traducción paralela. Contenido 100% original; solo la metodología

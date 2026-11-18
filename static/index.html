@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Lira · Lector de Idiomas</title>
+<title>Daily English Habit</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23c9a86a'/%3E%3Ctext x='50' y='72' font-size='64' font-family='Georgia' text-anchor='middle' fill='%23241800'%3EL%3C/text%3E%3C/svg%3E" />
 <style>
   :root{
@@ -465,8 +465,8 @@
   <!-- ============ SIDEBAR ============ -->
   <aside class="sidebar">
     <div class="brand">
-      <div class="logo">L</div>
-      <div class="name">Lira<small>Language reader</small></div>
+      <div class="logo">D</div>
+      <div class="name">Daily English Habit<small>Read a little every day</small></div>
     </div>
     <nav class="nav">
       <button class="navbtn active" data-sec="reading" onclick="showSection('reading')">📖 Reading</button>
@@ -516,7 +516,7 @@
     <div class="reader-wrap" style="flex:1;">
       <div class="topbar">
         <div class="tt grow">
-          <h1 id="bookTitle">Lira</h1>
+          <h1 id="bookTitle">Daily English Habit</h1>
           <div class="sub" id="bookSub">Choose or add a book to begin</div>
           <div id="bookLevel" class="booklvl" style="display:none"></div>
         </div>
@@ -561,7 +561,7 @@
       </div>
       <div class="paper-scroll" id="paperScroll">
         <div class="emptystate" id="empty">
-          <div class="big">Welcome to Lira</div>
+          <div class="big">Welcome to Daily English Habit</div>
           <p>Add a PDF or EPUB from the sidebar. PDFs are converted to EPUB automatically.
           Then read aloud, translate, and build flashcards for your decks.</p>
         </div>
@@ -608,7 +608,7 @@
 <div id="learnOverlay" class="overlay" style="display:none">
   <div class="learn-panel">
     <div class="learn-head">
-      <div class="brand"><div class="logo">L</div><div class="name">Flashcards</div></div>
+      <div class="brand"><div class="logo">D</div><div class="name">Flashcards</div></div>
       <div class="tabs">
         <button class="tab active" data-t="repaso" onclick="learnTab('repaso')">Review</button>
         <button class="tab" data-t="palabras" onclick="learnTab('palabras')">Words</button>
@@ -682,7 +682,7 @@
 <div id="statsOverlay" class="overlay" style="display:none;padding:0">
   <div class="fullpanel">
     <div class="statshead">
-      <div class="brand"><div class="logo">L</div><div class="name">Statistics</div></div>
+      <div class="brand"><div class="logo">D</div><div class="name">Statistics</div></div>
       <div class="rangetoggle">
         <button id="rgWeek" class="tab active" onclick="setStatsRange('week')">Week</button>
         <button id="rgMonth" class="tab" onclick="setStatsRange('month')">Month</button>
@@ -737,7 +737,7 @@
 <div id="decksOverlay" class="overlay" style="display:none;padding:0">
   <div class="fullpanel" style="position:relative">
     <div class="statshead">
-      <div class="brand"><div class="logo">L</div><div class="name">Decks</div></div>
+      <div class="brand"><div class="logo">D</div><div class="name">Decks</div></div>
       <span id="deckBack" style="display:none"><button class="tab" onclick="deckList()">‹ Decks</button></span>
       <span class="grow" style="flex:1"></span>
       <span class="muted" id="deckBudget" style="font-size:12px"></span>
@@ -792,7 +792,7 @@
 <div id="catalogOverlay" class="overlay" style="display:none;padding:0">
   <div class="fullpanel" style="position:relative">
     <div class="statshead">
-      <div class="brand"><div class="logo">L</div><div class="name">Free reading by level</div></div>
+      <div class="brand"><div class="logo">D</div><div class="name">Free reading by level</div></div>
       <span class="grow" style="flex:1"></span>
       <button class="iconbtn" onclick="showSection('reading')" title="Close">✕</button>
     </div>
@@ -813,7 +813,7 @@
 <div id="writingOverlay" class="overlay" style="display:none;padding:0">
   <div class="fullpanel">
     <div class="statshead">
-      <div class="brand"><div class="logo">L</div><div class="name">Writing</div></div>
+      <div class="brand"><div class="logo">D</div><div class="name">Writing</div></div>
       <div class="tabs">
         <button class="tab active" data-w="new" onclick="writingTab('new')">New</button>
         <button class="tab" data-w="mine" onclick="writingTab('mine')">My writings</button>
@@ -930,7 +930,7 @@
 <div id="lessonsOverlay" class="overlay" style="display:none;padding:0">
   <div class="fullpanel">
     <div class="statshead">
-      <div class="brand"><div class="logo">L</div><div class="name">Lessons</div></div>
+      <div class="brand"><div class="logo">D</div><div class="name">Lessons</div></div>
       <div id="lessonTabs" style="display:flex;gap:6px;margin-left:20px">
         <button class="tab active" data-lv="map" onclick="lessonLevel('map')">🗺 Ruta</button>
         <button class="tab" data-lv="beginner" onclick="lessonLevel('beginner')">🟢 Beginner</button>
@@ -952,7 +952,7 @@
 <div id="testOverlay" class="overlay" style="display:none;padding:0">
   <div class="fullpanel">
     <div class="statshead">
-      <div class="brand"><div class="logo">L</div><div class="name">Level Test</div></div>
+      <div class="brand"><div class="logo">D</div><div class="name">Level Test</div></div>
       <span class="grow" style="flex:1"></span>
       <button class="iconbtn" onclick="showSection('reading')" title="Close">✕</button>
     </div>
@@ -1773,10 +1773,10 @@ async function addVocab(){
 async function exportAnki(){
   const st=document.getElementById("study");st.innerHTML='<div class="term">Anki</div><span class="muted">Generating audio and cards…</span>';
   try{const r=await fetch("/api/export/anki",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({deck_name:"Lira — Vocabulary",lang:S.bookLang||"en"})});
+      body:JSON.stringify({deck_name:"Daily English Habit — Vocabulary",lang:S.bookLang||"en"})});
     if(!r.ok)throw new Error((await r.json()).detail||r.statusText);
     const blob=await r.blob();const url=URL.createObjectURL(blob);
-    const a=document.createElement("a");a.href=url;a.download="lira_vocabulary.apkg";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+    const a=document.createElement("a");a.href=url;a.download="daily_english_habit_vocabulary.apkg";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
     st.innerHTML='<div class="term">Anki</div>Vocabulary exported. Open it in Anki.';
   }catch(e){st.textContent="Export error: "+e.message;}
 }

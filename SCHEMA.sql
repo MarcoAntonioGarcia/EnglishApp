@@ -337,6 +337,27 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
 
 -- ---------------------------------------------------------------------------
+-- Enlaces de un solo uso que se mandan por correo: crear la cuenta ('signup')
+-- y restablecer la contraseña ('reset'). Se guarda el SHA-256 del token, nunca
+-- el token: quien lea la base no puede usar los enlaces que encuentre.
+-- Las fechas las pone Python (texto 'AAAA-MM-DD HH:MM:SS', hora del servidor),
+-- igual en SQLite y en Postgres. La tabla sirve también de registro de envíos:
+-- los topes de correos por hora y por día se cuentan aquí, y sobreviven a que
+-- el servidor se duerma.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS email_tokens (
+    token_hash TEXT    PRIMARY KEY,
+    email      TEXT    NOT NULL,
+    purpose    TEXT    NOT NULL,              -- 'signup' | 'reset'
+    created_at TEXT    NOT NULL,
+    expires_at TEXT    NOT NULL,
+    used_at    TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_tokens_email ON email_tokens (email);
+CREATE INDEX IF NOT EXISTS idx_email_tokens_created ON email_tokens (created_at);
+
+-- ---------------------------------------------------------------------------
 -- chapter_done: capitulos que UN usuario ha terminado.
 -- Antes era una columna 'done' en chapters, que es contenido compartido: si
 -- alguien marcaba un capitulo como leido, se lo marcaba a todo el mundo. Mismo

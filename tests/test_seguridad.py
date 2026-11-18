@@ -9,28 +9,11 @@ import json
 import os
 import shutil
 import subprocess
-import sys
-import tempfile
 import unittest
 
-RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_TMP = tempfile.mkdtemp(prefix="lira-pruebas-")
-os.environ["APP_DB_PATH"] = os.path.join(_TMP, "pruebas.db")
-os.environ.pop("DATABASE_URL", None)          # jamás Postgres en las pruebas
-os.environ["TTS_SERVIDOR"] = "0"
-os.environ.pop("GEMINI_API_KEY", None)
-os.environ.pop("IP_DE_CABECERA", None)
-sys.path.insert(0, RAIZ)
-
-from fastapi.testclient import TestClient  # noqa: E402
-
-import webapp  # noqa: E402
+from _comun import RAIZ, TestClient, webapp
 
 CLAVE = "clave-de-prueba-123"
-
-
-def tearDownModule():
-    shutil.rmtree(_TMP, ignore_errors=True)
 
 
 def _usuario(nombre, rol="user"):
