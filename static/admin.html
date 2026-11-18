@@ -1,101 +1,95 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Usuarios · Daily English Habit</title>
+<title>Users · Daily English Habit</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a111e'/%3E%3Cpath d='M7 20a9 9 0 0 1 18 0' fill='none' stroke='%233ccfe6' stroke-width='2.6' stroke-linecap='round'/%3E%3Cpath d='M16 20l4.5-6' stroke='%23f3b54a' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='20' r='2' fill='%23e4ebf5'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/theme.css">
 <style>
-  :root{
-    --bg:#efe9df; --card:#fffdf9; --line:#e7e0d2; --ink:#2a2723; --muted:#8a8378;
-    --gold:#c9a86a; --accent:#2f6b5e; --danger:#b4453b;
-    --shadow:0 1px 3px rgba(40,33,20,.06),0 8px 24px rgba(40,33,20,.06);
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);padding:28px 20px;
-       font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
-  .caja{max-width:900px;margin:0 auto}
-  header{display:flex;align-items:baseline;justify-content:space-between;gap:14px;
-         flex-wrap:wrap;margin-bottom:20px}
-  h1{margin:0;font-size:22px;font-weight:600;letter-spacing:-.3px}
-  header a{color:var(--accent);font-size:13.5px;text-decoration:none}
-  header a:hover{text-decoration:underline}
-  .tarjeta{background:var(--card);border:1px solid var(--line);border-radius:14px;
-           box-shadow:var(--shadow);overflow:hidden}
+  body{margin:0;padding:28px 20px calc(28px + env(safe-area-inset-bottom,0px));font:15px/1.5 var(--ui)}
+  .caja{max-width:980px;margin:0 auto}
+  header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+  h1{margin:0;font-size:26px;font-weight:650;letter-spacing:-.02em}
+  h1 em{font-family:var(--book);font-style:italic;font-weight:500;color:var(--cyan-ink)}
+  header a{color:var(--ink-2);font-size:14px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;min-height:40px}
+  header a:hover{color:var(--ink)}
+  .tarjeta{background:var(--s1);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
   .scroll{overflow-x:auto}
-  table{width:100%;border-collapse:collapse;min-width:680px}
-  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;
-     color:var(--muted);padding:12px 14px;border-bottom:1px solid var(--line);font-weight:600}
-  td{padding:13px 14px;border-bottom:1px solid #f1ebdf;font-size:14px;vertical-align:middle}
+  table{width:100%;border-collapse:collapse;min-width:720px}
+  th{text-align:left;font-size:12.5px;color:var(--ink-3);padding:12px 14px;border-bottom:1px solid var(--line);font-weight:600}
+  td{padding:13px 14px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:middle}
   tr:last-child td{border-bottom:0}
+  tbody tr:hover td{background:rgba(255,255,255,.015)}
   .correo{font-weight:600}
-  .sub{color:var(--muted);font-size:12px}
-  .chip{display:inline-block;padding:2.5px 9px;border-radius:99px;font-size:11.5px;font-weight:600}
-  .pending{background:#fdf3dd;color:#8a6d1f}
-  .active{background:#eaf3f0;color:var(--accent)}
-  .blocked{background:#fdeeec;color:var(--danger)}
-  .admin{background:#efe6f6;color:#6b4d8f}
+  .sub{color:var(--ink-3);font-size:12.5px}
+  .sub.num{font-family:var(--num)}
+  code{font-family:var(--num);font-size:12.5px;background:var(--bg);border:1px solid var(--line-2);border-radius:5px;padding:1px 6px;color:var(--ink-2)}
+  .chip{display:inline-block;padding:2.5px 9px;border-radius:99px;font-size:12px;font-weight:600}
+  .pending{background:var(--amber-wash);color:var(--amber-ink)}
+  .active{background:var(--ok-wash);color:var(--ok)}
+  .blocked{background:var(--bad-wash);color:var(--bad)}
+  .admin{background:var(--blue-wash);color:var(--blue)}
   .acciones{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-  button{padding:6px 11px;border-radius:7px;font:inherit;font-size:12.5px;font-weight:600;
-         cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink)}
-  button:hover{background:#f7f2e8}
-  button.ok{background:var(--accent);color:#fff;border-color:var(--accent)}
-  button.mal{color:var(--danger);border-color:#f0cfca}
+  button{padding:7px 12px;min-height:34px;border-radius:8px;font:inherit;font-size:13px;font-weight:600;
+         cursor:pointer;border:1px solid var(--line-2);background:var(--s2);color:var(--ink)}
+  button:hover{background:var(--s3)}
+  button.ok{background:var(--cyan);color:var(--cyan-deep);border-color:var(--cyan)}
+  button.mal{color:var(--bad);border-color:rgba(255,122,114,.4);background:transparent}
+  button.mal:hover{background:var(--bad-wash)}
   button:disabled{opacity:.4;cursor:default}
-  .vacio{padding:34px 16px;text-align:center;color:var(--muted);font-size:14px}
-  .aviso{margin-bottom:16px;padding:10px 13px;border-radius:8px;font-size:13.5px;display:none}
-  .aviso.error{background:#fdeeec;border:1px solid #f0cfca;color:var(--danger);display:block}
-  .aviso.ok{background:#eaf3f0;border:1px solid #c8e0d8;color:var(--accent);display:block}
-  .crear{background:var(--card);border:1px solid var(--line);border-radius:14px;
-         box-shadow:var(--shadow);padding:18px;margin-bottom:18px}
-  .crear h2{margin:0 0 4px;font-size:16px;font-weight:600}
-  .crear p{margin:0 0 14px;color:var(--muted);font-size:13px}
-  .campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
-  .campos label{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-bottom:4px}
-  .campos input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;
-                font:inherit;font-size:14px;background:#fff;color:var(--ink)}
-  .campos input:focus{outline:2px solid var(--gold);outline-offset:-1px;border-color:var(--gold)}
+  .vacio{padding:34px 16px;text-align:center;color:var(--ink-3);font-size:14px}
+  .aviso{margin-bottom:16px;padding:10px 13px;border-radius:10px;font-size:14px;display:none}
+  .aviso.error{background:var(--bad-wash);border:1px solid rgba(255,122,114,.4);color:#ffc1bc;display:block}
+  .aviso.ok{background:var(--ok-wash);border:1px solid rgba(79,212,154,.4);color:#bff3da;display:block}
+  .crear{background:var(--s1);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px;margin-bottom:18px}
+  .crear h2{margin:0 0 4px;font-size:16px;font-weight:650}
+  .crear p{margin:0 0 14px;color:var(--ink-2);font-size:13.5px}
+  .campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+  .campos label{display:block;font-size:12.5px;color:var(--ink-2);font-weight:600;margin-bottom:5px}
+  .campos input{width:100%;padding:10px 11px;border:1px solid var(--line-2);border-radius:10px;
+                font:inherit;font-size:16px;background:var(--bg);color:var(--ink)}
+  .campos input::placeholder{color:var(--ink-3)}
+  .campos input:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 3px var(--cyan-wash)}
   .crear .pie2{margin:12px 0 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  .ficha{background:#f6f1e7;border:1px solid var(--line);border-radius:9px;padding:11px 13px;
-         margin-top:12px;font-size:13.5px;display:none}
+  .ficha{background:var(--bg);border:1px solid var(--cyan-line);border-radius:10px;padding:12px 14px;margin-top:12px;font-size:14px;display:none}
   .ficha.on{display:block}
-  .ficha code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#fff;
-              border:1px solid var(--line);border-radius:5px;padding:1px 6px}
 </style>
 </head>
-<body>
+<body class="deck-grid">
 <main class="caja">
   <header>
-    <h1>Usuarios</h1>
-    <a href="/">← Volver a la app</a>
+    <h1>People on <em>Daily English Habit</em></h1>
+    <a href="/">← Back to the app</a>
   </header>
 
   <div class="aviso" id="aviso" role="status"></div>
 
   <div class="crear">
-    <h2>Crear una cuenta</h2>
-    <p>Nace activa: si la creas tú, ya has decidido que esa persona entra.
-       La contraseña es temporal — pásasela y que la cambie desde ⚙ Ajustes.</p>
+    <h2>Create an account</h2>
+    <p>It starts active: if you create it, you've already decided this person gets in.
+       The password is temporary. Share it and ask them to change it in Settings.</p>
     <div class="campos">
       <div>
-        <label for="nuevoNombre">Nombre</label>
-        <input id="nuevoNombre" placeholder="Luis Pérez">
+        <label for="nuevoNombre">Name</label>
+        <input id="nuevoNombre" placeholder="Luis Perez">
       </div>
       <div>
-        <label for="nuevoUsuario">Usuario (para entrar)</label>
+        <label for="nuevoUsuario">Username (to sign in)</label>
         <input id="nuevoUsuario" placeholder="luis.perez" autocapitalize="none" spellcheck="false">
       </div>
       <div>
-        <label for="nuevaClave">Contraseña temporal</label>
-        <input id="nuevaClave" placeholder="mínimo 10 caracteres">
+        <label for="nuevaClave">Temporary password</label>
+        <input id="nuevaClave" placeholder="at least 10 characters">
       </div>
       <div>
-        <label for="nuevoCorreo">Correo (opcional)</label>
-        <input id="nuevoCorreo" placeholder="no se usa para nada" autocapitalize="none">
+        <label for="nuevoCorreo">Email (optional)</label>
+        <input id="nuevoCorreo" placeholder="used only for password resets" autocapitalize="none">
       </div>
     </div>
     <div class="pie2">
-      <button class="ok" id="btnCrear">Crear cuenta</button>
-      <button id="btnSugerir" type="button">Sugerir contraseña</button>
+      <button class="ok" id="btnCrear">Create account</button>
+      <button id="btnSugerir" type="button">Suggest a password</button>
       <span class="sub" id="crearMsg"></span>
     </div>
     <div class="ficha" id="ficha"></div>
@@ -104,15 +98,16 @@
   <div class="tarjeta">
     <div class="scroll"><table>
       <thead><tr>
-        <th>Persona</th><th>Estado</th><th>Sesión</th><th>Clave IA</th><th>Alta</th>
-        <th style="text-align:right">Acciones</th>
+        <th>Person</th><th>Status</th><th>Session</th><th>AI key</th><th>Joined</th>
+        <th style="text-align:right">Actions</th>
       </tr></thead>
       <tbody id="filas"></tbody>
     </table></div>
-    <div class="vacio" id="vacio" hidden>Todavía no hay nadie más registrado.</div>
+    <div class="vacio" id="vacio" hidden>Nobody else has signed up yet.</div>
   </div>
 </main>
 
+<script src="/static/ui.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 let yo = null;
@@ -126,7 +121,7 @@ const esc = s => String(s == null ? "" : s)
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
   .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
-const ETIQUETA = {pending:"Pendiente", active:"Activo", blocked:"Bloqueado"};
+const ETIQUETA = {pending:"Pending", active:"Active", blocked:"Blocked"};
 
 function decir(texto, tipo){
   const a = $("#aviso");
@@ -142,7 +137,7 @@ async function llamar(url, cuerpo){
     body: JSON.stringify(cuerpo),
   });
   const d = await r.json().catch(() => ({}));
-  if(!r.ok) throw new Error(d.detail || "No se pudo completar.");
+  if(!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Couldn't complete it.");
   return d;
 }
 
@@ -150,14 +145,14 @@ function acciones(u){
   const soyYo = yo && u.id === yo.id;
   const b = [];
   if(u.status === "pending")
-    b.push(`<button class="ok" data-a="active" data-id="${u.id}">Aprobar</button>`);
+    b.push(`<button class="ok" data-a="active" data-id="${u.id}">Approve</button>`);
   if(u.status === "active" && !soyYo)
-    b.push(`<button class="mal" data-a="blocked" data-id="${u.id}">Bloquear</button>`);
+    b.push(`<button class="mal" data-a="blocked" data-id="${u.id}">Block</button>`);
   if(u.status === "blocked")
-    b.push(`<button class="ok" data-a="active" data-id="${u.id}">Reactivar</button>`);
-  if(u.sesiones) b.push(`<button class="mal" data-a="cerrar" data-id="${u.id}">Cerrar sesión</button>`);
-  b.push(`<button data-a="nombre" data-id="${u.id}">Renombrar</button>`);
-  b.push(`<button data-a="clave" data-id="${u.id}">Resetear contraseña</button>`);
+    b.push(`<button class="ok" data-a="active" data-id="${u.id}">Reactivate</button>`);
+  if(u.sesiones) b.push(`<button class="mal" data-a="cerrar" data-id="${u.id}">Sign out</button>`);
+  b.push(`<button data-a="nombre" data-id="${u.id}">Rename</button>`);
+  b.push(`<button data-a="clave" data-id="${u.id}">Reset password</button>`);
   return b.join("");
 }
 
@@ -167,16 +162,16 @@ function pintar(usuarios){
       <td>
         <div class="correo">${esc(u.nombre || u.username)}</div>
         <div class="sub">
-          ${u.role === "admin" ? '<span class="chip admin">Administrador</span> ' : ""}
-          entra como <code>${esc(u.username)}</code>
+          ${u.role === "admin" ? '<span class="chip admin">Admin</span> ' : ""}
+          signs in as <code>${esc(u.username)}</code>
         </div>
       </td>
       <td><span class="chip ${u.status}">${ETIQUETA[u.status] || u.status}</span></td>
       <td class="sub">${u.sesiones
-        ? "dentro desde " + esc((u.sesion_desde || "").slice(5, 16))
-        : "fuera"}</td>
+        ? "in since " + esc((u.sesion_desde || "").slice(5, 16))
+        : "signed out"}</td>
       <td class="sub">${esc(u.tiene_clave_gemini ? u.pista_clave_gemini : "—")}</td>
-      <td class="sub">${esc((u.created_at || "").slice(0, 10))}</td>
+      <td class="sub num">${esc((u.created_at || "").slice(0, 10))}</td>
       <td><div class="acciones">${acciones(u)}</div></td>
     </tr>`).join("");
   $("#vacio").hidden = usuarios.length > 1;
@@ -185,7 +180,7 @@ function pintar(usuarios){
 async function cargar(){
   const r = await fetch("/api/admin/users");
   if(r.status === 401) return location.href = "/entrar";
-  if(!r.ok) return decir("No se pudo cargar la lista.", "error");
+  if(!r.ok) return decir("Couldn't load the list.", "error");
   pintar(await r.json());
 }
 
@@ -197,31 +192,30 @@ $("#filas").addEventListener("click", async e => {
   try{
     if(b.dataset.a === "cerrar"){
       const d = await llamar(`/api/admin/users/${id}/sesiones/cerrar`, {});
-      decir("Sesiones cerradas: " + d.cerradas + ". Tendrá que volver a entrar.", "ok");
+      decir("Sessions closed: " + d.cerradas + ". They will need to sign in again.", "ok");
       await cargar();
       return;
     }
     if(b.dataset.a === "nombre"){
       const fila = (await (await fetch("/api/admin/users")).json()).find(x => x.id === id) || {};
-      const nombre = prompt("Nombre visible dentro de la app:", fila.nombre || "");
+      const nombre = await uiPrompt("The name shown inside the app.", fila.nombre || "", {title:"Display name", ok:"Next"});
       if(nombre === null) return;
-      const usuario = prompt("Usuario con el que entra (ojo: hay que avisarle):",
-                             fila.username || "");
+      const usuario = await uiPrompt("The username they sign in with. If you change it, tell them.",
+                             fila.username || "", {title:"Username", ok:"Save"});
       if(usuario === null) return;
       await llamar(`/api/admin/users/${id}/identidad`, {nombre, username: usuario});
-      decir("Renombrado. Avísale del usuario nuevo si lo cambiaste.", "ok");
+      decir("Renamed. Tell them their new username if you changed it.", "ok");
       await cargar();
       return;
     }
     if(b.dataset.a === "clave"){
-      const clave = prompt("Contraseña nueva para este usuario (mínimo 10 caracteres).\n" +
-                           "Se le cerrarán las sesiones abiertas.");
+      const clave = await uiPrompt("At least 10 characters. Their open sessions will be closed.", "", {title:"New password", ok:"Reset password"});
       if(clave === null) return;
       await llamar(`/api/admin/users/${id}/password`, {password: clave});
-      decir("Contraseña cambiada y sesiones cerradas.", "ok");
+      decir("Password changed and sessions closed.", "ok");
     }else{
       await llamar(`/api/admin/users/${id}/status`, {status: b.dataset.a});
-      decir("Hecho.", "ok");
+      decir("Done.", "ok");
     }
     await cargar();
   }catch(err){
@@ -254,17 +248,17 @@ $("#btnCrear").onclick = async () => {
       nombre: $("#nuevoNombre").value.trim(),
       email: $("#nuevoCorreo").value.trim()});
     // se muestran los datos UNA vez, para poder copiarlos y pasarlos
-    ficha.innerHTML = "Cuenta creada. Pásale estos datos:<br><br>" +
-      "Usuario: <code>" + esc(d.username) + "</code><br>" +
-      "Contraseña: <code>" + esc(clave) + "</code>" +
-      "<br><br><span class=\"sub\">No se vuelven a mostrar. " +
-      "Si se pierde la contraseña, resetéala desde la tabla.</span>";
+    ficha.innerHTML = "Account created. Share these details:<br><br>" +
+      "Username: <code>" + esc(d.username) + "</code><br>" +
+      "Password: <code>" + esc(clave) + "</code>" +
+      "<br><br><span class=\"sub\">They won't be shown again. " +
+      "If the password gets lost, reset it from the table.</span>";
     ficha.className = "ficha on";
     ["nuevoNombre","nuevoUsuario","nuevaClave","nuevoCorreo"].forEach(i => $("#"+i).value = "");
     await cargar();
   }catch(err){
     m.textContent = err.message;
-    m.style.color = "var(--danger)";
+    m.style.color = "var(--bad)";
   }finally{
     b.disabled = false;
   }

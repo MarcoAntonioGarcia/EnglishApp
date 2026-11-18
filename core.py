@@ -87,8 +87,8 @@ UNA_SESION_POR_USUARIO = True
 # Voces neurales Piper (más humanas). value 'piper:<modelo>'. Solo se listan las
 # que tengan su .onnx descargado en assets/piper/.
 _PIPER_MODELS = {
-    "en_US-amy-medium": {"display": "Amy · voz neural", "accent": "🇺🇸 femenina"},
-    "en_US-ryan-high": {"display": "Ryan · voz neural", "accent": "🇺🇸 masculina"},
+    "en_US-amy-medium": {"display": "Amy · neural voice", "accent": "🇺🇸 female"},
+    "en_US-ryan-high": {"display": "Ryan · neural voice", "accent": "🇺🇸 male"},
 }
 
 # Modelo Gemini. gemini-flash-lite-latest: cuota diaria del free tier mucho mayor
@@ -196,10 +196,10 @@ def ai_status() -> dict:
 
 
 COMO_SACAR_LA_KEY = [
-    "Entra en aistudio.google.com/apikey con tu cuenta de Google.",
-    "Pulsa «Create API key». Si te pide un proyecto, acepta el que te ofrece.",
-    "Copia la clave entera, sin espacios por delante ni por detrás.",
-    "Pégala aquí abajo y guarda: la comprobamos al momento contra Google.",
+    "Go to aistudio.google.com/apikey and sign in with your Google account.",
+    "Click \"Create API key\". If it asks for a project, accept the one it suggests.",
+    "Copy the whole key, with no spaces before or after it.",
+    "Paste it below and save: we'll check it with Google right away.",
 ]
 
 
@@ -219,7 +219,7 @@ def probar_api_key(key: str) -> tuple[str, str]:
     """
     key = (key or "").strip()
     if not key:
-        return "invalida", "No has pegado ninguna clave."
+        return "invalida", "You didn't paste a key."
     try:
         from google import genai
         from google.genai import types
@@ -233,8 +233,8 @@ def probar_api_key(key: str) -> tuple[str, str]:
         bajo = msg.lower()
         if ("api_key_invalid" in bajo or "api key not valid" in bajo
                 or "permission_denied" in bajo or "unauthenticated" in bajo):
-            return "invalida", ("Google dice que esa clave no es válida. "
-                                "Comprueba que la copiaste entera.")
+            return "invalida", ("Google says this key isn't valid. "
+                                "Check that you copied all of it.")
         if "resource_exhausted" in bajo or "quota" in bajo:
             # la clave es buena; solo se ha quedado sin cuota por hoy
             return "ok", ""
@@ -541,11 +541,11 @@ def verify_password(plain: str, stored: str) -> bool:
 def problema_con_la_clave(plain: str) -> str:
     """Mensaje de error si la contraseña no vale, o cadena vacía si vale."""
     if len(plain or "") < LONGITUD_MINIMA_CLAVE:
-        return f"La contraseña debe tener al menos {LONGITUD_MINIMA_CLAVE} caracteres."
+        return f"Your password must be at least {LONGITUD_MINIMA_CLAVE} characters long."
     if len(plain) > LONGITUD_MAXIMA_CLAVE:
-        return f"La contraseña puede tener como mucho {LONGITUD_MAXIMA_CLAVE} caracteres."
+        return f"Your password can be at most {LONGITUD_MAXIMA_CLAVE} characters long."
     if plain.strip() != plain:
-        return "La contraseña no puede empezar ni acabar con espacios."
+        return "Your password can't start or end with a space."
     return ""
 
 
@@ -570,9 +570,9 @@ def problema_con_el_nombre(nombre: str) -> str:
     """
     nombre = (nombre or "").strip()
     if len(nombre) > LARGO_MAXIMO_NOMBRE:
-        return f"El nombre no puede pasar de {LARGO_MAXIMO_NOMBRE} caracteres."
+        return f"The name can't be longer than {LARGO_MAXIMO_NOMBRE} characters."
     if any(ch in nombre for ch in "<>"):
-        return "El nombre no puede llevar los signos < ni >."
+        return "The name can't contain < or >."
     return ""
 
 
@@ -580,14 +580,14 @@ def problema_con_el_usuario(nombre: str) -> str:
     """Mensaje de error si el nombre no vale, o cadena vacia si vale."""
     nombre = (nombre or "").strip()
     if not nombre:
-        return "Hace falta un nombre de usuario."
+        return "Please choose a username."
     if len(nombre) < LONGITUD_MINIMA_USUARIO:
-        return f"El nombre debe tener al menos {LONGITUD_MINIMA_USUARIO} caracteres."
+        return f"Your username must be at least {LONGITUD_MINIMA_USUARIO} characters long."
     if len(nombre) > 32:
-        return "El nombre no puede pasar de 32 caracteres."
+        return "Your username can't be longer than 32 characters."
     if not _RE_USUARIO.match(nombre):
-        return ("Solo letras sin acentos, números, punto, guion y guion bajo. "
-                "Sin espacios.")
+        return ("Use only unaccented letters, numbers, periods (.), hyphens (-) "
+                "and underscores (_). No spaces.")
     return ""
 
 
@@ -749,12 +749,14 @@ class DatabaseManager:
             # la palabra y su ejemplo se conservan.
             self.conn.execute(
                 "UPDATE vocabulary SET translation='' WHERE translation LIKE '[modo simulado%' "
-                "OR translation LIKE '[IA sin configurar%' OR translation LIKE '[error de IA%' "
+                "OR translation LIKE '[IA sin configurar%' OR translation LIKE '[AI not set up%' "
+                "OR translation LIKE '[error de IA%' "
                 "OR translation LIKE '[respuesta vacía%'"
             )
             self.conn.execute(
                 "DELETE FROM translations WHERE result LIKE '[modo simulado%' "
-                "OR result LIKE '[IA sin configurar%' OR result LIKE '[error de IA%'"
+                "OR result LIKE '[IA sin configurar%' OR result LIKE '[AI not set up%' "
+                "OR result LIKE '[error de IA%'"
             )
             # Los libros guardan la ruta ABSOLUTA de su .epub. Si mueves la
             # carpeta del proyecto, esas rutas apuntan al sitio viejo: volver a
@@ -1256,7 +1258,7 @@ class DatabaseManager:
             raise ValueError(problema)
         email = (email or "").strip()
         if email and not email_valido(email):
-            raise ValueError("Ese correo no tiene un formato válido.")
+            raise ValueError("That doesn't look like a valid email address.")
         with self._lock:
             # el nombre no distingue mayusculas: 'Luis' y 'luis' serian la misma
             # persona intentando entrar y fallando sin entender por que
@@ -1265,10 +1267,10 @@ class DatabaseManager:
             ya = self.conn.execute(
                 "SELECT 1 FROM users WHERE lower(username) = lower(?)", (username,)).fetchone()
             if ya:
-                raise ValueError(f"Ya existe un usuario «{username}».")
+                raise ValueError(f"The username \"{username}\" is already taken.")
             if email and self.conn.execute(
                     "SELECT 1 FROM users WHERE lower(email) = lower(?)", (email,)).fetchone():
-                raise ValueError("Ya hay una cuenta con ese correo.")
+                raise ValueError("There's already an account with this email.")
             cur = self.conn.execute(
                 "INSERT INTO users (username, email, password_hash, role, status, nombre) "
                 "VALUES (?,?,?,?,?,?)",
@@ -1309,7 +1311,7 @@ class DatabaseManager:
                     "SELECT 1 FROM users WHERE username = ? AND id <> ?",
                     (username, user_id)).fetchone()
             if choca:
-                raise ValueError(f"Ya existe un usuario «{username}».")
+                raise ValueError(f"The username \"{username}\" is already taken.")
             campos.append("username = ?")
             valores.append(username)
         if nombre is not None:
@@ -1330,7 +1332,7 @@ class DatabaseManager:
     def set_user_status(self, user_id: int, status: str) -> bool:
         """'pending' | 'active' | 'blocked'. Bloquear cierra sus sesiones."""
         if status not in ("pending", "active", "blocked"):
-            raise ValueError("Estado desconocido: " + str(status))
+            raise ValueError("Unknown status: " + str(status))
         with self._lock:
             cur = self.conn.execute("UPDATE users SET status = ? WHERE id = ?",
                                     (status, user_id))
@@ -2470,7 +2472,7 @@ class DatabaseManager:
         # errores antiguos dominan el diagnóstico y apuntan al sitio equivocado
         total = sum(r["n"] for r in rows if r["category"] != "unclassified") or 1
         out = [{"category": r["category"],
-                "label": ERROR_CATEGORIES.get(r["category"], "Otros"),
+                "label": ERROR_CATEGORIES.get(r["category"], "Other"),
                 "n": r["n"],
                 "pct": 0 if r["category"] == "unclassified" else round(r["n"] * 100 / total),
                 "last_seen": r["last_seen"]} for r in rows]
@@ -2820,7 +2822,7 @@ def download_epub(url: str, dest_path: str, timeout: int = 60) -> int:
     with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
         data = resp.read()
     if len(data) < 1000 or not data.startswith(b"PK"):
-        raise RuntimeError("La descarga no es un EPUB válido.")
+        raise RuntimeError("The download isn't a valid EPUB.")
     with open(dest_path, "wb") as fh:
         fh.write(data)
     return len(data)
@@ -2987,7 +2989,7 @@ class PdfConverter:
             if not block:
                 continue
             idx += 1
-            title = f"Sección {idx}"
+            title = f"Section {idx}"
             safe = html.escape(block)
             ch = epub.EpubHtml(title=title, file_name=f"sec_{idx}.xhtml", lang="en")
             ch.content = f"<html><body><h2>{title}</h2><p>{safe}</p></body></html>"
@@ -2997,7 +2999,7 @@ class PdfConverter:
             toc.append(ch)
 
         if not epub_chapters:
-            raise RuntimeError("No se pudo extraer texto del PDF.")
+            raise RuntimeError("Couldn't extract any text from the PDF.")
 
         book.toc = tuple(toc)
         book.add_item(epub.EpubNcx())
@@ -3051,7 +3053,7 @@ class EpubParser:
             chapters.append({"title": ch_title, "sentences": sentences})
 
         if not chapters:
-            raise RuntimeError("El EPUB no contiene texto legible que se pueda extraer.")
+            raise RuntimeError("The EPUB has no readable text to extract.")
         return {"title": title, "author": author, "language": language, "chapters": chapters}
 
     @staticmethod
@@ -3132,7 +3134,7 @@ def ingest(source_path: str, db: DatabaseManager) -> int:
     elif ext == ".epub":
         final_path = source_path
     else:
-        raise RuntimeError(f"Formato no soportado: {ext} (usa .pdf o .epub)")
+        raise RuntimeError(f"Unsupported format: {ext} (use .pdf or .epub).")
     parsed = EpubParser().parse(final_path)
     return db.import_book(final_path, parsed)
 
@@ -3182,7 +3184,7 @@ def llm_generate(text: str, kind: str = "translation", target_lang: str = "es",
     prompt = _LLM_PROMPTS.get(kind, _LLM_PROMPTS["translation"]).format(lang=lang_name, text=text)
     if not api_key:
         time.sleep(0.3)
-        return f"[IA sin configurar — agrega tu API key en ⚙ Ajustes] ({kind}) {text}"
+        return f"[AI not set up — add your API key in ⚙ Settings] ({kind}) {text}"
     from google import genai
     from google.genai import types
     client = genai.Client(api_key=api_key)
@@ -3203,7 +3205,7 @@ def llm_generate(text: str, kind: str = "translation", target_lang: str = "es",
         resp = client.models.generate_content(model=model, contents=prompt, config=config)
         out = (resp.text or "").strip()
         if not out:
-            raise RuntimeError("respuesta vacía")
+            raise RuntimeError("empty response")
         return out
 
     # Reintenta y baja por la cadena de modelos. Lanza AIUnavailable si nada
@@ -3252,8 +3254,8 @@ _NOVELTY = {"albert", "bad", "bahh", "bells", "boing", "bubbles", "cellos", "goo
             "deranged", "hysterical", "pipe", "bruce", "junior", "ralph", "fred",
             "kathy", "princess", "reed", "rocko", "sandy", "shelley", "grandma",
             "grandpa", "flo", "eddy"}
-_ACCENT = {"en-us": "🇺🇸 EE.UU.", "en-gb": "🇬🇧 Británico", "en-au": "🇦🇺 Australiano",
-           "en-in": "🇮🇳 Indio", "en-ie": "🇮🇪 Irlandés", "en-za": "🇿🇦 Sudafricano"}
+_ACCENT = {"en-us": "🇺🇸 US", "en-gb": "🇬🇧 British", "en-au": "🇦🇺 Australian",
+           "en-in": "🇮🇳 Indian", "en-ie": "🇮🇪 Irish", "en-za": "🇿🇦 South African"}
 
 
 def _piper_voices(lang: str = "en") -> list[dict]:
@@ -3326,15 +3328,15 @@ def extract_text_from_upload(filename: str, data: bytes) -> str:
     if ext in (".png", ".jpg", ".jpeg", ".webp", ".heic", ".gif"):
         mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg"}.get(ext[1:], "image/" + ext[1:])
         return ocr_image(data, mime)
-    raise RuntimeError(f"Formato no soportado: {ext}")
+    raise RuntimeError(f"Unsupported format: {ext}.")
 
 
 def ocr_image(data: bytes, mime: str) -> str:
     """OCR de una foto (incl. manuscrito) con Gemini vision. Requiere GEMINI_API_KEY."""
     api_key = get_api_key()
     if not api_key:
-        raise AIUnavailable("Para leer fotos hace falta tu clave de Gemini. "
-                            "Ponla en ⚙ Ajustes.")
+        raise AIUnavailable("Reading photos needs your Gemini key. "
+                            "Add it in ⚙ Settings.")
     from google import genai
     from google.genai import types
     client = genai.Client(api_key=api_key)
@@ -3350,7 +3352,7 @@ def ocr_image(data: bytes, mime: str) -> str:
         )
         out = (resp.text or "").strip()
         if not out:
-            raise RuntimeError("no se leyó texto en la imagen")
+            raise RuntimeError("no text was found in the image")
         return out
 
     return _gemini_retry(_call)
@@ -3364,7 +3366,7 @@ def is_placeholder(text: str) -> bool:
     formatos de versiones anteriores, que siguen en la base.
     """
     t = (text or "").strip()
-    return t.startswith(("[modo simulado", "[IA sin configurar", "[error de IA",
+    return t.startswith(("[modo simulado", "[IA sin configurar", "[AI not set up", "[error de IA",
                          "[error de OCR", "[respuesta vacía", "[define GEMINI_API_KEY"))
 
 
@@ -3427,7 +3429,7 @@ def _gemini_retry(call, attempts: int = 3, prefer: str = ""):
                 if i < attempts - 1:
                     time.sleep(delay)
                     delay *= 2
-    raise AIUnavailable(_friendly_ai_error(last) if last else "La IA no respondió.")
+    raise AIUnavailable(_friendly_ai_error(last) if last else "The AI didn't respond. Please try again.")
 
 
 def _is_model_missing(exc: Exception) -> bool:
@@ -3439,14 +3441,14 @@ def _friendly_ai_error(exc: Exception) -> str:
     msg = str(exc)
     low = msg.lower()
     if "503" in low or "unavailable" in low or "overloaded" in low or "high demand" in low:
-        return ("El modelo está saturado ahora mismo (503). Ya lo reintenté varias "
-                "veces. Espera unos segundos y vuelve a intentarlo.")
+        return ("The AI model is overloaded right now (503). We already retried a few "
+                "times. Wait a few seconds and try again.")
     if "429" in low or "resource_exhausted" in low or "quota" in low:
-        return ("Se agotó la cuota gratuita por ahora (429). Espera un minuto y "
-                "vuelve a intentarlo.")
+        return ("The free AI quota has run out for now (429). Wait a minute and "
+                "try again.")
     if "api key" in low or "permission" in low or "401" in low or "403" in low:
-        return "La API key de Gemini no es válida o no tiene permisos."
-    return f"La IA falló: {msg}"
+        return "Your Gemini API key isn't valid or doesn't have permission."
+    return f"The AI request failed: {msg}"
 
 
 def _salvage_json(raw: str) -> dict | None:
@@ -3489,8 +3491,8 @@ def _gemini_json(prompt: str, max_tokens: int | None = None,
     """
     api_key = get_api_key()
     if not api_key:
-        raise AIUnavailable("No tienes clave de Gemini. Ponla en ⚙ Ajustes "
-                            "para activar la IA.")
+        raise AIUnavailable("You don't have a Gemini key yet. Add it in ⚙ Settings "
+                            "to turn on the AI.")
     from google import genai
     from google.genai import types
     client = genai.Client(api_key=api_key)
@@ -3502,7 +3504,7 @@ def _gemini_json(prompt: str, max_tokens: int | None = None,
         resp = client.models.generate_content(model=model, contents=prompt, config=cfg)
         raw = (resp.text or "").strip()
         if not raw:
-            raise RuntimeError("respuesta vacía")
+            raise RuntimeError("empty response")
         try:
             return json.loads(raw)
         except json.JSONDecodeError:
@@ -3524,20 +3526,20 @@ _STR = {"type": "STRING"}
 # Categorías CERRADAS de error. Son la clave de la pestaña "Errors": agrupando
 # por frase exacta nunca se repite nada, agrupando por tipo sí se ve el patrón.
 ERROR_CATEGORIES = {
-    "verb_tense": "Tiempos verbales",
-    "agreement": "Concordancia sujeto-verbo",
-    "preposition": "Preposiciones",
-    "article": "Artículos (a/an/the)",
-    "word_order": "Orden de las palabras",
-    "vocabulary": "Elección de palabra",
-    "plural": "Plurales y contables",
-    "pronoun": "Pronombres",
-    "spelling": "Ortografía",
-    "punctuation": "Puntuación",
-    "other": "Otros",
+    "verb_tense": "Verb tenses",
+    "agreement": "Subject-verb agreement",
+    "preposition": "Prepositions",
+    "article": "Articles (a/an/the)",
+    "word_order": "Word order",
+    "vocabulary": "Word choice",
+    "plural": "Plurals and countable nouns",
+    "pronoun": "Pronouns",
+    "spelling": "Spelling",
+    "punctuation": "Punctuation",
+    "other": "Other",
     # errores guardados antes de que existiera la clasificación: se muestran
     # aparte para que no falseen el diagnóstico
-    "unclassified": "Sin clasificar (anteriores)",
+    "unclassified": "Unclassified (older)",
 }
 
 WRITING_CHECK_SCHEMA = {
@@ -3731,7 +3733,7 @@ def explain_error(original: str, correction: str, note: str = "",
     leería en una lista de 36.
     """
     if not original or not correction:
-        raise AIUnavailable("Ese error no tiene datos suficientes.")
+        raise AIUnavailable("That mistake doesn't have enough data.")
     lvl = level if level in CEFR_LEVELS else "B1"
     prompt = (
         "A Spanish-speaking English student made this mistake:\n"
@@ -3754,7 +3756,7 @@ def explain_error(original: str, correction: str, note: str = "",
     data = _gemini_json(prompt, max_tokens=2048, schema=ERROR_MINI_SCHEMA,
                         prefer=GEMINI_MODEL_QUALITY)
     if not isinstance(data, dict) or not data.get("rule"):
-        raise AIUnavailable("La IA no devolvió una explicación utilizable.")
+        raise AIUnavailable("The AI didn't return a usable explanation. Please try again.")
     for key in ("examples", "drill"):
         if not isinstance(data.get(key), list):
             data[key] = []
@@ -3770,7 +3772,7 @@ def generate_error_lesson(category_label: str, errors: list[dict],
     *no related with*» se queda.
     """
     if not errors:
-        raise AIUnavailable("No hay errores de ese tipo todavía.")
+        raise AIUnavailable("There are no mistakes of that type yet.")
     lvl = level if level in CEFR_LEVELS else "B1"
     listado = "\n".join(
         f'- escribió: "{e.get("original","")}" · correcto: "{e.get("correction","")}"'
@@ -3803,7 +3805,7 @@ def generate_error_lesson(category_label: str, errors: list[dict],
     data = _gemini_json(prompt, max_tokens=8192, schema=ERROR_LESSON_SCHEMA,
                         prefer=GEMINI_MODEL_QUALITY)
     if not isinstance(data, dict) or not data.get("explanation"):
-        raise AIUnavailable("La IA no devolvió una lección utilizable. Reintenta.")
+        raise AIUnavailable("The AI didn't return a usable lesson. Please try again.")
     for key in ("explanation", "rule", "fixes", "examples", "practice", "watch_out"):
         if not isinstance(data.get(key), list):
             data[key] = []
@@ -3842,7 +3844,7 @@ def writing_check(text: str) -> dict:
     data = _gemini_json(prompt, max_tokens=8192, schema=WRITING_CHECK_SCHEMA,
                         prefer=GEMINI_MODEL_QUALITY)
     if not isinstance(data, dict) or not data.get("corrected"):
-        raise AIUnavailable("La IA devolvió una respuesta que no pude interpretar. Reintenta.")
+        raise AIUnavailable("The AI returned a response we couldn't read. Please try again.")
     level = str(data.get("level") or "").strip().upper()
     data["level"] = level if level in CEFR_LEVELS else ""
     data.setdefault("assessment", "")
@@ -3865,15 +3867,15 @@ def writing_upgrade(text: str, level: str = "B2", from_level: str = "") -> str:
     )
     out = _plain_gemini(prompt, prefer=GEMINI_MODEL_QUALITY)
     if not out:
-        raise AIUnavailable("La IA devolvió una reescritura vacía. Reintenta.")
+        raise AIUnavailable("The AI returned an empty rewrite. Please try again.")
     return out
 
 
 def _plain_gemini(prompt: str, prefer: str = "") -> str:
     api_key = get_api_key()
     if not api_key:
-        raise AIUnavailable("No tienes clave de Gemini. Ponla en ⚙ Ajustes "
-                            "para activar la IA.")
+        raise AIUnavailable("You don't have a Gemini key yet. Add it in ⚙ Settings "
+                            "to turn on the AI.")
     from google import genai
     client = genai.Client(api_key=api_key)
 
@@ -3881,7 +3883,7 @@ def _plain_gemini(prompt: str, prefer: str = "") -> str:
         resp = client.models.generate_content(model=model, contents=prompt)
         out = (resp.text or "").strip()
         if not out:
-            raise RuntimeError("respuesta vacía")
+            raise RuntimeError("empty response")
         return out
 
     return _gemini_retry(_call, prefer=prefer)
@@ -4072,8 +4074,8 @@ def get_checkpoints(level: str) -> list[dict]:
         nums = [g.get("n", 0) for g in group]
         out.append({
             "id": f"cp-{level}-{k}", "level": level, "n": k,
-            "title": f"Repaso {k}",
-            "desc": f"Mini-test de las lecciones {nums[0]}–{nums[-1]}",
+            "title": f"Review {k}",
+            "desc": f"Mini-test on lessons {nums[0]}–{nums[-1]}",
             "after": nums[-1],                      # va después de esta lección (nº)
             "lesson_ids": [g["id"] for g in group],
         })

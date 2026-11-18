@@ -774,7 +774,7 @@ VOCAB_SITUACIONES = VOCAB + [c for c in PHRASES if (c[2] or "") in _ESCENARIOS]
 DECKS = [
     ("words", "Palabras esenciales", "Las palabras más usadas del inglés.", WORDS),
     ("vocab", "Situaciones",
-     "Palabras Y frases por escenario: tienda, restaurante, aeropuerto, hotel, teléfono, trabajo.",
+     "Palabras y frases por escenario: tienda, restaurante, aeropuerto, hotel, teléfono, trabajo.",
      VOCAB_SITUACIONES),
     ("phrases", "Frases cotidianas",
      "Frases sociales que sirven en cualquier conversación.", PHRASES_SOCIAL),

@@ -287,7 +287,7 @@ class SeguridadMiddleware:
         async def rechazar():
             nonlocal empezada
             empezada = True
-            cuerpo = '{"detail":"El archivo o el texto es demasiado grande."}'.encode()
+            cuerpo = '{"detail":"The file or text is too large."}'.encode()
             await send({"type": "http.response.start", "status": 413,
                         "headers": [(b"content-type", b"application/json"),
                                     (b"content-length", str(len(cuerpo)).encode()),
@@ -385,7 +385,7 @@ def current_admin(peticion: Request) -> int:
     if not u:
         raise HTTPException(401, "Please sign in.")
     if u.get("role") != "admin":
-        raise HTTPException(404, "No encontrado")
+        raise HTTPException(404, "Not Found")
     return u["id"]
 
 
@@ -708,14 +708,14 @@ def cambiar_mi_clave(peticion: Request, respuesta: Response,
     fila = db.find_user((db.get_user(uid) or {}).get("username") or "")
     if not fila or not core.verify_password(payload.get("current") or "",
                                            fila["password_hash"] or ""):
-        raise HTTPException(403, "La contraseña actual no es correcta.")
+        raise HTTPException(403, "Your current password is incorrect.")
     try:
         db.set_password(uid, payload.get("new") or "")
     except ValueError as e:
         raise HTTPException(400, str(e))
     _poner_cookie(respuesta, db.create_session(uid, DIAS_DE_SESION))
-    return {"ok": True, "mensaje": "Contraseña cambiada. Se han cerrado las "
-                                   "demás sesiones que tuvieras abiertas."}
+    return {"ok": True, "mensaje": "Password changed. Your other open sessions "
+                                   "have been signed out."}
 
 
 @app.post("/api/auth/gemini-key")
@@ -737,7 +737,7 @@ def guardar_mi_key(payload: dict = Body(...), uid: int = Depends(current_user)) 
     db.set_gemini_key(uid, key)
     core.usar_api_key(key)            # que surta efecto ya, sin volver a entrar
     return {"ok": True, "tiene_clave_gemini": True,
-            "aviso": ("Guardada, pero no hemos podido comprobarla contra Google: "
+            "aviso": ("Saved, but we couldn't check it with Google: "
                       + mensaje) if estado == "sin_comprobar" else ""}
 
 
@@ -765,8 +765,8 @@ def admin_crear_usuario(payload: dict = Body(...),
         raise HTTPException(400, str(e))
     ficha = db.get_user(nuevo) or {}
     return {"ok": True, "id": nuevo, "username": ficha.get("username"),
-            "mensaje": "Cuenta creada y activa. Pásale el usuario y la "
-                       "contraseña; podrá cambiarla desde Ajustes."}
+            "mensaje": "Account created and active. Share the username and "
+                       "password with them; they can change the password in Settings."}
 
 
 @app.get("/api/admin/users")
@@ -789,7 +789,7 @@ def admin_renombrar(user_id: int, payload: dict = Body(...),
                     uid: int = Depends(current_admin)) -> dict:
     """Cambia el usuario de entrada y/o el nombre visible de una cuenta."""
     if not db.get_user(user_id):
-        raise HTTPException(404, "No existe ese usuario.")
+        raise HTTPException(404, "That user doesn't exist.")
     try:
         db.set_user_identity(
             user_id,
@@ -805,17 +805,17 @@ def admin_cambiar_estado(user_id: int, payload: dict = Body(...),
                          uid: int = Depends(current_admin)) -> dict:
     estado = payload.get("status") or ""
     if user_id == uid and estado != "active":
-        raise HTTPException(400, "No puedes desactivar tu propia cuenta.")
+        raise HTTPException(400, "You can't deactivate your own account.")
     objetivo = db.get_user(user_id)
     if not objetivo:
-        raise HTTPException(404, "No existe ese usuario.")
+        raise HTTPException(404, "That user doesn't exist.")
     # dejar la plataforma sin ningún admin activo la volvería ingobernable
     if (objetivo["role"] == "admin" and estado != "active"
             and db.count_admins() <= 1):
-        raise HTTPException(400, "Es el único administrador activo que queda.")
+        raise HTTPException(400, "This is the only active admin left.")
     try:
         if not db.set_user_status(user_id, estado):
-            raise HTTPException(404, "No existe ese usuario.")
+            raise HTTPException(404, "That user doesn't exist.")
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"ok": True, "status": estado}
@@ -829,7 +829,7 @@ def admin_cerrar_sesiones(user_id: int, uid: int = Depends(current_admin)) -> di
     contraseña: las dos hacen más de lo que a veces se quiere.
     """
     if not db.get_user(user_id):
-        raise HTTPException(404, "No existe ese usuario.")
+        raise HTTPException(404, "That user doesn't exist.")
     return {"ok": True, "cerradas": db.cerrar_sesiones(user_id)}
 
 
@@ -843,7 +843,7 @@ def admin_resetear_clave(user_id: int, payload: dict = Body(...),
     simple y no cuesta nada. Cambiarla cierra las sesiones de esa persona.
     """
     if not db.get_user(user_id):
-        raise HTTPException(404, "No existe ese usuario.")
+        raise HTTPException(404, "That user doesn't exist.")
     try:
         db.set_password(user_id, payload.get("password") or "")
     except ValueError as e:
@@ -891,7 +891,7 @@ def pagina_admin(peticion: Request) -> HTMLResponse:
     if not u:
         return _pagina("login.html")
     if u.get("role") != "admin":
-        raise HTTPException(404, "No encontrado")
+        raise HTTPException(404, "Not Found")
     return _pagina("admin.html")
 
 
@@ -911,7 +911,7 @@ async def upload(file: UploadFile = File(...),
                  uid: int = Depends(current_admin)) -> dict:
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in (".pdf", ".epub"):
-        raise HTTPException(400, "Solo se aceptan archivos .pdf o .epub")
+        raise HTTPException(400, "Only .pdf or .epub files are accepted.")
     safe_name = _SAFE.sub("_", os.path.basename(file.filename or f"libro{ext}"))
     dest = os.path.join(core.LIBRARY_DIR, safe_name)
     with open(dest, "wb") as out:
@@ -919,7 +919,7 @@ async def upload(file: UploadFile = File(...),
     try:
         book_id = core.ingest(dest, db)  # convierte PDF->EPUB si hace falta
     except Exception as exc:
-        raise HTTPException(400, f"No se pudo procesar el archivo: {exc}")
+        raise HTTPException(400, f"Couldn't process the file: {exc}")
     book = db.get_book(book_id, user_id=uid)
     return {"book_id": book_id, **book}
 
@@ -937,9 +937,9 @@ def get_catalog(uid: int = Depends(current_user)) -> dict:
         libros.append({**item, "in_library": tengo})
     return {"books": libros,
             "levels": ["A2", "B1", "B2", "C1"],
-            "kinds": {"relato": "Relatos cortos", "historia": "Historias",
-                      "libro": "Libros completos",
-                      "ensayo": "Ensayo y no ficción"},
+            "kinds": {"relato": "Short stories", "historia": "Stories",
+                      "libro": "Full books",
+                      "ensayo": "Essays and non-fiction"},
             "avoid": [{"title": t, "why": w} for t, w in catalog.NOT_RECOMMENDED]}
 
 
@@ -948,19 +948,19 @@ def add_from_catalog(key: str, uid: int = Depends(current_admin)) -> dict:
     """Descarga el EPUB de Project Gutenberg y lo añade a tu biblioteca."""
     item = catalog.get(key)
     if not item:
-        raise HTTPException(404, "Esa lectura no está en el catálogo")
+        raise HTTPException(404, "That reading isn't in the catalog.")
     safe = _SAFE.sub("_", item["title"])[:60] + ".epub"
     dest = os.path.join(core.LIBRARY_DIR, safe)
     try:
         size = core.download_epub(item["url"], dest)
     except Exception as exc:
-        raise HTTPException(502, f"No se pudo descargar de Project Gutenberg: {exc}")
+        raise HTTPException(502, f"Couldn't download it from Project Gutenberg: {exc}")
     try:
         book_id = core.ingest(dest, db)
     except Exception as exc:
         if os.path.exists(dest):
             os.remove(dest)   # no dejar basura si el EPUB no se pudo procesar
-        raise HTTPException(400, f"Se descargó pero no se pudo procesar: {exc}")
+        raise HTTPException(400, f"It downloaded, but couldn't be processed: {exc}")
     stats = core.readability(db.book_sample_sentences(book_id))
     return {"book_id": book_id, "title": item["title"], "bytes": size,
             "measured_level": stats["level"], "catalog_level": item["level"]}
@@ -970,7 +970,7 @@ def add_from_catalog(key: str, uid: int = Depends(current_admin)) -> dict:
 def get_book(book_id: int, uid: int = Depends(current_user)) -> dict:
     book = db.get_book(book_id, user_id=uid)
     if book is None:
-        raise HTTPException(404, "Libro no encontrado")
+        raise HTTPException(404, "Book not found.")
     return book
 
 
@@ -979,7 +979,7 @@ def delete_book(book_id: int, uid: int = Depends(current_admin)) -> dict:
     """Borra un libro. El vocabulario guardado leyéndolo se conserva."""
     info = db.delete_book(book_id)
     if info is None:
-        raise HTTPException(404, "Libro no encontrado")
+        raise HTTPException(404, "Book not found.")
     # El archivo solo se borra si vive DENTRO de library/ (es la copia que hizo
     # la app al subirlo). Si lo ingeriste desde otra carpeta, ese archivo es
     # tuyo y no se toca.
@@ -1003,7 +1003,7 @@ def _exigir_libro(book_id: int, uid: int) -> None:
     ya filtra información sobre el catálogo privado.
     """
     if not db.puede_ver_libro(book_id, uid):
-        raise HTTPException(404, "Libro no encontrado")
+        raise HTTPException(404, "Book not found.")
 
 
 @app.post("/api/books/{book_id}/visibility")
@@ -1015,7 +1015,7 @@ def set_book_visibility(book_id: int, payload: dict = Body(...),
     deja la copia del admin intacta y lo retira de la biblioteca de los demás.
     """
     if not db.set_book_visible(book_id, bool(payload.get("visible", True))):
-        raise HTTPException(404, "Libro no encontrado")
+        raise HTTPException(404, "Book not found.")
     return {"ok": True, "visible": bool(payload.get("visible", True))}
 
 
@@ -1039,21 +1039,21 @@ def book_difficulty(book_id: int, uid: int = Depends(current_user)) -> dict:
     nivel no es un reto, es una frustración con pasos extra.
     """
     if db.get_book(book_id, user_id=uid) is None:
-        raise HTTPException(404, "Libro no encontrado")
+        raise HTTPException(404, "Book not found.")
     stats = core.readability(db.book_sample_sentences(book_id))
     yours = (db.last_test(user_id=uid) or {}).get("level") or ""
     gap = core.level_gap(stats["level"], yours) if yours else 0
     if not yours:
-        verdict = "Haz el test de nivel para comparar con el tuyo."
+        verdict = "Take the level test to compare it with your level."
     elif gap <= -1:
-        verdict = "Por debajo de tu nivel: lectura cómoda, buena para coger ritmo."
+        verdict = "Below your level: an easy read, good for building momentum."
     elif gap == 0:
-        verdict = "Justo en tu nivel. Ideal."
+        verdict = "Right at your level. Ideal."
     elif gap == 1:
-        verdict = "Un escalón por encima: te costará, pero es donde se aprende."
+        verdict = "One level above yours: it will be hard, but that's where you learn."
     else:
-        verdict = ("Dos o más escalones por encima de tu nivel. Vas a parar en cada "
-                   "frase; mejor dejarlo para más adelante.")
+        verdict = ("Two or more levels above yours. You'll stop at every "
+                   "sentence; better to save it for later.")
     return {**stats, "your_level": yours, "gap": gap, "verdict": verdict}
 
 
@@ -1061,7 +1061,7 @@ def book_difficulty(book_id: int, uid: int = Depends(current_user)) -> dict:
 def rename_book(book_id: int, payload: dict = Body(...), uid: int = Depends(current_admin)) -> dict:
     title = (payload.get("title") or "").strip()
     if not title:
-        raise HTTPException(400, "El título no puede estar vacío")
+        raise HTTPException(400, "The title can't be empty.")
     db.rename_book(book_id, title)
     return {"ok": True, "title": title}
 
@@ -1072,7 +1072,7 @@ def improve_index(book_id: int, uid: int = Depends(current_admin)) -> list[dict]
     No reordena el texto (eso rompería la lectura); mejora los nombres del índice."""
     book = db.get_book(book_id, user_id=uid)
     if book is None:
-        raise HTTPException(404, "Libro no encontrado")
+        raise HTTPException(404, "Book not found.")
     lang = "es"  # los títulos del índice, en español (idioma del usuario)
     toc = db.get_toc(book_id, user_id=uid)
     improved = 0
@@ -1102,7 +1102,7 @@ def get_chapter(book_id: int, idx: int, uid: int = Depends(current_user)) -> dic
     chapter = db.get_chapter(book_id, idx)
     # sin capítulo, el lector se quedaba en blanco sin decir por qué
     if not chapter.get("sentences") and chapter.get("title") is None:
-        raise HTTPException(404, "Ese capítulo no existe")
+        raise HTTPException(404, "That chapter doesn't exist.")
     return chapter
 
 
@@ -1143,13 +1143,13 @@ def llm(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
     kind = payload.get("kind", "translation")
     lang = payload.get("target_lang", "es")
     if not text:
-        raise HTTPException(400, "Falta 'text'")
+        raise HTTPException(400, "Please enter some text.")
     if len(text) > MAX_TEXTO_IA:
-        raise HTTPException(413, f"Selecciona menos texto (máximo {MAX_TEXTO_IA} caracteres).")
+        raise HTTPException(413, f"Please select less text (up to {MAX_TEXTO_IA} characters).")
     # solo los tipos y los idiomas que existen: cualquier otro valor iría tal
     # cual dentro del prompt y llenaría la caché compartida de basura
     if kind not in core.TIPOS_IA or lang not in core.IDIOMAS_IA:
-        raise HTTPException(400, "Petición de IA no válida.")
+        raise HTTPException(400, "Invalid AI request.")
     cached = db.get_cached_translation(text, lang, kind)
     if cached is not None:
         return {"result": cached, "cached": True}
@@ -1198,10 +1198,10 @@ def set_config(payload: dict = Body(...), uid: int = Depends(current_user)) -> d
 def add_vocab(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
     term = str(payload.get("term") or "").strip()
     if not term:
-        raise HTTPException(400, "Falta 'term'")
+        raise HTTPException(400, "Please enter a word.")
     if (len(term) > 200 or len(str(payload.get("translation") or "")) > 2000
             or len(str(payload.get("example") or "")) > MAX_TEXTO_IA):
-        raise HTTPException(413, "La palabra o su ejemplo son demasiado largos.")
+        raise HTTPException(413, "The word or its example is too long.")
     # nunca guardar un texto de relleno como si fuera la traducción: mejor
     # vacío (se puede reintentar) que una tarjeta permanentemente errónea
     if core.is_placeholder(payload.get("translation") or ""):
@@ -1288,16 +1288,16 @@ def vocab_stats(uid: int = Depends(current_user)) -> dict:
 def grade_vocab(vid: int, payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
     grade = payload.get("grade", "good")
     if grade not in ("again", "hard", "good", "easy"):
-        raise HTTPException(400, "grade inválido")
+        raise HTTPException(400, "Invalid grade.")
     if not db.grade_vocab(vid, grade, user_id=uid):
-        raise HTTPException(404, "Esa palabra no existe")
+        raise HTTPException(404, "That word doesn't exist.")
     return db.vocab_stats(user_id=uid)
 
 
 @app.delete("/api/vocab/{vid}")
 def delete_vocab(vid: int, uid: int = Depends(current_user)) -> dict:
     if not db.delete_vocab(vid, user_id=uid):
-        raise HTTPException(404, "Esa palabra no existe")
+        raise HTTPException(404, "That word doesn't exist.")
     return db.vocab_stats(user_id=uid)
 
 
@@ -1488,13 +1488,13 @@ def generate_lesson(payload: dict = Body(default={}), uid: int = Depends(current
     """Crea una lección a medida contra tu tipo de error más frecuente."""
     resumen = [s for s in db.writing_error_summary(user_id=uid) if s["category"] != "unclassified"]
     if not resumen:
-        raise HTTPException(400, "Aún no hay errores clasificados. Evalúa alguna redacción "
-                                 "con «Check my writing» primero.")
+        raise HTTPException(400, "There are no classified mistakes yet. Check a piece of "
+                                 "writing with \"Check my writing\" first.")
     categoria = payload.get("category") or resumen[0]["category"]
     etiqueta = next((s["label"] for s in resumen if s["category"] == categoria), categoria)
     errores = db.errors_by_category(categoria, user_id=uid)
     if not errores:
-        raise HTTPException(400, f"No hay errores de tipo «{etiqueta}».")
+        raise HTTPException(400, f"There are no \"{etiqueta}\" mistakes yet.")
     nivel = (db.last_test(user_id=uid) or {}).get("level") or "B1"
     try:
         leccion = core.generate_error_lesson(etiqueta, errores, level=nivel)
@@ -1515,21 +1515,21 @@ def list_custom_lessons(uid: int = Depends(current_user)) -> list[dict]:
 def get_custom_lesson(lid: int, uid: int = Depends(current_user)) -> dict:
     row = db.get_custom_lesson(lid, user_id=uid)
     if not row:
-        raise HTTPException(404, "Esa lección no existe")
+        raise HTTPException(404, "That lesson doesn't exist.")
     return row
 
 
 @app.post("/api/lessons/custom/{lid}/done")
 def custom_lesson_done(lid: int, payload: dict = Body(default={}), uid: int = Depends(current_user)) -> dict:
     if not db.set_custom_lesson_done(lid, bool(payload.get("done", True)), user_id=uid):
-        raise HTTPException(404, "Esa lección no existe")
+        raise HTTPException(404, "That lesson doesn't exist.")
     return {"ok": True}
 
 
 @app.delete("/api/lessons/custom/{lid}")
 def delete_custom_lesson(lid: int, uid: int = Depends(current_user)) -> dict:
     if not db.delete_custom_lesson(lid, user_id=uid):
-        raise HTTPException(404, "Esa lección no existe")
+        raise HTTPException(404, "That lesson doesn't exist.")
     return {"deleted": lid}
 
 
@@ -1572,9 +1572,9 @@ async def writing_extract(file: UploadFile = File(...),
 def writing_check(payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
     text = str(payload.get("text") or "").strip()
     if not text:
-        raise HTTPException(400, "Falta 'text'")
+        raise HTTPException(400, "Please enter some text.")
     if len(text) > MAX_REDACCION:
-        raise HTTPException(413, f"La redacción es demasiado larga (máximo {MAX_REDACCION} caracteres).")
+        raise HTTPException(413, f"Your text is too long (up to {MAX_REDACCION} characters).")
     try:
         result = core.writing_check(text)
     except core.AIUnavailable as exc:
@@ -1596,24 +1596,24 @@ def writing_upgrade(payload: dict = Body(...), uid: int = Depends(current_user))
     text = str(payload.get("text") or "").strip()
     level = payload.get("level", "B2")
     if not text:
-        raise HTTPException(400, "Falta 'text'")
+        raise HTTPException(400, "Please enter some text.")
     if len(text) > MAX_REDACCION:
-        raise HTTPException(413, f"La redacción es demasiado larga (máximo {MAX_REDACCION} caracteres).")
+        raise HTTPException(413, f"Your text is too long (up to {MAX_REDACCION} characters).")
     wid = payload.get("writing_id")
     # el upgrade parte del nivel evaluado: primero hay que saber en qué nivel escribes
     record = db.get_writing(int(wid), user_id=uid) if wid else None
     from_level = (record or {}).get("level") or ""
     if not from_level:
         raise HTTPException(
-            400, "Primero evalúa tu texto con «Check my writing»: el upgrade parte "
-                 "de tu nivel actual."
+            400, "Check your text with \"Check my writing\" first: the upgrade "
+                 "starts from your current level."
         )
     allowed = core.next_levels(from_level)
     if not allowed:
-        raise HTTPException(400, f"Tu texto ya es {from_level}: no hay nivel superior.")
+        raise HTTPException(400, f"Your text is already {from_level}: there's no higher level.")
     if level not in allowed:
         raise HTTPException(
-            400, f"Tu texto es {from_level}; el siguiente escalón es {allowed[0]}."
+            400, f"Your text is {from_level}; the next level up is {allowed[0]}."
         )
     try:
         upgraded = core.writing_upgrade(text, level, from_level=from_level)
@@ -1633,14 +1633,14 @@ def get_writing(wid: int, uid: int = Depends(current_user)) -> dict:
     """Detalle completo: original, corrección, evaluación y upgrade (para comparar)."""
     record = db.get_writing(wid, user_id=uid)
     if not record:
-        raise HTTPException(404, "No existe ese escrito")
+        raise HTTPException(404, "That piece of writing doesn't exist.")
     return record
 
 
 @app.delete("/api/writings/{wid}")
 def delete_writing(wid: int, uid: int = Depends(current_user)) -> dict:
     if not db.delete_writing(wid, user_id=uid):
-        raise HTTPException(404, "No existe ese escrito")
+        raise HTTPException(404, "That piece of writing doesn't exist.")
     return {"deleted": wid}
 
 
@@ -1654,7 +1654,7 @@ def explain_error(eid: int, force: bool = False, uid: int = Depends(current_user
     """Mini-lección para UN error. Se cachea: la segunda vez no gasta IA."""
     err = db.get_writing_error(eid, user_id=uid)
     if not err:
-        raise HTTPException(404, "Ese error no existe")
+        raise HTTPException(404, "That mistake doesn't exist.")
     if err.get("lesson") and not force:
         return {"id": eid, "lesson": err["lesson"], "cached": True}
     nivel = (db.last_test(user_id=uid) or {}).get("level") or "B1"
@@ -1670,7 +1670,7 @@ def explain_error(eid: int, force: bool = False, uid: int = Depends(current_user
 @app.post("/api/writing/errors/{eid}/reviewed")
 def mark_error_reviewed(eid: int, payload: dict = Body(default={}), uid: int = Depends(current_user)) -> dict:
     if not db.set_error_reviewed(eid, bool(payload.get("reviewed", True)), user_id=uid):
-        raise HTTPException(404, "Ese error no existe")
+        raise HTTPException(404, "That mistake doesn't exist.")
     return {"ok": True, "reviewed": bool(payload.get("reviewed", True))}
 
 
@@ -1706,15 +1706,15 @@ def deck_study(deck_id: int, uid: int = Depends(current_user)) -> list[dict]:
     # todas las tarjetas, sin límite diario
     cards = db.deck_study_cards(deck_id, user_id=uid)
     if not cards and not any(d["id"] == deck_id for d in db.list_decks(user_id=uid)):
-        raise HTTPException(404, "Ese mazo no existe")
+        raise HTTPException(404, "That deck doesn't exist.")
     return _with_cloze(cards)
 
 
 # Si el servidor no tiene voces del sistema pero sí audio pre-generado, lo
 # anuncia como una voz. Sin esto el navegador daba por perdido el audio del
 # servidor y no volvía a pedirlo, dejando los ficheros pre-generados sin usar.
-VOZ_PREGENERADA = {"name": "pregen", "display": "Amy · voz neural",
-                   "accent": "🇺🇸 pre-generada", "pregenerada": True}
+VOZ_PREGENERADA = {"name": "pregen", "display": "Amy · neural voice",
+                   "accent": "🇺🇸 pre-generated", "pregenerada": True}
 
 
 @app.get("/api/voices")
@@ -1732,7 +1732,7 @@ def tts(text: str, voice: str = "", rate: int = 0, lang: str = "en", uid: int = 
     Permite cambiar voz y ritmo de los decks dinámicamente sin re-sembrar."""
     text = (text or "").strip()
     if not text:
-        raise HTTPException(400, "Falta 'text'")
+        raise HTTPException(400, "Please enter some text.")
     path = core.synthesize(text, lang, rate=rate or None, voice=voice or None)
     # synthesize devuelve el fichero de MUESTRA cuando no pudo generar nada --
     # p. ej. en el servidor Linux, donde no existe el `say` de macOS. Servirlo
@@ -1745,8 +1745,8 @@ def tts(text: str, voice: str = "", rate: int = 0, lang: str = "en", uid: int = 
         pre = core.audio_pregenerado(text)
         if pre:
             return FileResponse(pre, media_type="audio/mp4")
-        raise HTTPException(503, "Este servidor no puede generar audio; "
-                                 "usa la voz del navegador.")
+        raise HTTPException(503, "This server can't generate audio; "
+                                 "use your browser's voice instead.")
     return FileResponse(path, media_type="audio/wav")
 
 
@@ -1754,7 +1754,7 @@ def tts(text: str, voice: str = "", rate: int = 0, lang: str = "en", uid: int = 
 def grade_deck_card(card_id: int, payload: dict = Body(...), uid: int = Depends(current_user)) -> dict:
     grade = payload.get("grade", "good")
     if grade not in ("again", "hard", "good", "easy"):
-        raise HTTPException(400, "grade inválido")
+        raise HTTPException(400, "Invalid grade.")
     db.grade_deck_card(card_id, grade, user_id=uid)
     return {"ok": True}
 
@@ -1778,9 +1778,9 @@ def _barrer_exportaciones_viejas(edad: int = 3600) -> None:
 def export_anki(payload: dict = Body(...), uid: int = Depends(current_user)) -> FileResponse:
     items = payload.get("items") or []
     if not isinstance(items, list) or len(items) > MAX_ITEMS_ANKI:
-        raise HTTPException(413, f"Exporta como mucho {MAX_ITEMS_ANKI} palabras a la vez.")
+        raise HTTPException(413, f"You can export up to {MAX_ITEMS_ANKI} words at a time.")
     if not all(isinstance(it, dict) for it in items):
-        raise HTTPException(400, "Formato de exportación no válido.")
+        raise HTTPException(400, "Invalid export format.")
     _barrer_exportaciones_viejas()
     if not items:
         # sin items -> exporta TODO el vocabulario guardado
@@ -1790,8 +1790,8 @@ def export_anki(payload: dict = Body(...), uid: int = Depends(current_user)) -> 
             for v in db.list_vocab(user_id=uid)
         ]
     if not items:
-        raise HTTPException(400, "No hay vocabulario para exportar")
-    deck_name = payload.get("deck_name") or "AppIdiomas — Vocabulario"
+        raise HTTPException(400, "There's no vocabulary to export.")
+    deck_name = payload.get("deck_name") or "Daily English Habit — Vocabulary"
     lang = payload.get("lang") or "en"  # idioma original (para la voz correcta)
     enriched = []
     for it in items:
@@ -1807,7 +1807,7 @@ def export_anki(payload: dict = Body(...), uid: int = Depends(current_user)) -> 
             "example_audio": core.synthesize(example, lang) if example else "",
         })
     if not enriched:
-        raise HTTPException(400, "No hay vocabulario válido para exportar")
+        raise HTTPException(400, "There's no valid vocabulary to export.")
     # Un fichero propio por petición, que se borra al terminar de enviarlo. Con
     # una ruta fija para todos, dos personas exportando a la vez podían
     # descargarse el vocabulario la una de la otra.
@@ -1821,7 +1821,7 @@ def export_anki(payload: dict = Body(...), uid: int = Depends(current_user)) -> 
     return FileResponse(
         out_path,
         media_type="application/octet-stream",
-        filename="vocabulario_appidiomas.apkg",
+        filename="daily_english_habit_vocabulary.apkg",
         background=BackgroundTask(os.unlink, out_path),
     )
 

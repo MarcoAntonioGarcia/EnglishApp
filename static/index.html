@@ -1,513 +1,686 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Daily English Habit</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23c9a86a'/%3E%3Ctext x='50' y='72' font-size='64' font-family='Georgia' text-anchor='middle' fill='%23241800'%3EL%3C/text%3E%3C/svg%3E" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a111e'/%3E%3Cpath d='M7 20a9 9 0 0 1 18 0' fill='none' stroke='%233ccfe6' stroke-width='2.6' stroke-linecap='round'/%3E%3Cpath d='M16 20l4.5-6' stroke='%23f3b54a' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='20' r='2' fill='%23e4ebf5'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="/static/theme.css" />
 <style>
+  /* Old token names, mapped onto theme.css so every rule below speaks one palette. */
   :root{
-    --sidebar:#17181c; --sidebar-2:#1f2126; --side-ink:#e9e7e2;
-    --side-muted:#8d9099; --gold:#c9a86a; --gold-soft:#e4d4ae;
-    --bg:#efe9df; --card:#fffdf9; --line:#e7e0d2; --ink:#2a2723; --muted:#8a8378;
-    --paper:#fbf8f2; --hl:#ffe6a0; --accent:#2f6b5e; --danger:#b4453b;
-    --shadow:0 1px 3px rgba(40,33,20,.06),0 8px 24px rgba(40,33,20,.06);
+    --sidebar:var(--s1); --sidebar-2:var(--s2); --side-ink:var(--ink); --side-muted:var(--ink-3);
+    --gold:var(--cyan); --gold-soft:var(--cyan-wash); --card:var(--s1); --muted:var(--ink-2);
+    --paper:var(--page); --hl:var(--page-word); --accent:var(--cyan); --danger:var(--bad);
+    --side-w:272px;
   }
-  *{box-sizing:border-box;}
   html,body{height:100%;}
-  body{margin:0;background:var(--bg);color:var(--ink);
-    font-family:-apple-system,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
-    -webkit-font-smoothing:antialiased;overflow:hidden;}
-  .app{display:grid;grid-template-columns:270px 1fr 330px;height:100vh;}
+  body{margin:0;overflow:hidden;}
+  .app{display:grid;grid-template-columns:var(--side-w) 1fr 336px;height:100vh;height:100dvh;}
+  button{font:inherit;color:inherit}
 
-  /* ---------- Sidebar ---------- */
-  .sidebar{background:var(--sidebar);color:var(--side-ink);display:flex;flex-direction:column;
-    padding:22px 16px;gap:18px;overflow:hidden;}
-  .brand{display:flex;align-items:center;gap:11px;padding:2px 6px;}
-  .brand .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(145deg,var(--gold),#9c7c46);
-    display:grid;place-items:center;color:#1b1200;font-weight:800;font-size:18px;font-family:Georgia,serif;}
-  .brand .name{font-size:19px;font-weight:600;letter-spacing:.02em;}
-  .brand .name small{display:block;font-size:11px;color:var(--side-muted);font-weight:500;letter-spacing:.14em;text-transform:uppercase;}
-  .side-h{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--side-muted);
-    margin:6px 6px 2px;font-weight:600;}
+  /* ---------- Sidebar: the cockpit's left console ---------- */
+  .sidebar{background:var(--s1);border-right:1px solid var(--line);color:var(--ink);display:flex;flex-direction:column;
+    padding:18px 14px 14px;gap:14px;overflow:hidden;}
+  .brand{display:flex;align-items:center;gap:11px;padding:2px 4px;min-width:0;}
+  .brand .logo{width:34px;height:34px;flex:0 0 auto;display:grid;place-items:center;border-radius:10px;
+    background:var(--bg);border:1px solid var(--cyan-line);color:var(--cyan);}
+  .brand .logo svg{width:20px;height:20px}
+  .brand .name{font-size:15px;font-weight:650;letter-spacing:-.01em;line-height:1.2;min-width:0;}
+  .brand .name small{display:block;font-size:11.5px;color:var(--ink-3);font-weight:500;letter-spacing:0;margin-top:2px;}
+  .side-h{font-size:11.5px;color:var(--ink-3);margin:4px 6px 2px;font-weight:600;letter-spacing:.02em;}
   .side-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px;margin:0 -4px;padding:0 4px;}
-  .bookitem{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:9px;cursor:pointer;
-    color:var(--side-ink);font-size:14px;transition:background .12s;}
-  .bookitem:hover{background:var(--sidebar-2);}
-  .bookitem.active{background:var(--sidebar-2);box-shadow:inset 3px 0 0 var(--gold);}
-  .bookitem .ic{width:26px;height:34px;border-radius:3px;background:linear-gradient(160deg,#3a3d44,#26282d);
-    flex:0 0 auto;box-shadow:inset -3px 0 0 rgba(0,0,0,.25);}
+  .bookitem{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:var(--r-sm);cursor:pointer;
+    color:var(--ink);font-size:14px;transition:background .15s var(--ease);min-height:44px;}
+  .bookitem:hover{background:var(--s2);}
+  .bookitem.active{background:var(--s3);box-shadow:inset 2px 0 0 var(--cyan);}
+  .bookitem .ic{width:22px;height:30px;border-radius:3px;flex:0 0 auto;
+    background:linear-gradient(180deg,var(--s3),var(--s2));border:1px solid var(--line-2);}
+  .bookitem.active .ic{border-color:var(--cyan-line)}
   .bookitem .bt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .bookitem .ren{border:none;background:transparent;color:var(--side-muted);cursor:pointer;font-size:13px;opacity:0;padding:2px 4px;}
-  .bookitem:hover .ren{opacity:1;}
-  .bookitem .ren.del:hover{color:#e8837a;}
-  .btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);
-    border-radius:10px;padding:9px 13px;cursor:pointer;transition:.12s;display:inline-flex;align-items:center;gap:7px;justify-content:center;}
-  .btn:hover{background:#f3efe7;}
-  .btn.gold{background:var(--gold);border-color:var(--gold);color:#241800;font-weight:600;}
-  .btn.gold:hover{filter:brightness(1.05);}
-  .btn.dark{background:var(--sidebar-2);border-color:#2c2f35;color:var(--side-ink);}
-  .btn.dark:hover{background:#2a2d33;}
-  .btn.sm{padding:6px 10px;font-size:13px;border-radius:8px;}
-  .btn.ghost{background:transparent;}
-  .btn:disabled{opacity:.5;cursor:not-allowed;}
-  .side-foot{display:flex;align-items:center;gap:10px;color:var(--side-muted);font-size:12px;padding:6px;}
-  .avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(145deg,#4a4d55,#2a2c31);}
-  .side-cuenta{display:flex;gap:8px;align-items:center;padding:0 6px 4px;}
-  .side-cuenta a,.side-cuenta button{background:none;border:0;padding:2px 0;font:inherit;
-    font-size:11.5px;color:var(--side-muted);cursor:pointer;text-decoration:none;}
-  .side-cuenta a:hover,.side-cuenta button:hover{color:var(--side-ink);text-decoration:underline;}
+  .bookitem .ren{border:none;background:transparent;color:var(--ink-3);cursor:pointer;font-size:13px;
+    padding:6px 0;border-radius:6px;width:0;min-height:30px;overflow:hidden;opacity:0;transition:width .2s var(--ease),opacity .2s}
+  .bookitem:hover .ren,.bookitem:focus-within .ren{opacity:1;width:30px;padding:6px;}
+  .bookitem .ren:hover{background:var(--s3);color:var(--ink)}
+  .bookitem .ren.del:hover{color:var(--bad);}
+  @media (hover:none){.bookitem .ren{opacity:1;width:30px;padding:6px}}
+
+  .btn{font:inherit;font-size:14px;font-weight:550;border:1px solid var(--line-2);background:var(--s2);color:var(--ink);
+    border-radius:10px;padding:9px 14px;min-height:40px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;justify-content:center;
+    transition:background .15s var(--ease),border-color .15s var(--ease),transform .1s;}
+  .btn:hover{background:var(--s3);border-color:#3a4f78;}
+  .btn:active{transform:translateY(1px)}
+  .btn.gold{background:var(--cyan);border-color:var(--cyan);color:var(--cyan-deep);font-weight:650;}
+  .btn.gold:hover{background:#63dcef;border-color:#63dcef}
+  .btn.dark{background:var(--bg);border-color:var(--cyan-line);color:var(--cyan-ink);}
+  .btn.dark:hover{background:var(--cyan-wash);}
+  .btn.sm{padding:6px 11px;min-height:32px;font-size:13px;border-radius:8px;}
+  .btn.ghost{background:transparent;border-color:transparent;color:var(--ink-2)}
+  .btn.ghost:hover{background:var(--s2);color:var(--ink)}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+
+  /* the streak gauge: the habit, always in sight */
+  .gauge{border:1px solid var(--line);border-radius:var(--r);background:var(--bg);padding:12px 12px 11px;}
+  .gauge-top{display:flex;align-items:center;gap:10px}
+  .gauge .flame{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+    background:var(--s2);color:var(--ink-3);transition:color .3s,background .3s}
+  .gauge.lit .flame{background:var(--amber-wash);color:var(--amber)}
+  .gauge .flame svg{width:18px;height:18px}
+  .gauge #streakNum{font-family:var(--num);font-size:34px;font-weight:600;line-height:1;letter-spacing:-.03em;color:var(--amber-ink);opacity:.55;transition:opacity .4s}
+  .gauge.lit #streakNum{opacity:1}
+  .streak-chip{display:none;align-items:center;gap:5px;height:38px;padding:0 10px;border-radius:10px;border:1px solid var(--line-2);
+    background:var(--s1);color:var(--ink-3);cursor:pointer;font-size:14px}
+  .streak-chip.lit{color:var(--amber-ink);border-color:rgba(243,181,74,.45);background:var(--amber-wash)}
+  .gauge.lit #streakNum{color:var(--amber-ink)}
+  .gauge .glbl{font-size:12px;color:var(--ink-3);line-height:1.25}
+  .gauge .glbl b{display:block;color:var(--ink-2);font-weight:600;font-size:12.5px}
+  .segs{display:grid;grid-template-columns:repeat(10,1fr);gap:3px;margin:11px 0 6px}
+  .segs i{height:6px;border-radius:2px;background:var(--s3)}
+  .segs i.on{background:var(--cyan)}
+  .segs.met i.on{background:var(--ok)}
+  #goalBox{display:flex;justify-content:space-between;gap:8px;width:100%;border:0;background:none;padding:0;
+    cursor:pointer;font-size:12px;color:var(--ink-3);text-align:left}
+  #goalBox:hover{color:var(--ink-2)}
+  #goalBox .num{color:var(--ink-2)}
+
+  .side-foot{display:flex;align-items:center;gap:10px;color:var(--ink-3);font-size:12px;padding:8px 4px 2px;border-top:1px solid var(--line);}
+  .avatar{width:30px;height:30px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;font-size:12px;font-weight:700;
+    background:var(--s3);color:var(--ink-2);border:1px solid var(--line-2)}
+  .side-foot .who{flex:1;min-width:0;overflow:hidden}
+  .side-foot #cuentaNombre{display:block;color:var(--ink);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .side-foot #cuentaRol{color:var(--ink-3)}
+  .side-foot .tb{width:32px;height:32px;display:grid;place-items:center;border-radius:8px;border:0;background:transparent;color:var(--ink-3);cursor:pointer}
+  .side-foot .tb:hover{background:var(--s2);color:var(--ink)}
+  #aiDot{width:8px;height:8px;border-radius:50%;background:var(--ink-3);display:inline-block;margin:0 4px}
+  #aiDot.on{background:var(--ok);box-shadow:0 0 0 3px var(--ok-wash)}
+  .side-cuenta{display:flex;gap:10px;align-items:center;padding:0 4px;}
+  .side-cuenta a,.side-cuenta button{background:none;border:0;padding:4px 0;font:inherit;
+    font-size:12px;color:var(--ink-3);cursor:pointer;text-decoration:none;}
+  .side-cuenta a:hover,.side-cuenta button:hover{color:var(--ink);text-decoration:underline;}
   .side-cuenta button{margin-left:auto;}
 
-  /* ---------- Reader (centro, estilo libro) ---------- */
-  .reader-wrap{display:flex;flex-direction:column;min-width:0;background:var(--bg);}
-  .topbar{position:relative;display:flex;align-items:center;gap:14px;padding:16px 26px;border-bottom:1px solid var(--line);
-    background:rgba(255,253,249,.6);backdrop-filter:blur(6px);}
-  .opts{position:absolute;top:60px;right:26px;background:var(--card);border:1px solid var(--line);
-    border-radius:12px;box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:12px;z-index:30;min-width:250px;}
-  .opts label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
-    display:flex;flex-direction:column;gap:5px;font-weight:600;}
-  .opts select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);}
+  /* ---------- Reader ---------- */
+  .reader-wrap{display:flex;flex-direction:column;min-width:0;min-height:0;}
+  .topbar{position:relative;display:flex;align-items:center;gap:14px;padding:14px 24px;border-bottom:1px solid var(--line);
+    background:var(--bg);}
+  .opts{position:absolute;top:62px;right:24px;background:var(--s1);border:1px solid var(--line-2);
+    border-radius:var(--r);box-shadow:var(--shadow-pop);padding:14px;display:flex;flex-direction:column;gap:12px;z-index:30;min-width:260px;}
+  .opts label{font-size:12px;color:var(--ink-2);display:flex;flex-direction:column;gap:6px;font-weight:600;}
+  select{font:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line-2);border-radius:var(--r-sm);background:var(--bg);color:var(--ink);}
   .topbar .tt{min-width:0;}
-  .topbar .tt h1{margin:0;font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .topbar .tt .sub{font-size:12.5px;color:var(--muted);margin-top:1px;}
+  .topbar .tt h1{margin:0;font-size:17px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .topbar .tt .sub{font-size:12.5px;color:var(--ink-3);margin-top:2px;}
   .chapnav{display:flex;align-items:center;gap:6px;}
-  .iconbtn{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--card);
-    cursor:pointer;font-size:15px;color:var(--ink);}
-  .iconbtn:hover{background:#f3efe7;}
-  .progress{height:3px;background:var(--line);}
-  .progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#9c7c46);width:0;transition:width .3s;}
-  .pagebar{display:flex;align-items:center;justify-content:center;gap:16px;padding:8px;
-    border-bottom:1px solid var(--line);background:rgba(255,253,249,.5);}
-  .pagebar .iconbtn{width:30px;height:30px;font-size:14px;}
-  .paper-scroll{flex:1;min-height:0;overflow-y:auto;display:flex;justify-content:center;padding:32px 20px 120px;}
-  .paper{max-width:880px;width:100%;background:var(--paper);border-radius:14px;box-shadow:var(--shadow);
-    padding:52px 72px;border:1px solid var(--line);height:max-content;}
-  .paper .chtitle{font-family:Georgia,"Times New Roman",serif;font-size:15px;letter-spacing:.16em;
-    text-transform:uppercase;color:var(--gold);text-align:center;margin-bottom:6px;}
-  .paper .chname{font-family:Georgia,serif;font-size:26px;text-align:center;margin:0 0 34px;
-    font-weight:600;color:var(--ink);}
-  #reader{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
-    font-size:20px;line-height:1.95;color:#3a352e;text-align:justify;hyphens:auto;}
-  #reader .s{cursor:pointer;border-radius:3px;transition:background .12s,color .12s;padding:0 1px;}
-  #reader .s:hover{background:#f2ead6;}
-  #reader .s.cur{background:#fbeecb;color:#2a2115;border-radius:4px;}
+  .iconbtn{width:38px;height:38px;border-radius:10px;border:1px solid var(--line-2);background:var(--s1);
+    cursor:pointer;color:var(--ink-2);display:inline-grid;place-items:center;font-size:15px;transition:background .15s,color .15s;}
+  .iconbtn:hover{background:var(--s2);color:var(--ink);}
+  .progress{height:2px;background:var(--line);}
+  .progress > i{display:block;height:100%;background:var(--cyan);width:0;transition:width .4s var(--ease)}
+  .pagebar{display:flex;align-items:center;justify-content:center;gap:16px;padding:8px;border-bottom:1px solid var(--line);}
+  .pagebar .iconbtn{width:32px;height:32px;}
+  .paper-scroll{flex:1;min-height:0;overflow-y:auto;display:flex;justify-content:center;padding:28px 20px 128px;}
+  .paper{max-width:860px;width:100%;background:var(--page);border-radius:var(--r-lg);
+    padding:52px 72px;border:1px solid var(--page-line);height:max-content;transition:background .3s,border-color .3s;}
+  .paper .chtitle{font-family:var(--num);font-size:12px;letter-spacing:.08em;color:var(--cyan);text-align:center;margin-bottom:8px;}
+  body.paper-mode .paper .chtitle{color:#157a8c}
+  .paper .chname{font-family:var(--book);font-size:27px;text-align:center;margin:0 0 34px;font-weight:600;color:var(--page-ink);}
+  #reader{font-family:var(--book);font-size:20px;line-height:1.9;color:var(--page-ink);text-align:justify;hyphens:auto;max-width:68ch;margin:0 auto;}
+  #reader .s{cursor:pointer;border-radius:3px;transition:background .15s,color .15s;padding:0 1px;}
+  #reader .s:hover{background:var(--page-hover);}
+  #reader .s.cur{background:var(--page-cur);color:var(--page-cur-ink);border-radius:4px;}
   #reader .wd{border-radius:3px;transition:background .08s;}
-  #reader .wd.reading{background:var(--hl);box-shadow:0 0 0 2px var(--hl);color:#241d0c;}
-  .emptystate{max-width:520px;margin:8vh auto;text-align:center;color:var(--muted);}
-  .emptystate .big{font-family:Georgia,serif;font-size:30px;color:var(--ink);margin-bottom:10px;}
+  #reader .wd.reading{background:var(--page-word);box-shadow:0 0 0 2px var(--page-word);color:var(--page-word-ink);}
+  .emptystate{max-width:540px;margin:9vh auto;text-align:center;color:var(--ink-2);padding:0 8px}
+  .emptystate .big{font-size:28px;font-weight:650;letter-spacing:-.02em;color:var(--ink);margin-bottom:10px;}
+  .emptystate p{line-height:1.6}
 
-  /* ---------- Toolbar flotante ---------- */
+  /* ---------- Floating toolbar ---------- */
   .toolbar{position:absolute;left:50%;transform:translateX(-50%);bottom:22px;
-    display:flex;gap:8px;padding:9px;background:var(--card);border:1px solid var(--line);
-    border-radius:16px;box-shadow:var(--shadow);}
+    display:flex;gap:6px;padding:7px;background:rgba(15,24,41,.92);border:1px solid var(--line-2);
+    border-radius:16px;box-shadow:var(--shadow-pop);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+  .toolbar .btn{white-space:nowrap}
   .center-col{position:relative;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
-  .reader-wrap{min-height:0;}
 
-  /* ---------- Right rail (módulos) ---------- */
-  .rail{background:var(--bg);border-left:1px solid var(--line);padding:18px 16px;overflow-y:auto;
-    display:flex;flex-direction:column;gap:16px;}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
-    padding:15px 15px 14px;}
-  .card h3{margin:0 0 10px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
-    display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:700;}
-  .card h3 .tag{font-size:10px;background:var(--gold-soft);color:#6b5220;padding:2px 7px;border-radius:20px;letter-spacing:.04em;}
-  /* --- evaluación de nivel del writing --- */
+  /* ---------- Right rail ---------- */
+  .rail{background:var(--bg);border-left:1px solid var(--line);padding:16px 14px;overflow-y:auto;
+    display:flex;flex-direction:column;gap:14px;}
+  .card{background:var(--s1);border:1px solid var(--line);border-radius:var(--r);padding:15px 15px 14px;}
+  .card h3{margin:0 0 10px;font-size:13px;color:var(--ink);letter-spacing:0;
+    display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:650;}
+  .card h3 #rangeLabel{margin-right:auto;margin-left:-4px}
+  .card h3 .tag,.tag{font-size:11px;background:var(--cyan-wash);color:var(--cyan-ink);padding:2px 8px;border-radius:20px;font-weight:600;}
+  /* writing level */
   .lvlrow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
-  .lvlbig{flex:0 0 auto;min-width:62px;text-align:center;background:var(--accent);color:#fff;
-    border-radius:12px;padding:10px 12px;font-family:Georgia,serif;font-weight:700;font-size:26px;line-height:1;}
-  .lvlbig small{display:block;font-family:inherit;font-size:9px;letter-spacing:.14em;
-    text-transform:uppercase;opacity:.8;margin-top:4px;font-weight:400;}
-  .lvlbig.unknown{background:var(--muted);}
-  .lvltext{flex:1 1 260px;font-size:13.5px;line-height:1.5;color:var(--ink);}
+  .lvlbig{flex:0 0 auto;min-width:66px;text-align:center;background:var(--cyan-wash);color:var(--cyan-ink);border:1px solid var(--cyan-line);
+    border-radius:var(--r);padding:10px 12px;font-family:var(--num);font-weight:600;font-size:26px;line-height:1;}
+  .lvlbig small{display:block;font-family:var(--ui);font-size:10px;opacity:.85;margin-top:5px;font-weight:600;}
+  .lvlbig.unknown{background:var(--s2);color:var(--ink-3);border-color:var(--line-2)}
+  .lvltext{flex:1 1 260px;font-size:14px;line-height:1.55;color:var(--ink);}
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
-  .chip{font-size:12px;padding:3px 9px;border-radius:20px;border:1px solid var(--line);background:#fff;}
-  .chip.good{border-color:var(--accent);color:var(--accent);}
-  .chip.work{border-color:var(--gold);color:#6b5220;background:#fdf8ee;}
-  /* --- evolución del nivel escrito --- */
+  .chip{font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid var(--line-2);background:var(--s2);color:var(--ink-2)}
+  .chip.good{border-color:rgba(79,212,154,.4);color:var(--ok);background:var(--ok-wash)}
+  .chip.work{border-color:rgba(243,181,74,.4);color:var(--amber-ink);background:var(--amber-wash);}
   .errrow.done{opacity:.55;}
-  .errrow.done::after{content:"";}
-  .lsremember{margin-top:9px;font-size:13px;color:#6b5220;background:#fdf8ee;
-    border-radius:8px;padding:8px 11px;font-weight:600;}
+  .lsremember{margin-top:9px;font-size:13.5px;color:var(--amber-ink);background:var(--amber-wash);border-radius:var(--r-sm);padding:8px 11px;font-weight:600;}
   .lsdrill{margin-top:8px;font-size:13.5px;}
-  .legalbox{margin-top:14px;padding:11px 13px;border-radius:10px;background:#f3efe7;
-    border:1px solid var(--line);font-size:12px;line-height:1.5;color:var(--muted);}
+  .legalbox{margin-top:16px;padding:12px 13px;border-radius:10px;background:var(--bg);
+    border:1px solid var(--line);font-size:12.5px;line-height:1.55;color:var(--ink-2);}
   .legalbox b{color:var(--ink);}
-  .side-note{margin-top:8px;font-size:10.5px;line-height:1.45;color:var(--side-muted);
-    padding:0 2px;}
-  .lspot{background:#fdf8ee;border-left:3px solid var(--gold);padding:10px 12px;
-    border-radius:0 8px 8px 0;margin-bottom:12px;font-size:13.5px;line-height:1.5;}
-  .lspot b{display:block;margin-bottom:4px;color:#6b5220;}
-  .lspara{font-size:14px;line-height:1.6;margin:0 0 10px;color:var(--ink);}
-  .lsrule{background:var(--accent);color:#fff;border-radius:10px;padding:10px 13px;
-    font-size:13.5px;line-height:1.6;}
+  .side-note{font-size:11.5px;line-height:1.45;color:var(--ink-3);padding:0 2px;}
+  .lspot{background:var(--amber-wash);border:1px solid rgba(243,181,74,.25);padding:10px 12px;border-radius:var(--r-sm);margin-bottom:12px;font-size:14px;line-height:1.55;}
+  .lspot b{display:block;margin-bottom:4px;color:var(--amber-ink);}
+  .lspara{font-size:14.5px;line-height:1.65;margin:0 0 10px;color:var(--ink);}
+  .lsrule{background:var(--cyan-wash);border:1px solid var(--cyan-line);color:var(--ink);border-radius:10px;padding:10px 13px;font-size:14px;line-height:1.6;}
   .modebar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:14px;}
-  .mbtn{border:1px solid var(--line);background:#fff;color:var(--muted);border-radius:20px;
-    padding:5px 13px;font-size:12.5px;cursor:pointer;font-weight:600;}
-  .mbtn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
-  .mhint{font-size:12px;color:var(--muted);margin-left:4px;}
+  .mbtn{border:1px solid var(--line-2);background:var(--s1);color:var(--ink-2);border-radius:20px;
+    padding:7px 14px;font-size:13px;cursor:pointer;font-weight:600;min-height:36px}
+  .mbtn:hover{color:var(--ink);background:var(--s2)}
+  .mbtn.active{background:var(--cyan);border-color:var(--cyan);color:var(--cyan-deep);}
+  .mhint{font-size:12.5px;color:var(--ink-3);margin-left:4px;}
   .rc-prompt{font-size:17px;line-height:1.5;color:var(--ink);margin:4px 0 2px;}
-  .rc-prompt b{color:var(--accent);}
-  .typein{width:100%;max-width:420px;padding:11px 13px;border:2px solid var(--line);
-    border-radius:10px;font-size:16px;font-family:inherit;background:#fff;color:var(--ink);}
-  .typein:focus{outline:none;border-color:var(--gold);}
-  .typein.ok{border-color:var(--accent);} .typein.bad{border-color:var(--danger);}
-  .verdict{margin-top:7px;font-size:13.5px;font-weight:600;min-height:19px;}
-  .verdict.ok{color:var(--accent);} .verdict.bad{color:var(--danger);}
-  .booklvl{margin-top:3px;font-size:11.5px;font-weight:600;color:var(--side-muted);}
-  .booklvl.hard{color:#e8837a;}
-  .booklvl.easy{color:#8fbf7f;}
-  .catrow{display:flex;gap:12px;align-items:flex-start;padding:11px 12px;border:1px solid var(--line);
-    border-radius:11px;background:#fff;margin-bottom:8px;}
-  .catrow .lvl{flex:0 0 40px;text-align:center;font-family:Georgia,serif;font-weight:700;
-    background:var(--accent);color:#fff;border-radius:8px;padding:6px 0;font-size:14px;}
-  .catrow .lvl.b1{background:#5b7f52;} .catrow .lvl.b2{background:#8a6a3b;}
+  .rc-prompt b{color:var(--cyan-ink);}
+  .typein{width:100%;max-width:420px;padding:11px 13px;border:1px solid var(--line-2);
+    border-radius:10px;font-size:16px;font-family:inherit;background:var(--bg);color:var(--ink);}
+  .typein::placeholder,.setinput::placeholder,textarea::placeholder{color:var(--ink-3)}
+  .typein:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 3px var(--cyan-wash)}
+  .typein.ok{border-color:var(--ok);} .typein.bad{border-color:var(--bad);}
+  .verdict{margin-top:7px;font-size:14px;font-weight:600;min-height:19px;}
+  .verdict.ok{color:var(--ok);} .verdict.bad{color:var(--bad);}
+  .booklvl{margin-top:3px;font-size:12px;font-weight:600;color:var(--ink-3);}
+  .booklvl.hard{color:var(--bad);}
+  .booklvl.easy{color:var(--ok);}
+  .catrow{display:flex;gap:12px;align-items:flex-start;padding:12px;border:1px solid var(--line);
+    border-radius:var(--r);background:var(--s1);margin-bottom:8px;}
+  .catrow .lvl{flex:0 0 42px;text-align:center;font-family:var(--num);font-weight:600;
+    background:var(--cyan-wash);color:var(--cyan-ink);border-radius:8px;padding:6px 0;font-size:13.5px;}
+  .catrow .lvl.b1{background:var(--ok-wash);color:var(--ok)} .catrow .lvl.b2{background:var(--blue-wash);color:var(--blue)}
   .catrow .ci{flex:1;min-width:0;}
   .catrow .ct{font-weight:600;font-size:14.5px;color:var(--ink);}
-  .catrow .ca{font-size:12.5px;color:var(--muted);margin-bottom:3px;}
-  .catrow .cn{font-size:12.5px;color:var(--ink);line-height:1.45;}
-  .catgroup{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
-    font-weight:700;margin:16px 0 8px;}
-  .dcap{margin-top:4px;font-size:11.5px;color:var(--gold);font-weight:600;}
-  .rc-src{margin-top:6px;font-size:12px;color:var(--muted);line-height:1.45;font-style:italic;}
+  .catrow .ca{font-size:12.5px;color:var(--ink-3);margin-bottom:3px;}
+  .catrow .cn{font-size:13px;color:var(--ink-2);line-height:1.5;}
+  .catgroup{font-size:12.5px;color:var(--ink-2);font-weight:650;margin:18px 0 8px;}
+  .dcap{margin-top:4px;font-size:12px;color:var(--cyan-ink);font-weight:600;}
+  .rc-src{margin-top:6px;font-size:12.5px;color:var(--ink-3);line-height:1.45;font-style:italic;}
   .lvltrack{display:flex;align-items:flex-end;gap:6px;height:86px;padding-top:4px;}
-  .lvlpt{flex:1;min-width:16px;display:flex;flex-direction:column;justify-content:flex-end;
-    align-items:center;height:100%;gap:4px;}
-  .lvlpt > i{display:block;width:100%;max-width:34px;background:linear-gradient(180deg,var(--gold),var(--accent));
-    border-radius:5px 5px 0 0;min-height:5px;}
-  .lvlpt > b{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.04em;}
-  /* --- patrones de error (pestaña Errors) --- */
-  .errbar{display:flex;align-items:center;gap:10px;padding:5px 6px;border-radius:8px;cursor:pointer;}
-  .errbar:hover{background:#f3efe7;}
-  .errbar.on{background:#efe7d4;}
+  .lvlpt{flex:1;min-width:16px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;gap:4px;}
+  .lvlpt > i{display:block;width:100%;max-width:34px;background:var(--cyan);border-radius:4px 4px 0 0;min-height:5px;opacity:.85}
+  .lvlpt > b{font-family:var(--num);font-size:10.5px;color:var(--ink-3);font-weight:600;}
+  /* error patterns */
+  .errbar{display:flex;align-items:center;gap:10px;padding:6px;border-radius:8px;cursor:pointer;}
+  .errbar:hover{background:var(--s2);}
+  .errbar.on{background:var(--s3);}
   .errbar .lbl{flex:0 0 42%;font-size:13px;color:var(--ink);}
-  .errbar .bar{flex:1;height:8px;background:var(--line);border-radius:20px;overflow:hidden;}
-  .errbar .bar > i{display:block;height:100%;background:var(--danger);border-radius:20px;}
-  .errbar .cnt{flex:0 0 26px;text-align:right;font-size:12.5px;color:var(--muted);font-weight:600;}
-  /* --- comparación lado a lado (tuyo vs upgrade) --- */
+  .errbar .bar{flex:1;height:6px;background:var(--s3);border-radius:20px;overflow:hidden;}
+  .errbar .bar > i{display:block;height:100%;background:var(--bad);border-radius:20px;}
+  .errbar .cnt{flex:0 0 26px;text-align:right;font-family:var(--num);font-size:12.5px;color:var(--ink-2);}
+  /* yours vs upgraded */
   .cmp{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
   @media (max-width:820px){.cmp{grid-template-columns:1fr;}}
-  .cmp .col{min-width:0;border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:#fff;}
-  .cmp .col.up{border-color:var(--gold);background:#fffdf7;}
-  .cmp .col h4{margin:0 0 8px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
-    color:var(--muted);font-weight:700;display:flex;align-items:center;gap:6px;}
-  .cmp .col h4 .tag{font-size:10px;background:var(--gold-soft);color:#6b5220;padding:2px 7px;border-radius:20px;}
-  #study{white-space:pre-wrap;font-size:14.5px;line-height:1.55;color:var(--ink);min-height:44px;}
-  #study .term{font-family:Georgia,serif;font-size:17px;color:var(--accent);font-weight:600;margin-bottom:4px;}
+  .cmp .col{min-width:0;border:1px solid var(--line-2);border-radius:var(--r);padding:12px;background:var(--bg);}
+  .cmp .col.up{border-color:var(--cyan-line);}
+  .cmp .col h4{margin:0 0 8px;font-size:12.5px;color:var(--ink-2);font-weight:650;display:flex;align-items:center;gap:6px;}
+  #study{white-space:pre-wrap;font-size:14.5px;line-height:1.6;color:var(--ink);min-height:44px;}
+  #study.muted{color:var(--ink-2)}
+  #study .term{font-family:var(--book);font-size:19px;color:var(--cyan-ink);font-weight:600;margin-bottom:4px;}
   .toclist{max-height:30vh;overflow-y:auto;margin:-4px -6px 0;}
-  .tocrow{padding:7px 8px;border-radius:8px;cursor:pointer;font-size:13.5px;color:var(--ink);
-    display:flex;gap:8px;align-items:baseline;}
-  .tocrow:hover{background:#f3efe7;}
-  .tocrow.active{background:#efe7d4;font-weight:600;}
-  .tocrow .n{color:var(--gold);font-weight:700;font-size:12px;flex:0 0 auto;}
-  .tocrow .chk{cursor:pointer;color:var(--muted);width:15px;flex:0 0 auto;font-size:13px;}
-  .tocrow .chk.done{color:var(--accent);}
-  .tocrow.donerow .name,.tocrow.donerow span{color:var(--muted);}
-  .vocabrow{padding:8px;border-radius:8px;border:1px solid var(--line);margin-bottom:6px;font-size:13.5px;
-    display:flex;justify-content:space-between;gap:8px;cursor:pointer;background:var(--card);}
-  .vocabrow:hover{border-color:var(--gold);}
+  .tocrow{padding:8px;border-radius:8px;cursor:pointer;font-size:13.5px;color:var(--ink-2);display:flex;gap:8px;align-items:baseline;}
+  .tocrow:hover{background:var(--s2);color:var(--ink)}
+  .tocrow.active{background:var(--s3);color:var(--ink);font-weight:600;}
+  .tocrow .n{font-family:var(--num);color:var(--cyan-ink);font-size:12px;flex:0 0 auto;}
+  .tocrow .chk{cursor:pointer;color:var(--ink-3);width:15px;flex:0 0 auto;font-size:13px;}
+  .tocrow .chk.done{color:var(--ok);}
+  .tocrow.donerow .name,.tocrow.donerow span{color:var(--ink-3);}
+  .vocabrow{padding:9px;border-radius:8px;border:1px solid var(--line);margin-bottom:6px;font-size:13.5px;
+    display:flex;justify-content:space-between;gap:8px;cursor:pointer;background:var(--bg);}
+  .vocabrow:hover{border-color:var(--cyan-line);}
   .vocabrow .w{font-weight:600;}
-  .vocabrow .t{color:var(--muted);}
+  .vocabrow .t{color:var(--ink-2);}
   #vocabWrap{max-height:26vh;overflow-y:auto;}
-  .muted{color:var(--muted);font-size:12.5px;}
+  .muted{color:var(--ink-2);font-size:13px;}
   .row-gap{display:flex;gap:8px;}
   .grow{flex:1;}
   input[type=file]{display:none;}
-  .count-pill{font-size:11px;background:#efe7d4;color:#6b5220;border-radius:20px;padding:2px 8px;font-weight:600;}
-  /* ---------- Overlay Aprender ---------- */
-  /* Secciones: cubren el área a la DERECHA del sidebar (el panel izquierdo queda visible) */
-  .overlay{position:fixed;top:0;right:0;bottom:0;left:270px;background:var(--bg);
-    z-index:100;display:flex;align-items:center;justify-content:center;padding:24px;}
-  .nav{display:flex;flex-direction:column;gap:2px;margin:2px 0;}
-  .navbtn{text-align:left;padding:10px 12px;border-radius:9px;border:none;background:transparent;
-    color:var(--side-ink);cursor:pointer;font:inherit;font-size:14.5px;display:flex;align-items:center;gap:10px;}
-  .navbtn:hover{background:var(--sidebar-2);}
-  .navbtn.active{background:var(--sidebar-2);box-shadow:inset 3px 0 0 var(--gold);font-weight:600;}
-  #readingNav{display:flex;flex-direction:column;gap:8px;flex:1;min-height:0;margin-top:6px;}
-  .learn-panel{background:var(--bg);width:100%;max-width:920px;height:88vh;border-radius:18px;
-    box-shadow:0 20px 60px rgba(0,0,0,.35);display:flex;flex-direction:column;overflow:hidden;}
-  .learn-head{display:flex;align-items:center;gap:16px;padding:16px 20px;border-bottom:1px solid var(--line);background:var(--card);}
-  .learn-head .name{font-family:Georgia,serif;font-size:19px;font-weight:600;}
-  .tabs{display:flex;gap:6px;flex:1;flex-wrap:wrap;}
-  .tab{border:none;background:transparent;padding:8px 13px;border-radius:9px;cursor:pointer;font:inherit;color:var(--muted);}
-  .tab:hover{background:#efe7d4;}
-  .tab.active{background:var(--sidebar);color:#fff;}
+  .count-pill{font-family:var(--num);font-size:11.5px;background:var(--cyan-wash);color:var(--cyan-ink);border-radius:20px;padding:2px 8px;font-weight:600;}
+
+  /* ---------- Sections (overlays to the right of the sidebar) ---------- */
+  .overlay{position:fixed;top:0;right:0;bottom:0;left:var(--side-w);z-index:100;display:flex;align-items:center;justify-content:center;padding:24px;}
+  .nav{display:flex;flex-direction:column;gap:2px;margin:0;}
+  .navbtn{text-align:left;padding:9px 10px;min-height:42px;border-radius:var(--r-sm);border:none;background:transparent;
+    color:var(--ink-2);cursor:pointer;font:inherit;font-size:14.5px;font-weight:550;display:flex;align-items:center;gap:11px;transition:background .15s,color .15s;}
+  .navbtn:hover{background:var(--s2);color:var(--ink)}
+  .navbtn.active{background:var(--s3);color:var(--ink);box-shadow:inset 2px 0 0 var(--cyan);}
+  .navbtn.active .ico{color:var(--cyan)}
+  #readingNav{display:flex;flex-direction:column;gap:8px;flex:1;min-height:0;margin-top:2px;}
+  .learn-panel{background:var(--bg);width:100%;max-width:940px;height:88vh;border-radius:var(--r-lg);border:1px solid var(--line-2);
+    box-shadow:var(--shadow-pop);display:flex;flex-direction:column;overflow:hidden;}
+  .learn-head{display:flex;align-items:center;gap:16px;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--s1);}
+  .learn-head .name,.statshead .name{font-size:17px;font-weight:650;letter-spacing:-.01em}
+  .tabs{display:flex;gap:4px;flex:1;flex-wrap:wrap;}
+  .tab{white-space:nowrap;border:1px solid transparent;background:transparent;padding:7px 13px;min-height:36px;border-radius:9px;cursor:pointer;font:inherit;font-size:14px;font-weight:550;color:var(--ink-2);}
+  .tab:hover{background:var(--s2);color:var(--ink)}
+  .tab.active{background:var(--s3);color:var(--ink);border-color:var(--line-2)}
   .learn-body{flex:1;overflow-y:auto;padding:26px;}
-  .tabpanel{max-width:640px;margin:0 auto;}
-  /* Stat tiles */
-  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
-  .tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;text-align:center;box-shadow:var(--shadow);}
-  .tile .n{font-family:Georgia,serif;font-size:34px;font-weight:700;color:var(--ink);}
-  .tile .l{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:4px;}
-  /* Review card */
-  .revcard{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);
-    padding:36px;text-align:center;min-height:260px;display:flex;flex-direction:column;justify-content:center;gap:14px;}
-  .rc-term{font-family:Georgia,serif;font-size:40px;color:var(--ink);}
-  .rc-trans{font-size:24px;color:var(--accent);font-weight:600;}
-  .rc-ex{font-size:16px;color:var(--muted);font-style:italic;margin-top:4px;}
-  .rc-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px;}
-  .rc-actions .btn small{display:block;font-size:11px;color:var(--muted);font-weight:400;margin-top:2px;}
-  .rc-actions .btn.gold small{color:#6b5220;}
+  .tabpanel{max-width:660px;margin:0 auto;}
+  /* stat tiles: instrument readouts */
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .tile{background:var(--s1);border:1px solid var(--line);border-radius:var(--r);padding:16px 16px 14px;text-align:left;}
+  .tile .n{font-family:var(--num);font-size:30px;font-weight:600;color:var(--ink);letter-spacing:-.02em;line-height:1.1}
+  .tile .l{font-size:12.5px;color:var(--ink-3);margin-top:6px;}
+  .statsbody .tiles{gap:0;border:1px solid var(--line);border-radius:var(--r);background:var(--s1);overflow:hidden}
+  .statsbody .tiles .tile{border:0;border-radius:0;background:none;border-left:1px solid var(--line)}
+  .statsbody .tiles .tile:first-child{border-left:0}
+  /* review card */
+  .revcard{background:var(--s1);border:1px solid var(--line-2);border-radius:var(--r-lg);
+    padding:34px;text-align:center;min-height:270px;display:flex;flex-direction:column;justify-content:center;gap:14px;}
+  .rc-term{font-family:var(--book);font-size:40px;color:var(--ink);line-height:1.15}
+  .rc-trans{font-size:23px;color:var(--cyan-ink);font-weight:600;}
+  .rc-ex{font-size:16px;color:var(--ink-2);font-style:italic;margin-top:4px;line-height:1.5}
+  .rc-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:6px;}
+  .rc-actions .btn{min-width:84px;flex-direction:column;gap:2px}
+  .rc-actions .btn small{display:block;font-family:var(--num);font-size:11px;color:var(--ink-3);font-weight:500;}
+  .rc-actions .btn.gold small{color:var(--cyan-deep);opacity:.75}
   .rc-top{display:flex;justify-content:space-between;align-items:center;width:100%;}
-  .rc-top .badge{font-size:11px;border-radius:20px;padding:2px 9px;}
-  .rc-top .badge.new{background:#dbe4ff;color:#2a3f7a;}
-  .rc-top .badge.review{background:var(--gold-soft);color:#6b5220;}
+  .rc-top .badge{font-size:11.5px;border-radius:20px;padding:2px 9px;font-weight:600}
+  .rc-top .badge.new{background:var(--blue-wash);color:var(--blue);}
+  .rc-top .badge.review{background:var(--cyan-wash);color:var(--cyan-ink);}
   .vlist .vrow{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);
-    border-radius:10px;margin-bottom:8px;background:var(--card);}
+    border-radius:10px;margin-bottom:8px;background:var(--s1);}
   .vlist .vrow .w{font-weight:600;}
-  .vlist .vrow .t{color:var(--muted);flex:1;}
-  .vlist .vrow .badge{font-size:11px;color:#6b5220;background:var(--gold-soft);border-radius:20px;padding:2px 8px;}
-  .vlist .vrow .del{border:none;background:transparent;cursor:pointer;color:var(--danger);opacity:.6;}
-  .vlist .vrow .del:hover{opacity:1;}
-  .soon{text-align:center;color:var(--muted);padding:40px;}
-  .soon .big{font-family:Georgia,serif;font-size:26px;color:var(--ink);margin-bottom:8px;}
-  .level-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow);margin-bottom:16px;text-align:center;}
-  .level-name{font-family:Georgia,serif;font-size:28px;color:var(--ink);margin-top:2px;}
-  .meter{height:10px;background:var(--line);border-radius:20px;overflow:hidden;margin:12px 0 6px;}
-  .meter>i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#9c7c46);transition:width .4s;}
-  .stack{display:flex;height:26px;border-radius:8px;overflow:hidden;border:1px solid var(--line);margin:4px 0;}
-  .legend{display:flex;gap:16px;justify-content:center;font-size:12.5px;color:var(--muted);flex-wrap:wrap;margin-top:10px;}
+  .vlist .vrow .t{color:var(--ink-2);flex:1;}
+  .vlist .vrow .badge{font-size:11px;color:var(--cyan-ink);background:var(--cyan-wash);border-radius:20px;padding:2px 8px;}
+  .vlist .vrow .del{border:none;background:transparent;cursor:pointer;color:var(--bad);opacity:.7;min-width:32px;min-height:32px;border-radius:6px}
+  .vlist .vrow .del:hover{opacity:1;background:var(--bad-wash)}
+  .soon{text-align:center;color:var(--ink-2);padding:44px 20px;}
+  .soon .big{font-size:24px;font-weight:650;letter-spacing:-.02em;color:var(--ink);margin-bottom:8px;}
+  .level-card{background:var(--s1);border:1px solid var(--line);border-radius:var(--r);padding:20px;margin-bottom:16px;text-align:center;}
+  .level-name{font-family:var(--num);font-size:30px;font-weight:600;color:var(--ink);margin-top:4px;}
+  .meter{height:6px;background:var(--s3);border-radius:20px;overflow:hidden;margin:12px 0 7px;}
+  .meter>i{display:block;height:100%;background:var(--cyan);transition:width .5s var(--ease);}
+  .stack{display:flex;height:22px;border-radius:7px;overflow:hidden;border:1px solid var(--line);margin:4px 0;}
+  .legend{display:flex;gap:16px;justify-content:center;font-size:12.5px;color:var(--ink-2);flex-wrap:wrap;margin-top:10px;}
   .legend .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle;}
-  .daychart{display:flex;align-items:flex-end;gap:4px;height:80px;margin-top:6px;}
-  .daychart .bar{flex:1;background:var(--gold-soft);border-radius:3px 3px 0 0;min-height:2px;}
-  .daychart .bar.today{background:var(--gold);}
-  .deckcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow);margin-bottom:14px;display:flex;align-items:center;gap:14px;}
-  .deckcard .di{width:46px;height:46px;border-radius:11px;background:linear-gradient(145deg,var(--gold),#9c7c46);display:grid;place-items:center;font-size:22px;flex:0 0 auto;}
-  .deckcard .dn{font-weight:600;font-size:16px;}
-  .deckcard .dd{color:var(--muted);font-size:13px;}
+  .daychart{display:flex;align-items:flex-end;gap:4px;height:80px;margin-top:6px;border-bottom:1px solid var(--line-2)}
+  .daychart .bar{flex:1;background:rgba(60,207,230,.28);border-radius:3px 3px 0 0;min-height:2px;}
+  .daychart .bar.today{background:var(--cyan);}
+  .deckcard{background:var(--s1);border:1px solid var(--line);border-radius:var(--r);padding:15px 17px;margin-bottom:12px;display:flex;align-items:center;gap:14px;transition:border-color .15s}
+  .deckcard:hover{border-color:var(--line-2)}
+  .deckcard .di{width:44px;height:44px;border-radius:11px;background:var(--bg);border:1px solid var(--cyan-line);display:grid;place-items:center;font-family:var(--num);font-size:14px;font-weight:600;color:var(--cyan-ink);flex:0 0 auto;}
+  .deckcard .dn{font-weight:650;font-size:15.5px;}
+  .deckcard .dd{color:var(--ink-2);font-size:13px;}
   .deckcard .dinfo{flex:1;min-width:0;}
-  .readable{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:18px;line-height:1.85;color:#3a352e;}
+  .readable{font-family:var(--book);font-size:18px;line-height:1.8;color:var(--ink);}
   .readable .ww{cursor:pointer;border-radius:3px;padding:0 1px;}
-  .readable .ww:hover{background:#f2ead6;}
+  .readable .ww:hover{background:var(--cyan-wash);}
   textarea{font:inherit;}
   .wtoolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
-  .wbtn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 11px;cursor:pointer;font:inherit;min-width:36px;}
-  .wbtn:hover{background:#f2f4f7;}
-  .wtoolbar select{padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;font:inherit;}
-  .editor{min-height:55vh;background:var(--card);border:1px solid var(--line);border-radius:14px;
-    padding:24px 28px;font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:19px;line-height:1.7;
-    color:var(--ink);overflow-y:auto;box-shadow:var(--shadow);}
-  .editor:focus{outline:2px solid var(--gold-soft);}
-  .editor:empty:before{content:attr(data-ph);color:var(--muted);}
-  .wbtn.active{background:var(--sidebar);color:#fff;border-color:var(--sidebar);}
+  .wbtn{border:1px solid var(--line-2);background:var(--s1);color:var(--ink-2);border-radius:8px;padding:6px 11px;min-height:34px;cursor:pointer;font:inherit;font-size:13.5px;min-width:36px;}
+  .wbtn:hover{background:var(--s2);color:var(--ink)}
+  .wtoolbar select{padding:6px 9px;}
+  .editor{min-height:55vh;background:var(--s1);border:1px solid var(--line-2);border-radius:var(--r-lg);
+    padding:24px 28px;font-family:var(--book);font-size:19px;line-height:1.7;color:var(--ink);overflow-y:auto;}
+  .editor:focus{outline:none;border-color:var(--cyan-line);box-shadow:0 0 0 3px var(--cyan-wash)}
+  .editor:empty:before{content:attr(data-ph);color:var(--ink-3);}
+  .wbtn.active{background:var(--s3);color:var(--ink);border-color:var(--cyan-line);}
   .mdwrap{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
   @media(max-width:860px){.mdwrap{grid-template-columns:1fr;}}
-  .mdsrc{min-height:55vh;font-family:"Courier New",monospace;font-size:15px;line-height:1.6;
-    padding:20px 22px;border:1px solid var(--line);border-radius:14px;resize:vertical;background:var(--card);width:100%;}
+  .mdsrc{min-height:55vh;font-family:var(--num);font-size:14.5px;line-height:1.65;color:var(--ink);
+    padding:20px 22px;border:1px solid var(--line-2);border-radius:var(--r-lg);resize:vertical;background:var(--s1);width:100%;}
   #wPreview{min-height:55vh;}
-  #wPreview h1,#wPreview h2,#wPreview h3{font-family:Georgia,serif;margin:.4em 0 .3em;}
-  #wPreview blockquote{border-left:3px solid var(--gold);margin:8px 0;padding-left:12px;color:var(--muted);}
-  #wPreview code{background:#efece2;padding:1px 5px;border-radius:4px;font-family:monospace;font-size:.92em;}
+  #wPreview h1,#wPreview h2,#wPreview h3{font-family:var(--ui);font-weight:650;margin:.4em 0 .3em;}
+  #wPreview blockquote{border-left:2px solid var(--cyan-line);margin:8px 0;padding-left:12px;color:var(--ink-2);}
+  #wPreview code{background:var(--s3);padding:1px 5px;border-radius:4px;font-family:var(--num);font-size:.88em;}
   #wPreview ul,#wPreview ol{padding-left:22px;}
-  #wPreview a{color:var(--accent);}
-  .fullpanel{width:100%;height:100%;background:var(--bg);overflow-y:auto;display:flex;flex-direction:column;}
-  .statshead{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:16px;padding:16px 26px;
-    border-bottom:1px solid var(--line);background:var(--card);}
-  .statshead .name{font-family:Georgia,serif;font-size:19px;font-weight:600;}
+  #wPreview a{color:var(--cyan-ink);}
+  .fullpanel{width:100%;height:100%;overflow-y:auto;display:flex;flex-direction:column;}
+  .statshead{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:14px;padding:13px 24px;
+    border-bottom:1px solid var(--line);background:rgba(10,17,30,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+  .statshead .brand .logo,.learn-head .brand .logo{display:none}
   .rangetoggle{display:flex;gap:4px;}
-  .statsbody{padding:24px;max-width:1120px;margin:0 auto;width:100%;display:flex;flex-direction:column;gap:16px;}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .statsbody{padding:24px;max-width:1120px;margin:0 auto;width:100%;display:flex;flex-direction:column;gap:14px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
   @media(max-width:820px){.grid2{grid-template-columns:1fr;}}
   .modbar{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:13.5px;}
-  .modbar .lbl{width:90px;color:var(--muted);}
-  .modbar .track{flex:1;height:14px;background:var(--line);border-radius:8px;overflow:hidden;}
-  .modbar .track>i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#9c7c46);}
-  .modbar .val{width:52px;text-align:right;}
-  .oppbanner{background:linear-gradient(135deg,#2f6b5e,#255449);color:#eafff7;border-radius:14px;
-    padding:16px 18px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow);}
-  .oppbanner .big{font-size:26px;}
+  .modbar .lbl{width:90px;color:var(--ink-2);}
+  .modbar .track{flex:1;height:8px;background:var(--s3);border-radius:8px;overflow:hidden;}
+  .modbar .track>i{display:block;height:100%;background:var(--cyan);}
+  .modbar .val{width:52px;text-align:right;font-family:var(--num);font-size:12.5px;color:var(--ink-2)}
+  .oppbanner{background:var(--cyan-wash);border:1px solid var(--cyan-line);color:var(--ink);border-radius:var(--r);
+    padding:15px 17px;display:flex;align-items:center;gap:14px;}
+  .oppbanner .big{font-size:24px;}
   .areabar{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:14px;}
   .areabar .lbl{width:140px;}
-  .areabar .track{flex:1;height:12px;background:var(--line);border-radius:8px;overflow:hidden;}
-  .areabar .track>i{display:block;height:100%;background:var(--accent);}
-  .areabar .val{width:70px;text-align:right;color:var(--muted);}
+  .areabar .track{flex:1;height:8px;background:var(--s3);border-radius:8px;overflow:hidden;}
+  .areabar .track>i{display:block;height:100%;background:var(--cyan);}
+  .areabar .val{width:70px;text-align:right;color:var(--ink-2);font-family:var(--num);font-size:12.5px}
   .heat{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,13px);gap:3px;overflow-x:auto;padding-bottom:4px;}
-  .heat .c{width:13px;height:13px;border-radius:3px;background:var(--line);}
-  .heat .c.l1{background:#e7d9b4;} .heat .c.l2{background:#d3b878;}
-  .heat .c.l3{background:#c9a86a;} .heat .c.l4{background:#9c7c46;}
-  .heatlegend{display:flex;align-items:center;gap:5px;justify-content:flex-end;color:var(--muted);font-size:12px;margin-top:8px;}
+  .heat .c{width:13px;height:13px;border-radius:3px;background:var(--s3);}
+  .heat .c.l1{background:rgba(60,207,230,.25);} .heat .c.l2{background:rgba(60,207,230,.45);}
+  .heat .c.l3{background:rgba(60,207,230,.7);} .heat .c.l4{background:var(--cyan);}
+  .heatlegend{display:flex;align-items:center;gap:5px;justify-content:flex-end;color:var(--ink-3);font-size:12px;margin-top:8px;}
   .heatlegend .c{width:12px;height:12px;border-radius:3px;display:inline-block;}
   .navbtn.alert{position:relative;}
-  .navbtn.alert::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--gold);margin-left:auto;box-shadow:0 0 0 2px var(--sidebar);}
-  @media(max-width:1100px){ .app{grid-template-columns:230px 1fr;} .rail{display:none;} }
+  .navbtn.alert::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--cyan);margin-left:auto;box-shadow:0 0 0 3px var(--cyan-wash);}
+  @media(max-width:1100px){ .app{grid-template-columns:var(--side-w) 1fr;} .rail{display:none;} }
 
-  /* ---------- Móvil y tablet estrecha ----------
-     La rejilla son tres columnas FIJAS (270 + contenido + 330). En un teléfono
-     de 390 px no caben, y la barra lateral se comía el texto. Por debajo de
-     900 px se pasa a UNA columna y los dos paneles se vuelven cajones que se
-     abren desde la barra superior.
-     El panel derecho no se puede simplemente esconder: dentro está «Study»,
-     que es donde aparece la traducción al tocar una palabra. Sin él, tocabas y
-     no pasaba nada visible. */
+  /* ---------- Phone and narrow tablet ----------
+     Below 900 px the grid becomes one column and both side panels become
+     drawers. The right rail cannot simply hide: "Study" lives there, which is
+     where a tapped word's translation appears. Sections cover the whole
+     screen instead of starting at the desktop sidebar's width. */
   @media(max-width:900px){
     .app{grid-template-columns:1fr;}
-    .sidebar,.rail{
-      position:fixed;top:0;bottom:0;z-index:60;width:min(86vw,300px);
-      transition:transform .22s ease;will-change:transform;
-      padding-top:env(safe-area-inset-top,0px);
-      padding-bottom:env(safe-area-inset-bottom,0px);
-    }
+    .sidebar,.rail{position:fixed;top:0;bottom:0;z-index:60;width:min(86vw,310px);
+      transition:transform .26s var(--ease);will-change:transform;
+      padding-top:calc(14px + env(safe-area-inset-top,0px));padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));}
     .sidebar{left:0;transform:translateX(-100%);}
-    .rail{right:0;display:block;transform:translateX(100%);
-      border-left:1px solid var(--line);box-shadow:-8px 0 24px rgba(40,33,20,.14);}
-    .sidebar.abierto{transform:none;}
-    .rail.abierto{transform:none;}
-    #velo{position:fixed;inset:0;background:rgba(20,16,10,.42);z-index:55;display:none;}
+    .rail{right:0;display:flex;transform:translateX(100%);box-shadow:var(--shadow-pop);}
+    .sidebar.abierto,.rail.abierto{transform:none;}
+    #velo{position:fixed;inset:0;background:rgba(3,7,14,.6);z-index:55;display:none;}
     #velo.on{display:block;}
-    .solo-movil{display:inline-flex !important;}
-    /* el texto del libro necesita todo el ancho */
-    .reader-wrap{min-width:0;}
-    .topbar{padding:12px 14px;gap:8px;}
-    .topbar h1{font-size:19px;}
-    .toolbar{flex-wrap:wrap;gap:7px;}
+    .solo-movil{display:inline-grid !important;}
+    .streak-chip.solo-movil{display:inline-flex !important;}
+    /* on a phone the Contents drawer does chapter navigation */
+    #prevCh,#nextCh{display:none}
+    #deckBudget{display:none}
+    #decksOverlay.inside .statshead{flex-wrap:wrap}
+    #decksOverlay .statshead .brand{flex:1 1 0;min-width:0}
+    #decksOverlay .statshead .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #deckModes{order:10;flex:1 0 100%;overflow-x:auto;flex-wrap:nowrap}
+    .topbar{padding:10px 12px;gap:8px;padding-top:calc(10px + env(safe-area-inset-top,0px))}
+    .topbar .tt h1{font-size:16px;}
+    .paper-scroll{padding:14px 10px 150px}
+    .paper{padding:28px 20px;border-radius:var(--r)}
+    #reader{font-size:19px;line-height:1.85;text-align:left;hyphens:manual}
+    .toolbar{left:10px;right:10px;transform:none;bottom:calc(10px + env(safe-area-inset-bottom,0px));flex-wrap:wrap;gap:6px;justify-content:center}
     .toolbar .btn{flex:1 1 auto;}
-
-    /* Las secciones -- Decks, Writing, Statistics, Lessons, Test -- son
-       superposiciones colocadas con left:270px, que es el ancho de la barra
-       lateral de ESCRITORIO. En un telefono de 390 px eso dejaba 120 px de
-       contenido pegado al borde derecho: el cajon se cerraba y aun asi no
-       quedaba sitio donde leer. Aqui ocupan la pantalla entera. */
     .overlay{left:0;padding:0;align-items:stretch;justify-content:stretch;}
-    .learn-panel{max-width:none;height:100%;border-radius:0;}
-    /* recuadros de estadisticas: tres columnas en un telefono son ilegibles */
-    .tiles{grid-template-columns:repeat(2,1fr);gap:10px;}
+    .learn-panel{max-width:none;height:100%;border-radius:0;border:0}
+    .learn-body{padding:18px 14px}
+    .tiles{grid-template-columns:repeat(2,1fr)!important;gap:10px;}
     .tile{padding:13px;}
-    .tile .n{font-size:27px;}
-    .statshead{padding:13px 15px;gap:10px;}
-    .fullpanel{padding-top:env(safe-area-inset-top,0px);
-      padding-bottom:env(safe-area-inset-bottom,0px);}
+    .tile .n{font-size:25px;}
+    .statshead{padding:10px 12px;gap:8px;flex-wrap:nowrap}
+    .statshead .tabs,.statshead .rangetoggle{flex-wrap:nowrap;overflow-x:auto;min-width:0;margin-left:0!important;scrollbar-width:none}
+    .statshead .tabs::-webkit-scrollbar{display:none}
+    .statshead .tab{flex:0 0 auto}
+    #bookLevel,#bookPct,.topbar .tt .sub{display:none!important}
+    .statsbody{padding:14px 12px}
+    .revcard{padding:24px 16px}
+    .rc-term{font-size:34px}
+    .fullpanel{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);}
+    .opts{right:10px;left:10px;min-width:0}
   }
   .solo-movil{display:none;}
-  /* ---- Lessons (método contrastivo) ---- */
-  .lessoncard{cursor:pointer;transition:transform .08s,box-shadow .15s;margin-bottom:12px;}
-  .lessoncard:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.06);}
-  .lcheck{width:26px;height:26px;flex:none;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--gold);font-weight:700;}
-  .lcheck.on{border-color:var(--gold);background:var(--gold);color:#241800;}
-  .ltitle{font-family:Georgia,serif;font-size:17px;font-weight:600;}
-  .ltitle.big{font-size:24px;}
+
+  /* ---- Lessons (contrastive method) ---- */
+  .lessoncard{cursor:pointer;transition:border-color .15s,transform .1s;margin-bottom:12px;}
+  .lessoncard:hover{border-color:var(--line-2);}
+  .lcheck{width:26px;height:26px;flex:none;border-radius:50%;border:1.5px solid var(--line-2);display:flex;align-items:center;justify-content:center;color:var(--cyan);font-weight:700;font-size:13px}
+  .lcheck.on{border-color:var(--cyan);background:var(--cyan);color:var(--cyan-deep);}
+  .ltitle{font-size:16.5px;font-weight:650;letter-spacing:-.01em}
+  .ltitle.big{font-size:24px;letter-spacing:-.02em}
   .lhero{margin:6px 0 18px;}
-  .lsect{margin:16px 0;}
-  .lsecth{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:9px;}
-  .lpair{display:grid;grid-template-columns:38px 1fr auto;align-items:center;gap:10px 12px;padding:11px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);margin-bottom:9px;}
+  .lsect{margin:18px 0;}
+  .lsecth{font-size:13px;color:var(--ink-2);font-weight:650;margin-bottom:9px;}
+  .lpair{display:grid;grid-template-columns:38px 1fr auto;align-items:center;gap:10px 12px;padding:11px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--s1);margin-bottom:9px;}
   .lpair .len{font-size:17px;grid-column:2;}
-  .lpair .les{grid-column:2;font-size:14px;}
+  .lpair .les{grid-column:2;font-size:14px;color:var(--ink-2)}
   .lpair .sayb{grid-row:1/3;}
-  .sayb,.deckb,.revealb{border:1px solid var(--line);background:var(--card);border-radius:9px;padding:6px 9px;cursor:pointer;font:inherit;font-size:14px;}
-  .sayb:hover,.deckb:hover,.revealb:hover{background:#f3efe7;}
-  .lexp{font-size:15.5px;line-height:1.6;margin:0 0 11px;color:var(--ink);max-width:760px;}
-  .lformula{margin:14px 0;border:1px dashed var(--line);border-radius:12px;padding:12px 16px;background:#faf6ee;}
-  .lformula .flabel{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);font-weight:700;margin-bottom:6px;}
-  .lformula .fline{font-family:'SF Mono',Menlo,monospace;font-size:14.5px;padding:4px 0;color:#3a2f18;}
-  .lform{display:grid;grid-template-columns:104px 38px 1fr;align-items:center;gap:5px 12px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:var(--card);}
+  .sayb,.deckb,.revealb{border:1px solid var(--line-2);background:var(--s2);color:var(--ink);border-radius:9px;padding:6px 10px;min-height:34px;cursor:pointer;font:inherit;font-size:14px;}
+  .sayb:hover,.deckb:hover,.revealb:hover{background:var(--s3);}
+  .lexp{font-size:15.5px;line-height:1.65;margin:0 0 11px;color:var(--ink);max-width:70ch;}
+  .lformula{margin:14px 0;border:1px dashed var(--line-2);border-radius:var(--r);padding:12px 16px;background:var(--bg);}
+  .lformula .flabel{font-size:12px;color:var(--cyan-ink);font-weight:650;margin-bottom:6px;}
+  .lformula .fline{font-family:var(--num);font-size:14px;padding:4px 0;color:var(--ink);}
+  .lform{display:grid;grid-template-columns:104px 38px 1fr;align-items:center;gap:5px 12px;padding:10px 14px;border:1px solid var(--line);border-radius:var(--r);margin-bottom:8px;background:var(--s1);}
   .lform .flabelchip{grid-row:1/3;font-size:12.5px;font-weight:700;}
   .lform .sayb{grid-row:1/3;}
   .lform .fen{grid-column:3;font-size:16px;}
-  .lform .fes{grid-column:3;font-size:13.5px;}
-  .lform.f-aff{border-left:3px solid #4a9d5b;} .lform.f-aff .flabelchip{color:#3a7d44;}
-  .lform.f-neg{border-left:3px solid #c85a5a;} .lform.f-neg .flabelchip{color:#b23b3b;}
-  .lform.f-q{border-left:3px solid #5a7fc8;}   .lform.f-q .flabelchip{color:#3a5fa8;}
-  .lprac{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 14px;border:1px solid var(--line);border-radius:12px;margin-bottom:9px;}
+  .lform .fes{grid-column:3;font-size:13.5px;color:var(--ink-2)}
+  .lform.f-aff .flabelchip{color:var(--ok);}
+  .lform.f-neg .flabelchip{color:var(--bad);}
+  .lform.f-q .flabelchip{color:var(--blue);}
+  .lprac{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 14px;border:1px solid var(--line);border-radius:var(--r);margin-bottom:9px;background:var(--s1)}
   .lprac .pes{font-size:15.5px;flex:1;min-width:180px;}
   .lprac .pans{display:flex;align-items:center;gap:9px;}
   .lprac .pen{font-size:16px;font-weight:600;}
-  .backb{border:none;background:transparent;color:var(--muted);cursor:pointer;font:inherit;padding:4px 0;margin-bottom:8px;}
+  .backb{border:none;background:transparent;color:var(--ink-2);cursor:pointer;font:inherit;padding:6px 0;margin-bottom:8px;}
   .backb:hover{color:var(--ink);}
-  #liraToast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(20px);background:#241f17;color:#f3ead4;padding:11px 20px;border-radius:11px;font-size:14px;opacity:0;transition:.2s;z-index:99;pointer-events:none;}
+  #liraToast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--s2);color:var(--ink);
+    border:1px solid var(--line-2);box-shadow:var(--shadow-pop);padding:11px 18px;border-radius:12px;font-size:14px;opacity:0;transition:.25s var(--ease);z-index:350;pointer-events:none;max-width:min(92vw,520px);text-align:center}
   #liraToast.on{opacity:1;transform:translateX(-50%) translateY(0);}
-  #liraToast.err{background:var(--danger);color:#fff;font-weight:600;max-width:min(92vw,520px);text-align:center;}
+  #liraToast.err{background:#3a1416;border-color:rgba(255,122,114,.5);color:#ffd9d6;font-weight:600;}
   /* ---- Settings modal ---- */
-  .modal-back{position:fixed;inset:0;background:rgba(20,18,14,.45);display:flex;align-items:center;justify-content:center;z-index:100;}
-  .modal{background:var(--bg);border:1px solid var(--line);border-radius:16px;width:min(480px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.25);}
-  .modal-h{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line);font-size:17px;}
-  .modal-b{padding:18px;}
-  .setsect .setlabel{font-family:Georgia,serif;font-size:17px;font-weight:600;margin-bottom:8px;}
-  .setinput{width:100%;font:inherit;font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);box-sizing:border-box;}
+  .modal-back{position:fixed;inset:0;background:rgba(3,7,14,.62);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+  .modal{background:var(--s1);border:1px solid var(--line-2);border-radius:var(--r-lg);width:min(500px,100%);max-height:92vh;overflow-y:auto;box-shadow:var(--shadow-pop);}
+  .modal-h{position:sticky;top:0;background:var(--s1);display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);font-size:16px;}
+  .modal-b{padding:18px;display:flex;flex-direction:column;gap:22px}
+  .setsect .setlabel{font-size:15px;font-weight:650;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .setinput{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line-2);border-radius:10px;background:var(--bg);color:var(--ink);}
   .aistatus{font-size:13.5px;font-weight:600;padding:8px 12px;border-radius:9px;margin-bottom:10px;}
-  .aistatus.on{background:#e3f0e5;color:#2f6b3a;}
-  .aistatus.off{background:#f3e6df;color:#9a4a2f;}
-  /* ---- Lessons: mapa/ruta ---- */
+  .aistatus.on{background:var(--ok-wash);color:var(--ok);}
+  .aistatus.off{background:var(--amber-wash);color:var(--amber-ink);}
+  /* ---- Lessons: route map ---- */
   .maphero{margin:2px 0 22px;max-width:820px;}
-  .mapprog{height:9px;background:var(--line);border-radius:6px;overflow:hidden;margin:14px 0 6px;max-width:520px;}
-  .mapprogbar{height:100%;background:var(--gold);border-radius:6px;transition:width .4s;}
-  .maproad{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;align-items:start;}
+  .mapprog{height:6px;background:var(--s3);border-radius:6px;overflow:hidden;margin:14px 0 6px;max-width:520px;}
+  .mapprogbar{height:100%;background:var(--cyan);border-radius:6px;transition:width .5s var(--ease);}
+  .maproad{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start;}
   @media(max-width:980px){ .maproad{grid-template-columns:1fr;} }
-  .mapcol{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;}
-  .mapcolh{border-radius:12px;padding:12px 14px;margin-bottom:12px;cursor:pointer;color:#241800;}
-  .mapcolh-beginner{background:linear-gradient(135deg,#bfe3c2,#8fce9a);}
-  .mapcolh-mid{background:linear-gradient(135deg,#f3e2a6,#e9c766);}
-  .mapcolh-advanced{background:linear-gradient(135deg,#bcd6f2,#8fb6e6);}
-  .mapcolt{font-family:Georgia,serif;font-size:19px;font-weight:700;}
-  .mapcoltag{font-size:12.5px;opacity:.75;font-weight:600;}
+  .mapcol{background:var(--s1);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px;}
+  .mapcolh{border-radius:var(--r);padding:12px 14px;margin-bottom:12px;cursor:pointer;border:1px solid var(--line-2);background:var(--bg)}
+  .mapcolh-beginner{border-color:rgba(79,212,154,.45);box-shadow:inset 0 2px 0 var(--ok)}
+  .mapcolh-mid{border-color:rgba(143,178,255,.45);box-shadow:inset 0 2px 0 var(--blue)}
+  .mapcolh-advanced{border-color:rgba(180,140,255,.45);box-shadow:inset 0 2px 0 #b48cff}
+  .mapcolt{font-size:17px;font-weight:650;}
+  .mapcoltag{font-size:12.5px;color:var(--ink-2);font-weight:600;}
   .mapblock{margin:0 0 12px;}
-  .mapblockh{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin:10px 4px 6px;}
-  .mapstep{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;cursor:pointer;transition:background .12s;}
-  .mapstep:hover{background:#f3efe7;}
-  .mapnum{flex:none;width:24px;height:24px;border-radius:50%;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;color:var(--muted);}
-  .mapstep.done .mapnum{background:var(--gold);border-color:var(--gold);color:#241800;}
-  .mapdesc{font-size:13.5px;line-height:1.35;}
-  /* ---- Checkpoints (mini-test) ---- */
-  .cpcard{border-left:3px solid var(--gold);background:#fbf7ee;}
-  .cpcard.done{border-left-color:#4a9d5b;background:#f0f6f0;}
-  .cpq{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin:8px 0 6px;}
-  .cpprompt{font-family:Georgia,serif;font-size:24px;margin-bottom:18px;}
-  .cpopt{display:block;width:100%;text-align:left;font:inherit;font-size:16px;padding:13px 16px;margin-bottom:10px;border:1px solid var(--line);border-radius:12px;background:var(--card);cursor:pointer;transition:.1s;}
-  .cpopt:hover:not(:disabled){background:#f3efe7;}
+  .mapblockh{font-size:12.5px;color:var(--ink-3);font-weight:650;margin:10px 4px 6px;}
+  .mapstep{display:flex;align-items:center;gap:10px;padding:8px 10px;min-height:42px;border-radius:10px;cursor:pointer;transition:background .15s;}
+  .mapstep:hover{background:var(--s2);}
+  .mapnum{flex:none;width:24px;height:24px;border-radius:50%;border:1.5px solid var(--line-2);display:flex;align-items:center;justify-content:center;font-family:var(--num);font-size:11.5px;color:var(--ink-3);}
+  .mapstep.done .mapnum{background:var(--cyan);border-color:var(--cyan);color:var(--cyan-deep);}
+  .mapdesc{font-size:13.5px;line-height:1.4;}
+  /* ---- Checkpoints (mini test) ---- */
+  .cpcard{border-color:var(--cyan-line);}
+  .cpcard.done{border-color:rgba(79,212,154,.45);}
+  .cpq{font-size:12.5px;color:var(--ink-3);font-weight:650;margin:8px 0 6px;}
+  .cpprompt{font-family:var(--book);font-size:24px;margin-bottom:18px;line-height:1.35}
+  .cpopt{display:block;width:100%;text-align:left;font:inherit;font-size:16px;padding:13px 16px;margin-bottom:10px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--s1);color:var(--ink);cursor:pointer;transition:background .12s,border-color .12s;}
+  .cpopt:hover:not(:disabled){background:var(--s2);border-color:#3a4f78}
   .cpopt:disabled{cursor:default;}
-  .cpopt.right{background:#e3f0e5;border-color:#4a9d5b;color:#2f6b3a;font-weight:600;}
-  .cpopt.wrong{background:#f6e4e0;border-color:#c85a5a;color:#b23b3b;}
+  .cpopt.right{background:var(--ok-wash);border-color:var(--ok);color:var(--ok);font-weight:600;}
+  .cpopt.wrong{background:var(--bad-wash);border-color:var(--bad);color:var(--bad);}
   .cpfb{display:flex;align-items:center;gap:12px;margin-top:8px;min-height:40px;}
-  .cpok{color:#2f6b3a;font-weight:600;} .cpno{color:#b23b3b;}
+  .cpok{color:var(--ok);font-weight:600;} .cpno{color:var(--bad);}
   .cpresult{text-align:center;padding:40px 20px;}
+  /* level test */
+  .testq{font-family:var(--book);font-size:23px;margin:14px 0 20px;line-height:1.35}
+  .bigread{font-family:var(--num);font-size:46px;font-weight:600;letter-spacing:-.03em;margin:6px 0;color:var(--cyan-ink)}
+  /* ---------- Reading lamp (pull the cord: Night ↔ Paper) ---------- */
+  .lampwrap{position:relative;height:0;z-index:20}
+  .lamp{position:absolute;top:0;right:30px;width:64px;height:150px;padding:0;border:0;background:none;cursor:pointer;
+    transform-origin:32px 0;animation:lampSway 3.5s ease-in-out 2;-webkit-tap-highlight-color:transparent}
+  .lamp svg{width:100%;height:100%;overflow:visible}
+  .lamp .wire,.lamp .chain line{stroke:var(--line-2);stroke-width:1.6}
+  .lamp .shade{fill:var(--s3);stroke:var(--line-2);stroke-width:1.2;transition:fill .4s}
+  .lamp .shade-rim{stroke:var(--ink-3);stroke-width:2;stroke-linecap:round}
+  .lamp .bulb{fill:var(--s2);stroke:var(--line-2);transition:fill .3s,filter .3s}
+  .lamp .bead{fill:var(--ink-3);stroke:none;transition:fill .2s}
+  .lamp:hover .bead,.lamp:focus-visible .bead{fill:var(--amber)}
+  .lamp .chain{transition:transform .2s}
+  .lamp.pulled .chain{animation:cordPull .7s cubic-bezier(.3,1.6,.5,1)}
+  body.paper-mode .lamp .bulb{fill:#ffe7a8;filter:drop-shadow(0 0 6px #ffd76b) drop-shadow(0 0 14px rgba(255,200,90,.7))}
+  body.paper-mode .lamp .shade{fill:#2b3446}
+  .lampglow{position:absolute;top:40px;right:-60px;width:620px;height:560px;pointer-events:none;opacity:0;
+    background:radial-gradient(closest-side,rgba(255,214,130,.20),rgba(255,214,130,.07) 55%,transparent);
+    transition:opacity .6s var(--ease)}
+  body.paper-mode .lampglow{opacity:1}
+  @keyframes cordPull{0%{transform:translateY(0)}35%{transform:translateY(14px)}100%{transform:translateY(0)}}
+  @keyframes lampSway{0%,100%{transform:rotate(-1.2deg)}50%{transform:rotate(1.2deg)}}
+  @media(max-width:900px){.lamp{right:6px;width:48px;height:112px}.lampglow{width:360px;height:380px;right:-80px}}
+
+  /* ---------- Depth: every click moves you one layer deeper ----------
+     A section rises from behind the cockpit and its contents arrive in
+     layers; a revealed answer turns over like a card. */
+  .overlay > *{animation:depthIn .55s var(--ease) both}
+  .statsbody > *,.learn-body .tabpanel > *{animation:layerIn .5s var(--ease) both}
+  .statsbody > *:nth-child(2),.learn-body .tabpanel > *:nth-child(2){animation-delay:.05s}
+  .statsbody > *:nth-child(3),.learn-body .tabpanel > *:nth-child(3){animation-delay:.1s}
+  .statsbody > *:nth-child(4),.learn-body .tabpanel > *:nth-child(4){animation-delay:.15s}
+  .statsbody > *:nth-child(n+5),.learn-body .tabpanel > *:nth-child(n+5){animation-delay:.2s}
+  #rcBack,#dBack{animation:turnIn .45s var(--ease) both;transform-origin:50% 0}
+  .modal{animation:dlgRise .3s var(--ease)}
+  .gauge.ignite .flame{animation:ignite .9s var(--ease)}
+  .gauge.ignite #streakNum{animation:numPop .9s var(--ease)}
+  @keyframes depthIn{from{opacity:0;transform:translateZ(0) scale(.94) translateY(18px);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
+  @keyframes layerIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  @keyframes turnIn{from{opacity:0;transform:perspective(700px) rotateX(-55deg)}to{opacity:1;transform:none}}
+  @keyframes ignite{0%{transform:scale(1)}30%{transform:scale(1.25);box-shadow:0 0 0 8px var(--amber-wash)}100%{transform:scale(1);box-shadow:0 0 0 0 transparent}}
+  @keyframes numPop{0%{transform:none}30%{transform:translateY(-3px) scale(1.12)}100%{transform:none}}
+  .ltitle em,.emptystate em{font-family:var(--book);font-style:italic;font-weight:500;color:var(--cyan-ink)}
+  /* ---------- Decks as a tower: hover lights a floor, click zooms into it ----------
+     Each deck is a floor. Its "windows" are its cards: lit cyan = due today,
+     dim = learning or known, dark = never seen. Pick a floor and the camera
+     moves in (up to 6x) before the cards appear; going back zooms out to the
+     same floor. Reduced motion: no zoom, just the cut. */
+  .tower{position:relative;border:1px solid var(--line-2);border-radius:var(--r-lg);background:var(--s1);overflow:hidden;
+    transform-origin:50% 50%;transition:transform .7s var(--ease),filter .7s var(--ease),opacity .7s var(--ease)}
+  .tower-roof{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:16px 18px 12px}
+  .tower-roof h2{margin:0;font-size:22px;font-weight:650;letter-spacing:-.02em}
+  .tower-roof h2 em{font-family:var(--book);font-style:italic;font-weight:500;color:var(--cyan-ink)}
+  .tower-roof .num{color:var(--ink-3);font-size:12.5px}
+  .storey{position:relative;display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:14px;
+    padding:15px 18px;border-top:1px solid var(--line);cursor:pointer;transition:opacity .5s var(--ease),filter .5s var(--ease)}
+  .storey::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s var(--ease);
+    background:linear-gradient(90deg,transparent,var(--cyan-wash) 18%,var(--cyan-wash) 82%,transparent);
+    border-top:1px solid var(--cyan-line);border-bottom:1px solid var(--cyan-line)}
+  .storey:hover::before,.storey:focus-within::before,.storey.target::before{opacity:1}
+  .storey > *{position:relative}
+  .fl-no{font-family:var(--num);font-size:13px;color:var(--ink-3);transition:color .25s;width:40px;height:40px;display:grid;place-items:center;
+    border:1px solid var(--line-2);border-radius:10px;background:var(--bg)}
+  .storey:hover .fl-no,.storey:focus-visible .fl-no{border-color:var(--cyan-line)}
+  .fl-sub b{color:var(--cyan-ink);font-weight:600}
+  .fl-go{color:var(--ink-3);transition:transform .25s var(--ease),color .25s}
+  .storey:hover .fl-go,.storey:focus-visible .fl-go{color:var(--cyan);transform:translateX(3px)}
+  .storey:focus-visible{outline:none}
+  .storey:focus-visible::before{opacity:1}
+  .pane{position:fixed;z-index:150;pointer-events:none;border-radius:var(--r-lg);transform-origin:0 0;
+    background:var(--cyan);border:1px solid var(--cyan);
+    transition:transform .45s var(--ease),background .45s var(--ease),opacity .3s var(--ease)}
+  .pane.open{background:var(--s1);border-color:var(--line-2)}
+  .pane.gone{opacity:0}
+  .statsbody > .noanim{animation:none}
+  .keys{display:none;font-size:12px;color:var(--ink-3);margin-top:2px}
+  @media (hover:hover) and (pointer:fine){.keys{display:block}}
+  .startrow{display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:22px}
+  .starttitle{flex:1 0 100%;font-size:13px;color:var(--ink-3)}
+  .streak-chip .num{font-size:13px}
+  .storey:hover .fl-no,.storey:focus-within .fl-no{color:var(--cyan-ink)}
+  .fl-name{font-weight:650;font-size:15.5px;margin-bottom:3px}
+  .fl-sub{color:var(--ink-2);font-size:13px}
+  .windows{display:flex;gap:3px;margin-top:9px;flex-wrap:wrap}
+  .windows i{width:7px;height:11px;border-radius:2px;background:var(--s3)}
+  .windows i.due{background:var(--cyan)}
+  .windows i.seen{background:rgba(60,207,230,.3)}
+  .fl-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .tower.zoom{transform:scale(var(--k,4));}
+  .tower.zoom .storey:not(.target),.tower.zoom .tower-roof{opacity:0;filter:blur(4px)}
+  .tower.zoom .storey.target .fl-go,.tower.zoom .storey.target .dcap{opacity:0}
+  .tower.dim{opacity:0}
+  @media(max-width:900px){
+    .storey{grid-template-columns:40px minmax(0,1fr) auto;padding:14px}
+  }
+  @media (prefers-reduced-motion:reduce){.tower,.storey{transition:none}}
 </style>
 </head>
-<body>
+<body class="deck-grid">
+<!--
+THESIS: the daily habit as a night instrument panel; the book is the payload. Refuses the cream-paper bookish default and the neon-glow cockpit.
+OWN-WORLD: ink-blue deck (#0a111e) with a faint plotting grid; one cyan signal for state and action, amber marks the habit (the streak) and warm notes; system UI sans, monospace only for measurements, book serif for reading; hairline panels, drawn line icons; a pull-cord reading lamp.
+STORY: the learner sees today's streak and goal first, opens a book, taps a word to understand and save it, pulls the lamp for paper; every section rises one layer deeper.
+FIRST VIEWPORT: left console with the streak gauge (number + 10-segment goal), sections and library; center the book page with the hanging lamp and the floating Read aloud toolbar; right rail Study/Contents/Vocabulary.
+FORM: direction A "night mission-control", pinned by the owner (no roll; concept-seed printed no assignment).
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 16a8 8 0 0 1 16 0"/><path d="M12 16l4-5.5"/><circle cx="12" cy="16" r="1.4"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5z"/></symbol>
+  <symbol id="i-cards" viewBox="0 0 24 24"><rect x="7" y="4" width="13" height="16" rx="2"/><path d="M4 7v11a2 2 0 0 0 2 2"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 7l3 3"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7 16v-5"/><path d="M12 16V6"/><path d="M17 16v-8"/></symbol>
+  <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="M8 18h6a3 3 0 0 0 0-6h-4a3 3 0 0 1 0-6h6"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></symbol>
+  <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 21c3.9 0 7-2.8 7-6.7 0-3.3-2.2-5.4-3.9-7.3-.4 1.9-1.4 3-2.6 3.6.3-2.9-.8-5.5-3-7.6-.3 3.4-4.5 6.1-4.5 11.3C5 18.2 8.1 21 12 21z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M14.5 4.5v15"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6L8 10z"/><path d="M16.5 9a4 4 0 0 1 0 6"/><path d="M19 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M5 6h9M18 6h1M5 12h3M12 12h7M5 18h11M20 18h-1"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19 14.5A7.5 7.5 0 0 1 9.5 5 7.5 7.5 0 1 0 19 14.5z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6.5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l1 13h9l1-13"/></symbol>
+</svg>
 <div class="app">
   <!-- ============ SIDEBAR ============ -->
   <aside class="sidebar">
     <div class="brand">
-      <div class="logo">D</div>
-      <div class="name">Daily English Habit<small>Read a little every day</small></div>
+      <div class="logo"><svg class="ico"><use href="#i-gauge"/></svg></div>
+      <div class="name">Daily English Habit<small>A little every day</small></div>
     </div>
-    <nav class="nav">
-      <button class="navbtn active" data-sec="reading" onclick="showSection('reading')">📖 Reading</button>
-      <button class="navbtn" data-sec="decks" onclick="showSection('decks')">🃏 Decks</button>
-      <button class="navbtn" data-sec="writing" onclick="showSection('writing')">✍️ Writing</button>
-      <button class="navbtn" data-sec="stats" onclick="showSection('stats')">📊 Statistics</button>
-      <button class="navbtn" data-sec="lessons" onclick="showSection('lessons')">📚 Lessons</button>
-      <button class="navbtn" data-sec="test" onclick="showSection('test')">🧪 Test</button>
+    <div id="streakBox" class="gauge" title="Study streak">
+      <div class="gauge-top">
+        <span class="flame" id="streakFlame"><svg class="ico"><use href="#i-flame"/></svg></span>
+        <span id="streakNum">0</span>
+        <span class="glbl"><b>day streak</b><span id="streakSub">Review today to keep it</span></span>
+      </div>
+      <div class="segs" id="goalSegs" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <button type="button" id="goalBox" onclick="setDailyGoal()" title="Change your daily goal"><span>Today's goal</span><span class="num" id="goalNums">0 / 20</span></button>
+    </div>
+    <nav class="nav" aria-label="Sections">
+      <button class="navbtn active" data-sec="reading" onclick="showSection('reading')"><svg class="ico"><use href="#i-book"/></svg>Reading</button>
+      <button class="navbtn" data-sec="decks" onclick="showSection('decks')"><svg class="ico"><use href="#i-cards"/></svg>Decks</button>
+      <button class="navbtn" data-sec="writing" onclick="showSection('writing')"><svg class="ico"><use href="#i-pen"/></svg>Writing</button>
+      <button class="navbtn" data-sec="stats" onclick="showSection('stats')"><svg class="ico"><use href="#i-chart"/></svg>Statistics</button>
+      <button class="navbtn" data-sec="lessons" onclick="showSection('lessons')"><svg class="ico"><use href="#i-route"/></svg>Lessons</button>
+      <button class="navbtn" data-sec="test" onclick="showSection('test')"><svg class="ico"><use href="#i-target"/></svg>Level test</button>
     </nav>
     <div id="readingNav">
       <div class="side-h">Library</div>
       <div id="library" class="side-list"></div>
       <label>
         <input type="file" id="fileInput" accept=".pdf,.epub" />
-        <button class="btn gold" style="width:100%" onclick="document.getElementById('fileInput').click()">＋ Add book</button>
+        <button class="btn gold" style="width:100%" onclick="document.getElementById('fileInput').click()"><svg class="ico sm"><use href="#i-plus"/></svg>Add book</button>
       </label>
-      <button class="btn" style="width:100%;margin-top:6px" onclick="openCatalog()">🔎 Find books by level</button>
-      <div class="side-note">Tus archivos se quedan en tu ordenador. Eres responsable
-        de tener derecho a usarlos.</div>
+      <button class="btn" style="width:100%" onclick="openCatalog()"><svg class="ico sm"><use href="#i-search"/></svg>Find books by level</button>
+      <div class="side-note">Your files stay private to your account. Make sure you have the right to use them.</div>
       <div id="uploadMsg" class="muted"></div>
-      <button class="btn" style="width:100%;justify-content:flex-start;gap:9px" onclick="openLearn('repaso')">
-        🎴 Flashcards <span class="count-pill" id="dueBadge" style="display:none;margin-left:auto">0</span>
+      <button class="btn" style="width:100%;justify-content:flex-start" onclick="openLearn('repaso')">
+        <svg class="ico sm"><use href="#i-cards"/></svg>Flashcards <span class="count-pill" id="dueBadge" style="display:none;margin-left:auto">0</span>
       </button>
     </div>
-    <div id="streakBox" title="Study streak" style="display:flex;align-items:center;gap:8px;padding:8px 10px;color:var(--side-ink);font-size:14px">
-      <span id="streakFlame" style="font-size:18px;filter:grayscale(1);opacity:.5">🔥</span>
-      <b id="streakNum">0</b><span style="color:var(--side-muted)">day streak</span>
-    </div>
-    <div id="goalBox" onclick="setDailyGoal()" title="Daily goal (click to change)" style="cursor:pointer;padding:0 10px;font-size:12.5px;color:var(--side-muted)"></div>
-    <div class="side-foot" title="Cuenta">
-      <div class="avatar"></div>
-      <div style="flex:1;min-width:0;overflow:hidden">
-        <span id="cuentaNombre" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">…</span>
-        <span id="cuentaRol" style="color:#6c6f77"></span>
+    <div class="side-foot">
+      <div class="avatar" id="avatar" aria-hidden="true"></div>
+      <div class="who">
+        <span id="cuentaNombre">…</span>
+        <span id="cuentaRol"></span>
       </div>
-      <span id="aiDot" title="AI status" style="font-size:11px;color:#6c6f77">●</span>
-      <span onclick="openSettings()" title="Settings" style="cursor:pointer;color:#6c6f77;font-size:15px">⚙</span>
+      <span id="aiDot" title="AI status" role="img" aria-label="AI status"></span>
+      <button type="button" class="tb" onclick="openSettings()" title="Settings" aria-label="Settings"><svg class="ico"><use href="#i-gear"/></svg></button>
     </div>
     <div class="side-cuenta">
-      <a href="/admin" id="enlaceAdmin" hidden>Usuarios</a>
-      <button type="button" onclick="salir()">Salir</button>
+      <a href="/admin" id="enlaceAdmin" hidden>Users</a>
+      <button type="button" onclick="salir()">Sign out</button>
     </div>
   </aside>
 
@@ -522,16 +695,17 @@
         </div>
         <span class="count-pill" id="bookPct" style="display:none">0%</span>
         <div class="chapnav">
+          <button type="button" class="streak-chip solo-movil" id="streakChip" onclick="cajon('sidebar')" aria-label="Day streak"><svg class="ico sm"><use href="#i-flame"/></svg><span class="num" id="streakChipNum">0</span></button>
           <button class="iconbtn solo-movil" onclick="cajon('sidebar')"
-            title="Biblioteca" aria-label="Biblioteca">☰</button>
+            title="Library and sections" aria-label="Library and sections"><svg class="ico"><use href="#i-menu"/></svg></button>
           <button class="iconbtn solo-movil" onclick="cajon('rail')"
-            title="Estudio e índice" aria-label="Estudio e índice">▤</button>
-          <button class="iconbtn" id="optBtn" onclick="toggleOpts()" title="Reading options">⚙</button>
-          <button class="iconbtn" id="prevCh" onclick="changeChapter(-1)" title="Previous section">‹</button>
-          <button class="iconbtn" id="nextCh" onclick="changeChapter(1)" title="Next section">›</button>
+            title="Study and contents" aria-label="Study and contents"><svg class="ico"><use href="#i-panel"/></svg></button>
+          <button class="iconbtn" id="optBtn" onclick="toggleOpts()" title="Reading options" aria-label="Reading options"><svg class="ico"><use href="#i-sliders"/></svg></button>
+          <button class="iconbtn" id="prevCh" onclick="changeChapter(-1)" title="Previous section" aria-label="Previous section"><svg class="ico"><use href="#i-left"/></svg></button>
+          <button class="iconbtn" id="nextCh" onclick="changeChapter(1)" title="Next section" aria-label="Next section"><svg class="ico"><use href="#i-right"/></svg></button>
         </div>
         <div id="optsPanel" class="opts" style="display:none">
-          <div id="practiceLang" style="font-size:12.5px;color:var(--ink)">Practicing: —</div>
+          <div id="practiceLang" style="font-size:12.5px;color:var(--ink-2)">Practicing: —</div>
           <label>Reading voice
             <select id="voiceSel" onchange="setVoice(this.value)"></select>
           </label>
@@ -550,34 +724,47 @@
               <option value="paged">Paged (Kindle)</option>
             </select>
           </label>
-          <button class="btn sm" onclick="testVoice()">🔊 Test voice</button>
+          <button class="btn sm" onclick="testVoice()"><svg class="ico sm"><use href="#i-sound"/></svg>Test voice</button>
         </div>
       </div>
       <div class="progress"><i id="progbar"></i></div>
       <div class="pagebar" id="pageBar" style="display:none">
-        <button class="iconbtn" onclick="prevPage()" title="Previous page">‹</button>
-        <span id="pageLabel" class="muted">Page 1 / 1</span>
-        <button class="iconbtn" onclick="nextPage()" title="Next page">›</button>
+        <button class="iconbtn" onclick="prevPage()" title="Previous page" aria-label="Previous page"><svg class="ico"><use href="#i-left"/></svg></button>
+        <span id="pageLabel" class="muted num">Page 1 / 1</span>
+        <button class="iconbtn" onclick="nextPage()" title="Next page" aria-label="Next page"><svg class="ico"><use href="#i-right"/></svg></button>
+      </div>
+      <div class="lampwrap">
+        <div class="lampglow" aria-hidden="true"></div>
+        <button type="button" id="lamp" class="lamp" onclick="pullLamp()" aria-pressed="false" aria-label="Reading lamp: switch between night and paper">
+          <svg viewBox="0 0 64 150" aria-hidden="true">
+            <line class="wire" x1="32" y1="0" x2="32" y2="34"/>
+            <path class="shade" d="M14 58 Q32 26 50 58 Z"/>
+            <path class="shade-rim" d="M12 58 H52"/>
+            <circle class="bulb" cx="32" cy="61" r="5"/>
+            <g class="chain"><line x1="44" y1="58" x2="44" y2="104"/><circle class="bead" cx="44" cy="108" r="4.5"/></g>
+          </svg>
+        </button>
       </div>
       <div class="paper-scroll" id="paperScroll">
         <div class="emptystate" id="empty">
-          <div class="big">Welcome to Daily English Habit</div>
-          <p>Add a PDF or EPUB from the sidebar. PDFs are converted to EPUB automatically.
+          <div class="big">A little English, <em>every day</em></div>
+          <p>Add a PDF or EPUB to your library. PDFs are converted to EPUB automatically.
           Then read aloud, translate, and build flashcards for your decks.</p>
+          <div class="startrow" id="startRow"></div>
         </div>
         <div class="paper" id="paper" style="display:none">
-          <div class="chtitle" id="chLabel"></div>
+          <div class="chtitle" id="chLabel" hidden></div>
           <div class="chname" id="chName"></div>
           <div id="reader"></div>
         </div>
       </div>
     </div>
     <div class="toolbar" id="toolbar" style="display:none">
-      <button class="btn gold" id="playBtn" onclick="togglePlay()">▶ Read</button>
+      <button class="btn gold" id="playBtn" onclick="togglePlay()">Read aloud</button>
       <button class="btn" onclick="askLLM('translation')">Translate</button>
       <button class="btn" onclick="askLLM('grammar')">Grammar</button>
       <button class="btn" onclick="askLLM('example')">Examples</button>
-      <button class="btn dark" onclick="addVocab()">＋ Vocabulary</button>
+      <button class="btn dark" onclick="addVocab()"><svg class="ico sm"><use href="#i-plus"/></svg>Vocabulary</button>
     </div>
   </div>
 
@@ -590,22 +777,22 @@
     <div class="card">
       <h3>Contents
         <button class="btn sm" id="btnIdx" onclick="improveIndex()"
-          title="Let the AI name the sections of this book">✨ Improve</button></h3>
+          title="Let the AI name the sections of this book">Improve</button></h3>
       <div id="toc" class="toclist"><div class="muted">Open a book.</div></div>
     </div>
     <div class="card">
       <h3>Vocabulary <span class="count-pill" id="vocabCount">0</span></h3>
-      <div class="muted" id="vocabHint">Select a word and press ＋ Vocabulary to save and review it.</div>
+      <div class="muted" id="vocabHint">Select a word and press Vocabulary to save it for review.</div>
       <div class="row-gap" style="margin-top:10px">
-        <button class="btn gold grow" onclick="openLearn('repaso')">🎴 Review</button>
-        <button class="btn sm" onclick="exportAnki()">⬇ Anki</button>
+        <button class="btn gold grow" onclick="openLearn('repaso')">Review</button>
+        <button class="btn sm" onclick="exportAnki()"><svg class="ico sm"><use href="#i-down"/></svg>Anki</button>
       </div>
     </div>
   </aside>
 </div>
 
 <!-- ============ APRENDER (overlay) ============ -->
-<div id="learnOverlay" class="overlay" style="display:none">
+<div id="learnOverlay" class="overlay deck-grid" style="display:none">
   <div class="learn-panel">
     <div class="learn-head">
       <div class="brand"><div class="logo">D</div><div class="name">Flashcards</div></div>
@@ -613,26 +800,26 @@
         <button class="tab active" data-t="repaso" onclick="learnTab('repaso')">Review</button>
         <button class="tab" data-t="palabras" onclick="learnTab('palabras')">Words</button>
       </div>
-      <button class="iconbtn" onclick="showSection('reading')" title="Close">✕</button>
+      <button class="iconbtn" onclick="showSection('reading')" title="Close" aria-label="Close"><svg class="ico"><use href="#i-close"/></svg></button>
     </div>
     <div class="learn-body">
       <div id="tab-repaso" class="tabpanel">
         <div class="modebar" id="modeBar">
-          <button class="mbtn active" data-mode="recall">👁 Recognise</button>
-          <button class="mbtn" data-mode="produce">✍️ Produce</button>
-          <button class="mbtn" data-mode="cloze">␣ Fill the gap</button>
+          <button class="mbtn active" data-mode="recall">Recognise</button>
+          <button class="mbtn" data-mode="produce">Produce</button>
+          <button class="mbtn" data-mode="cloze">Fill the gap</button>
           <span class="mhint" id="modeHint">See the English, recall the meaning.</span>
         </div>
-        <div id="reviewEmpty" class="soon"><div class="big" id="reviewEmptyTitle">All caught up 🎉</div>
+        <div id="reviewEmpty" class="soon"><div class="big" id="reviewEmptyTitle">All caught up</div>
           <div id="reviewEmptyMsg">No words due today.</div>
           <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-            <button class="btn gold" id="btnNewWords" style="display:none" onclick="loadReview('new')">＋ Study new words</button>
-            <button class="btn" onclick="loadReview(true)">⏩ Study ahead anyway</button></div></div>
+            <button class="btn gold" id="btnNewWords" style="display:none" onclick="loadReview('new')"><svg class="ico sm"><use href="#i-plus"/></svg>Study new words</button>
+            <button class="btn" onclick="loadReview(true)">Study ahead anyway</button></div></div>
         <div id="reviewCard" class="revcard" style="display:none">
           <div class="rc-top"><span class="badge new" id="rcBadge">New</span><span class="muted" id="rcCounter"></span></div>
           <div class="rc-term" id="rcTerm"></div>
           <div class="rc-prompt" id="rcPrompt" style="display:none"></div>
-          <div><button class="btn sm" id="rcListen" onclick="speakText(S.review.listenText||document.getElementById('rcTerm').textContent)">🔊 Listen</button></div>
+          <div><button class="btn sm" id="rcListen" onclick="speakText(S.review.listenText||document.getElementById('rcTerm').textContent)"><svg class="ico sm"><use href="#i-sound"/></svg>Listen</button></div>
           <div id="rcTypeWrap" style="display:none;margin-top:10px">
             <input id="rcInput" class="typein" autocomplete="off" autocapitalize="off"
               spellcheck="false" placeholder="Type it in English…"
@@ -654,6 +841,7 @@
             <button class="btn gold" onclick="gradeCard('easy')">Easy<small id="ivEasy"></small></button>
           </div>
           <div class="muted" id="rcCount"></div>
+          <div class="keys">Space to show the answer · 1 2 3 4 to grade</div>
         </div>
       </div>
       <div id="tab-palabras" class="tabpanel" style="display:none">
@@ -665,12 +853,12 @@
             <input id="newWordInput" class="typein" style="flex:1;min-width:180px;max-width:none"
               placeholder="e.g. overwhelmed" autocomplete="off" spellcheck="false"
               onkeydown="if(event.key==='Enter')addWordManually()"/>
-            <button class="btn gold" id="newWordBtn" onclick="addWordManually()">＋ Add</button>
+            <button class="btn gold" id="newWordBtn" onclick="addWordManually()"><svg class="ico sm"><use href="#i-plus"/></svg>Add</button>
           </div>
           <div class="muted" id="newWordMsg" style="margin-top:8px"></div>
         </div>
         <div class="row-gap" style="justify-content:flex-end;margin-bottom:12px">
-          <button class="btn gold" onclick="exportAnki()">⬇ Export all to Anki</button>
+          <button class="btn gold" onclick="exportAnki()"><svg class="ico sm"><use href="#i-down"/></svg>Export all to Anki</button>
         </div>
         <div id="vocabFull" class="vlist"></div>
       </div>
@@ -679,7 +867,7 @@
 </div>
 
 <!-- ============ STATISTICS (full-width section) ============ -->
-<div id="statsOverlay" class="overlay" style="display:none;padding:0">
+<div id="statsOverlay" class="overlay deck-grid" style="display:none;padding:0">
   <div class="fullpanel">
     <div class="statshead">
       <div class="brand"><div class="logo">D</div><div class="name">Statistics</div></div>
@@ -688,17 +876,17 @@
         <button id="rgMonth" class="tab" onclick="setStatsRange('month')">Month</button>
       </div>
       <span class="grow" style="flex:1"></span>
-      <button class="iconbtn" onclick="showSection('reading')" title="Close">✕</button>
+      <button class="iconbtn" onclick="showSection('reading')" title="Close" aria-label="Close"><svg class="ico"><use href="#i-close"/></svg></button>
     </div>
     <div class="statsbody">
       <div id="oppBox"></div>
-      <div class="card"><h3>Daily goal 🎯 <button class="btn sm ghost" style="margin-left:auto" onclick="setDailyGoal()">Change</button></h3>
+      <div class="card"><h3>Daily goal <button class="btn sm ghost" style="margin-left:auto" onclick="setDailyGoal()">Change</button></h3>
         <div class="meter"><i id="goalMeter" style="width:0"></i></div>
         <div class="muted" id="goalText"></div>
       </div>
       <div class="level-card">
-        <div class="l" style="text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-size:11px">Estimated level</div>
         <div class="level-name" id="lvlName">—</div>
+        <div class="muted">estimated level, from your vocabulary</div>
         <div class="meter"><i id="lvlMeter" style="width:0"></i></div>
         <div class="muted" id="lvlNext"></div>
         <div class="muted" id="streakLine" style="margin-top:8px"></div>
@@ -734,16 +922,17 @@
 </div>
 
 <!-- ============ DECKS (overlay) ============ -->
-<div id="decksOverlay" class="overlay" style="display:none;padding:0">
+<div id="decksOverlay" class="overlay deck-grid" style="display:none;padding:0">
   <div class="fullpanel" style="position:relative">
     <div class="statshead">
-      <div class="brand"><div class="logo">D</div><div class="name">Decks</div></div>
-      <span id="deckBack" style="display:none"><button class="tab" onclick="deckList()">‹ Decks</button></span>
+      <div class="brand"><div class="logo">D</div><div class="name" id="deckTitle">Decks</div></div>
+      <span id="deckBack" style="display:none"><button class="tab" onclick="deckList()">‹ All decks</button></span>
+      <span id="deckModes" class="tabs" style="display:none;flex:0 1 auto" role="group" aria-label="What to study"></span>
       <span class="grow" style="flex:1"></span>
       <span class="muted" id="deckBudget" style="font-size:12px"></span>
-      <button class="iconbtn" onclick="openLimits()" title="Daily limits">🎚</button>
-      <button class="iconbtn" onclick="toggleDeckOpts()" title="Voice & speed">⚙</button>
-      <button class="iconbtn" onclick="showSection('reading')" title="Close">✕</button>
+      <button class="iconbtn" onclick="openLimits()" title="Daily limits" aria-label="Daily limits"><svg class="ico"><use href="#i-target"/></svg></button>
+      <button class="iconbtn" onclick="toggleDeckOpts()" title="Voice and speed" aria-label="Voice and speed"><svg class="ico"><use href="#i-sliders"/></svg></button>
+      <button class="iconbtn" onclick="showSection('reading')" title="Close" aria-label="Close"><svg class="ico"><use href="#i-close"/></svg></button>
     </div>
     <div id="deckOpts" class="opts" style="display:none;top:64px;right:20px">
       <label>Reading voice
@@ -758,22 +947,22 @@
           <option value="175">Very fast</option>
         </select>
       </label>
-      <button class="btn sm" onclick="playDeckAudio()">🔊 Test</button>
+      <button class="btn sm" onclick="playDeckAudio()"><svg class="ico sm"><use href="#i-sound"/></svg>Test</button>
     </div>
     <div class="statsbody">
       <div id="deckHome" class="tabpanel"></div>
       <div id="deckReview" class="tabpanel" style="display:none">
-        <div id="deckRevEmpty" class="soon"><div class="big" id="deckEmptyTitle">Deck complete 🎉</div>
+        <div id="deckRevEmpty" class="soon"><div class="big" id="deckEmptyTitle">Deck complete</div>
           <div id="deckEmptyMsg">No cards due today in this deck.</div>
-          <button class="btn" style="margin-top:12px" onclick="openDeck(S.deck.id,'ahead')">⏩ Study ahead anyway</button></div>
+          <button class="btn" style="margin-top:12px" onclick="openDeck(S.deck.id,'ahead')">Study ahead anyway</button></div>
         <div id="deckRevCard" class="revcard" style="display:none">
           <div class="rc-top"><span class="badge new" id="dBadge">New</span><span class="tag" id="dCat" style="display:none"></span><span class="muted" id="dCounter"></span></div>
           <div class="rc-term" id="dTerm"></div>
-          <div><button class="btn sm" onclick="playDeckAudio()">🔊 Listen</button></div>
+          <div><button class="btn sm" onclick="playDeckAudio()"><svg class="ico sm"><use href="#i-sound"/></svg>Listen</button></div>
           <div id="dBack" style="display:none">
             <div class="rc-trans" id="dTrans"></div>
             <div class="rc-ex" id="dNote"></div>
-            <div id="dExBtn" style="display:none;margin-top:6px"><button class="btn sm" onclick="playDeckExample()">🔊 Listen to sentence</button></div>
+            <div id="dExBtn" style="display:none;margin-top:6px"><button class="btn sm" onclick="playDeckExample()"><svg class="ico sm"><use href="#i-sound"/></svg>Listen to sentence</button></div>
           </div>
           <div class="rc-actions" id="dReveal"><button class="btn gold" onclick="deckReveal()">Show answer</button></div>
           <div class="rc-actions" id="dGrades" style="display:none">
@@ -783,18 +972,19 @@
             <button class="btn gold" onclick="deckGrade('easy')">Easy<small id="dIvEasy"></small></button>
           </div>
           <div class="muted" id="dCount"></div>
+          <div class="keys">Space to show the answer · 1 2 3 4 to grade</div>
         </div>
       </div>
     </div>
   </div>
 </div>
 <!-- ============ WRITING (overlay) ============ -->
-<div id="catalogOverlay" class="overlay" style="display:none;padding:0">
+<div id="catalogOverlay" class="overlay deck-grid" style="display:none;padding:0">
   <div class="fullpanel" style="position:relative">
     <div class="statshead">
       <div class="brand"><div class="logo">D</div><div class="name">Free reading by level</div></div>
       <span class="grow" style="flex:1"></span>
-      <button class="iconbtn" onclick="showSection('reading')" title="Close">✕</button>
+      <button class="iconbtn" onclick="showSection('reading')" title="Close" aria-label="Close"><svg class="ico"><use href="#i-close"/></svg></button>
     </div>
     <div class="learn-body">
       <div class="muted" style="margin-bottom:14px">
@@ -810,7 +1000,7 @@
   </div>
 </div>
 
-<div id="writingOverlay" class="overlay" style="display:none;padding:0">
+<div id="writingOverlay" class="overlay deck-grid" style="display:none;padding:0">
   <div class="fullpanel">
     <div class="statshead">
       <div class="brand"><div class="logo">D</div><div class="name">Writing</div></div>
@@ -819,7 +1009,7 @@
         <button class="tab" data-w="mine" onclick="writingTab('mine')">My writings</button>
         <button class="tab" data-w="errors" onclick="writingTab('errors')">Errors journal</button>
       </div>
-      <button class="iconbtn" onclick="showSection('reading')" title="Close">✕</button>
+      <button class="iconbtn" onclick="showSection('reading')" title="Close" aria-label="Close"><svg class="ico"><use href="#i-close"/></svg></button>
     </div>
     <div class="statsbody">
       <div id="wtab-new" class="tabpanel" style="max-width:none;width:100%;margin:0;align-self:stretch">
@@ -853,7 +1043,7 @@
         </div>
         <div class="row-gap" style="margin-top:12px;align-items:center;flex-wrap:wrap">
           <label><input type="file" id="wFile" accept=".txt,.pdf,.docx,image/*" style="display:none"/>
-            <button class="btn" onclick="document.getElementById('wFile').click()">📎 Upload file / photo</button></label>
+            <button class="btn" onclick="document.getElementById('wFile').click()">Upload file or photo</button></label>
           <span class="muted" id="wFileMsg"></span>
           <span class="grow" style="flex:1"></span>
           <button class="btn gold" onclick="checkWriting()">Check my writing</button>
@@ -872,8 +1062,8 @@
           <div class="card" style="margin-top:14px">
             <h3>Corrected
               <span style="margin-left:auto;display:flex;gap:6px">
-                <button class="btn sm" onclick="copyText(S.writing.corrected,this)">⧉ Copy</button>
-                <button class="btn sm" onclick="readWriting('corrected')">🔊 Read</button></span></h3>
+                <button class="btn sm" onclick="copyText(S.writing.corrected,this)">Copy</button>
+                <button class="btn sm" onclick="readWriting('corrected')"><svg class="ico sm"><use href="#i-sound"/></svg>Read</button></span></h3>
             <div id="wCorrected" class="readable"></div>
             <div class="muted" style="margin-top:6px">Tip: click any word to save it to your vocabulary.</div>
           </div>
@@ -882,7 +1072,7 @@
             <div id="wErrors" class="vlist"></div>
           </div>
           <div class="card" style="margin-top:14px">
-            <h3>Level up ✨</h3>
+            <h3>Level up</h3>
             <div class="muted" id="wUpgradeHint">Rewrite your text at a higher level, then read it as your next practice.</div>
             <div class="row-gap" id="wUpgradeBtns" style="margin-top:10px"></div>
             <div id="wCompare" style="display:none;margin-top:14px">
@@ -891,15 +1081,15 @@
                   <h4>Yours <span class="tag" id="wCmpMineLvl">?</span></h4>
                   <div id="wCmpMine" class="readable"></div>
                   <div class="row-gap" style="margin-top:8px">
-                    <button class="btn sm" onclick="copyText(S.writing.corrected,this)">⧉ Copy</button>
-                    <button class="btn sm" onclick="readWriting('corrected')">🔊 Read</button></div>
+                    <button class="btn sm" onclick="copyText(S.writing.corrected,this)">Copy</button>
+                    <button class="btn sm" onclick="readWriting('corrected')"><svg class="ico sm"><use href="#i-sound"/></svg>Read</button></div>
                 </div>
                 <div class="col up">
                   <h4>Upgraded <span class="tag" id="wCmpUpLvl">?</span></h4>
                   <div id="wUpgraded" class="readable"></div>
                   <div class="row-gap" style="margin-top:8px">
-                    <button class="btn sm" onclick="copyText(S.writing.upgraded,this)">⧉ Copy</button>
-                    <button class="btn sm" onclick="readWriting('upgraded')">🔊 Read</button></div>
+                    <button class="btn sm" onclick="copyText(S.writing.upgraded,this)">Copy</button>
+                    <button class="btn sm" onclick="readWriting('upgraded')"><svg class="ico sm"><use href="#i-sound"/></svg>Read</button></div>
                 </div>
               </div>
             </div>
@@ -914,7 +1104,7 @@
         <div id="errorsList" class="vlist"></div>
         <div class="card" style="margin-top:14px">
           <h3>Lessons from your mistakes
-            <button class="btn sm gold" id="genLessonBtn" onclick="generateErrorLesson()">📘 Generate</button></h3>
+            <button class="btn sm gold" id="genLessonBtn" onclick="generateErrorLesson()">Generate</button></h3>
           <div class="muted" id="genLessonMsg">A lesson built from the mistakes you actually
             make — why they happen in Spanish, the rule, your errors corrected one by one,
             and practice so they stop.</div>
@@ -927,18 +1117,18 @@
 </div>
 
 <!-- ============ LESSONS (full-width section) ============ -->
-<div id="lessonsOverlay" class="overlay" style="display:none;padding:0">
+<div id="lessonsOverlay" class="overlay deck-grid" style="display:none;padding:0">
   <div class="fullpanel">
     <div class="statshead">
       <div class="brand"><div class="logo">D</div><div class="name">Lessons</div></div>
-      <div id="lessonTabs" style="display:flex;gap:6px;margin-left:20px">
-        <button class="tab active" data-lv="map" onclick="lessonLevel('map')">🗺 Ruta</button>
-        <button class="tab" data-lv="beginner" onclick="lessonLevel('beginner')">🟢 Beginner</button>
-        <button class="tab" data-lv="mid" onclick="lessonLevel('mid')">🟡 Mid</button>
-        <button class="tab" data-lv="advanced" onclick="lessonLevel('advanced')">🔵 Advanced</button>
+      <div id="lessonTabs" class="tabs" style="flex:0 1 auto;margin-left:12px">
+        <button class="tab active" data-lv="map" onclick="lessonLevel('map')">Route</button>
+        <button class="tab" data-lv="beginner" onclick="lessonLevel('beginner')">Beginner</button>
+        <button class="tab" data-lv="mid" onclick="lessonLevel('mid')">Mid</button>
+        <button class="tab" data-lv="advanced" onclick="lessonLevel('advanced')">Advanced</button>
       </div>
       <span class="grow" style="flex:1"></span>
-      <button class="iconbtn" onclick="showSection('reading')" title="Close">✕</button>
+      <button class="iconbtn" onclick="showSection('reading')" title="Close" aria-label="Close"><svg class="ico"><use href="#i-close"/></svg></button>
     </div>
     <div class="statsbody">
       <div id="lessonMap"></div>
@@ -949,16 +1139,16 @@
 </div>
 
 <!-- ============ TEST (full-width section) ============ -->
-<div id="testOverlay" class="overlay" style="display:none;padding:0">
+<div id="testOverlay" class="overlay deck-grid" style="display:none;padding:0">
   <div class="fullpanel">
     <div class="statshead">
       <div class="brand"><div class="logo">D</div><div class="name">Level Test</div></div>
       <span class="grow" style="flex:1"></span>
-      <button class="iconbtn" onclick="showSection('reading')" title="Close">✕</button>
+      <button class="iconbtn" onclick="showSection('reading')" title="Close" aria-label="Close"><svg class="ico"><use href="#i-close"/></svg></button>
     </div>
     <div class="statsbody">
       <div id="testIntro" class="card" style="text-align:center;padding:34px">
-        <div style="font-family:Georgia,serif;font-size:27px;margin-bottom:8px">Level test 🧪</div>
+        <div class="ltitle big" style="margin-bottom:8px">Find your <em>level</em></div>
         <p class="muted" style="max-width:520px;margin:0 auto">Estimate your CEFR level (A1–C1). <b>Quick</b> = 10 fixed questions (5 equivalent versions). <b>Adaptive</b> = questions adjust to you and it stops when confident (~10–12).</p>
         <div id="testLast" class="muted" style="margin:12px 0"></div>
         <div class="row-gap" style="justify-content:center">
@@ -972,8 +1162,8 @@
         <div id="testOpts" style="display:flex;flex-direction:column;gap:10px"></div>
       </div>
       <div id="testResult" class="card" style="display:none;text-align:center;padding:34px">
-        <div class="muted" style="text-transform:uppercase;letter-spacing:.08em;font-size:11px">Your estimated level</div>
-        <div id="testLevel" style="font-family:Georgia,serif;font-size:44px;margin:6px 0"></div>
+        <div id="testLevel" class="bigread"></div>
+        <div class="muted">your estimated level</div>
         <div class="muted" id="testScore"></div>
         <div class="row-gap" style="justify-content:center;margin-top:18px">
           <button class="btn gold" onclick="startTest()">Retake (new version)</button>
@@ -989,47 +1179,49 @@
 <!-- ============ SETTINGS (modal) ============ -->
 <div id="settingsModal" class="modal-back" style="display:none" onclick="if(event.target===this)closeSettings()">
   <div class="modal">
-    <div class="modal-h"><b>Settings</b><button class="iconbtn" onclick="closeSettings()" title="Close">✕</button></div>
+    <div class="modal-h"><b>Settings</b><button class="iconbtn" onclick="closeSettings()" title="Close" aria-label="Close"><svg class="ico"><use href="#i-close"/></svg></button></div>
     <div class="modal-b">
       <div class="setsect">
-        <div class="setlabel">🤖 IA (Gemini)</div>
-        <p class="muted" style="margin:0 0 10px;font-size:13.5px">La app usa Gemini (gratis) para traducir, corregir tu escritura y leer fotos. Pega tu API key para activar la IA. Se guarda en <b>tu ficha de usuario</b> y es solo tuya: nadie más la ve ni gasta tu cuota, y a partir de ahora solo verás sus últimos cuatro caracteres.</p>
+        <div class="setlabel">AI (Gemini)</div>
+        <p class="muted" style="margin:0 0 10px;font-size:13.5px">The app uses Gemini (free) to translate, correct your writing and read photos. Paste your API key to turn the AI on. It is saved to <b>your account only</b>: nobody else sees it or uses your quota, and from then on you only see its last four characters.</p>
         <div id="aiStatusLine" class="aistatus"></div>
-        <input id="apiKeyInput" type="password" class="setinput" placeholder="Pega tu API key completa" autocomplete="off" />
+        <input id="apiKeyInput" type="password" class="setinput" placeholder="Paste your full API key" autocomplete="off" />
         <div style="display:flex;gap:8px;margin-top:10px">
           <button class="btn gold" onclick="saveConfig()">Save</button>
           <button class="btn" onclick="clearConfig()">Clear</button>
         </div>
-        <p class="muted" style="margin:12px 0 0;font-size:12.5px">¿No tienes una? Consíguela gratis en <b>aistudio.google.com/apikey</b> (Google AI Studio → Create API key). Al guardarla la comprobamos contra Google, así que sabrás al momento si sirve. Es tuya; si la compartiste por error, bórrala desde ahí y crea otra.</p>
+        <p class="muted" style="margin:12px 0 0;font-size:12.5px">Don't have one? Get it free at <b>aistudio.google.com/apikey</b> (Google AI Studio → Create API key). We check it with Google when you save it, so you know right away if it works. It's yours: if you ever share it by mistake, delete it there and create a new one.</p>
         <div id="setMsg" class="muted" style="font-size:13px;margin-top:8px"></div>
       </div>
 
       <div class="setsect">
-        <div class="setlabel">🔑 Tu contraseña</div>
-        <p class="muted" style="margin:0 0 10px;font-size:13.5px">Al cambiarla se cierran las demás sesiones que tengas abiertas. Esta no.</p>
-        <input id="claveActual" type="password" class="setinput" placeholder="Contraseña actual" autocomplete="current-password" />
-        <input id="claveNueva" type="password" class="setinput" style="margin-top:8px" placeholder="Contraseña nueva (mínimo 10)" autocomplete="new-password" />
-        <input id="claveNueva2" type="password" class="setinput" style="margin-top:8px" placeholder="Repite la nueva" autocomplete="new-password" />
+        <div class="setlabel">Your password</div>
+        <p class="muted" style="margin:0 0 10px;font-size:13.5px">Changing it signs out your other sessions. This one stays signed in.</p>
+        <input id="claveActual" type="password" class="setinput" placeholder="Current password" autocomplete="current-password" />
+        <input id="claveNueva" type="password" class="setinput" style="margin-top:8px" placeholder="New password (at least 10 characters)" autocomplete="new-password" />
+        <input id="claveNueva2" type="password" class="setinput" style="margin-top:8px" placeholder="Repeat the new password" autocomplete="new-password" />
         <div style="display:flex;gap:8px;margin-top:10px">
-          <button class="btn gold" onclick="cambiarClave()">Cambiar contraseña</button>
+          <button class="btn gold" onclick="cambiarClave()">Change password</button>
         </div>
         <div id="claveMsg" class="muted" style="font-size:13px;margin-top:8px"></div>
         <div class="legalbox">
-          <b>Software libre · AGPL-3.0</b>
-          <div>Se distribuye SIN NINGUNA GARANTÍA. Puedes usarlo, estudiarlo y
-            modificarlo; si distribuyes tu versión, debe seguir siendo libre.</div>
-          <div style="margin-top:6px">Este es un <b>lector de propósito general</b>: no
-            incluye ni distribuye libros. Eres responsable de los archivos que subas y de
-            tener derecho a usarlos. Todo se queda en tu ordenador.</div>
-          <div style="margin-top:6px">El catálogo solo descarga obras de
-            <b>dominio público</b> (Project Gutenberg).</div>
+          <b>Free software · AGPL-3.0</b>
+          <div>Distributed WITHOUT ANY WARRANTY. You may use, study and change it; if you
+            distribute your version, it must stay free.</div>
+          <div style="margin-top:6px">This is a <b>general-purpose reader</b>: it does not
+            include or distribute books. You are responsible for the files you upload and for
+            having the right to use them.</div>
+          <div style="margin-top:6px">The catalog only downloads <b>public-domain</b> works
+            (Project Gutenberg).</div>
         </div>
       </div>
     </div>
   </div>
 </div>
 
+<script src="/static/ui.js"></script>
 <script>
+const ICO=n=>'<svg class="ico sm" aria-hidden="true"><use href="#i-'+n+'"/></svg>';
 const S={bookId:null,bookLang:"en",chapterIndex:0,sentenceIndex:0,sentences:[],chapterCount:0,
   isPlaying:false,selWord:"",selExample:"",lastLookup:"",
   voice:localStorage.getItem("lira_voice")||"piper:en_US-amy-medium",
@@ -1049,7 +1241,7 @@ async function api(url,opts){
   // 401 = la sesión ya no vale. Pasa al entrar en otro dispositivo (solo se
   // permite una a la vez), al caducar, o si el admin la cierra. Sin esto el
   // navegador se quedaba dando errores sueltos sin explicar por qué.
-  if(r.status===401){location.href="/entrar";throw new Error("Sesión cerrada");}
+  if(r.status===401){location.href="/entrar";throw new Error("Signed out");}
   if(!r.ok){let m;try{m=(await r.json()).detail;}catch(e){m=r.statusText;}throw new Error(m);}
   return r.json();
 }
@@ -1066,37 +1258,53 @@ async function loadBooks(){
     d.innerHTML='<div class="ic"></div>';
     const bt=document.createElement("div");bt.className="bt";bt.textContent=b.title;bt.onclick=()=>openBook(b.id);
     if(esAdmin && b.visible===false){
-      bt.title="Privado: solo tú lo ves";
-      const can=document.createElement("span");can.textContent=" 🔒";can.style.opacity=".6";
+      bt.title="Private: only you can see it";
+      const can=document.createElement("span");can.textContent=" · private";can.style.opacity=".6";
       bt.appendChild(can);
     }
     d.appendChild(bt);
     if(esAdmin){
       const ojo=document.createElement("button");ojo.className="ren";
-      ojo.textContent=b.visible===false?"🔒":"👁";
+      ojo.innerHTML=b.visible===false?ICO("lock"):ICO("eye");ojo.setAttribute("aria-label",b.visible===false?"Private book":"Public book");
       ojo.title=b.visible===false
-        ? "Privado: solo tú lo ves. Pulsa para publicarlo a todos."
-        : "Visible para todos. Pulsa para hacerlo privado.";
+        ? "Private: only you can see it. Click to publish it to everyone."
+        : "Visible to everyone. Click to make it private.";
       ojo.onclick=(e)=>{e.stopPropagation();cambiarVisibilidad(b.id,b.title,b.visible!==false);};
-      const ren=document.createElement("button");ren.className="ren";ren.textContent="✎";ren.title="Rename";
+      const ren=document.createElement("button");ren.className="ren";ren.innerHTML=ICO("edit");ren.title="Rename";ren.setAttribute("aria-label","Rename");
       ren.onclick=(e)=>{e.stopPropagation();renameBook(b.id,b.title);};
-      const del=document.createElement("button");del.className="ren del";del.textContent="🗑";
+      const del=document.createElement("button");del.className="ren del";del.innerHTML=ICO("trash");del.setAttribute("aria-label","Delete book");
       del.title="Delete this book";
       del.onclick=(e)=>{e.stopPropagation();deleteBook(b.id,b.title);};
       d.appendChild(ojo);d.appendChild(ren);d.appendChild(del);
     }
     d.onclick=()=>openBook(b.id);el.appendChild(d);
   });
+  S.books=books;renderStart();
+}
+/* Today's way in: with a book in the library, the empty reader offers to
+   continue it and to review what's due, so a phone session starts in one tap. */
+function renderStart(){
+  const row=document.getElementById("startRow");if(!row)return;
+  row.textContent="";
+  const books=S.books||[];if(S.bookId!==null||!books.length)return;
+  let last=null;try{last=+localStorage.getItem("lira_lastbook");}catch(e){}
+  const b=books.find(x=>x.id===last)||books[0];
+  const go=document.createElement("button");go.className="btn gold";go.type="button";
+  go.textContent="Continue reading";go.onclick=()=>openBook(b.id);
+  const t=document.createElement("span");t.className="starttitle";t.textContent=b.title;
+  const rv=document.createElement("button");rv.className="btn";rv.type="button";
+  rv.textContent=S.vocabDue>0?("Review "+S.vocabDue+" due"):"Open flashcards";rv.onclick=()=>openLearn("repaso");
+  row.append(go,rv,t);
 }
 
 async function cambiarVisibilidad(id,titulo,eraVisible){
   const aviso=eraVisible
-    ? "«"+titulo+"» dejará de aparecer para los demás usuarios.\n\n"+
-      "Tú lo seguirás leyendo con tu progreso intacto. Es lo que conviene hacer "+
-      "con un libro que tienes derecho a leer pero no a distribuir."
-    : "«"+titulo+"» pasará a estar visible para TODOS los usuarios.\n\n"+
-      "Asegúrate de que es de dominio público antes de publicarlo.";
-  if(!confirm(aviso)) return;
+    ? "“"+titulo+"” will stop showing for other users.\n\n"+
+      "You keep reading it with your progress intact. Do this with a book you have "+
+      "the right to read but not to share."
+    : "“"+titulo+"” will become visible to ALL users.\n\n"+
+      "Make sure it is in the public domain before you publish it.";
+  if(!(await uiConfirm(aviso,{title:eraVisible?"Make it private?":"Publish to everyone?",ok:eraVisible?"Make private":"Publish"}))) return;
   await api("/api/books/"+id+"/visibility",{method:"POST",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({visible:!eraVisible})});
@@ -1105,8 +1313,8 @@ async function cambiarVisibilidad(id,titulo,eraVisible){
 async function deleteBook(id,title){
   // Es la acción más destructiva de la app: se confirma escribiendo, no con un
   // clic que se pueda dar sin querer. El vocabulario NO se pierde.
-  if(!confirm('Delete "'+title+'"?\n\nThis removes the book, its chapters and your '+
-              'reading position.\nThe words you saved from it are KEPT in your vocabulary.'))return;
+  if(!(await uiConfirm('This removes the book, its chapters and your reading position.\nThe words you saved from it are KEPT in your vocabulary.',
+              {title:'Delete “'+title+'”?',ok:'Delete book',danger:true})))return;
   try{
     const r=await api("/api/books/"+id,{method:"DELETE"});
     if(S.bookId===id){   // si borras el libro abierto, hay que cerrar el lector
@@ -1120,12 +1328,12 @@ async function deleteBook(id,title){
     }
     await loadBooks();
     toast('"'+r.title+'" deleted'+(r.kept_words?" · "+r.kept_words+" saved words kept":""));
-  }catch(e){saveError("el borrado del libro",e);}
+  }catch(e){saveError("the book deletion",e);}
 }
 async function renameBook(id,cur){
-  const t=prompt("New book name:",cur);if(!t||!t.trim())return;
+  const t=await uiPrompt("Give the book a name that is easy to find.",cur,{title:"Rename book",ok:"Rename"});if(!t||!t.trim())return;
   try{await api("/api/books/"+id+"/rename",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:t.trim()})});await loadBooks();if(id===S.bookId)document.getElementById("bookTitle").textContent=t.trim();}
-  catch(e){alert("Couldn't rename: "+e.message);}
+  catch(e){toast("Couldn't rename: "+e.message,true);}
 }
 document.getElementById("fileInput").addEventListener("change",async(e)=>{
   const f=e.target.files[0];if(!f)return;const msg=document.getElementById("uploadMsg");
@@ -1140,7 +1348,7 @@ document.getElementById("fileInput").addEventListener("change",async(e)=>{
 
 /* ---------- Abrir libro ---------- */
 async function openBook(id){
-  stopSpeech();
+  stopSpeech();try{localStorage.setItem("lira_lastbook",String(id));}catch(e){}
   const book=await api("/api/books/"+id);
   S.bookId=id;S.bookLang=book.language||"en";S.chapterCount=book.chapter_count;
   loadVoices();  // filtra voces al idioma del libro
@@ -1173,7 +1381,7 @@ function renderTOC(){
   const el=document.getElementById("toc");if(!el)return;el.innerHTML="";
   TOC.forEach(c=>{
     const d=document.createElement("div");d.className="tocrow"+(c.index===S.chapterIndex?" active":"")+(c.done?" donerow":"");d.dataset.idx=c.index;
-    d.innerHTML='<span class="chk'+(c.done?" done":"")+'" title="Mark complete">'+(c.done?"✓":"○")+'</span><span class="n">'+(c.index+1)+'</span><span style="flex:1">'+escapeHtml(c.title||("Section "+(c.index+1)))+'</span>';
+    d.innerHTML='<span class="chk'+(c.done?" done":"")+'" title="Mark complete">'+(c.done?ICO("check"):ICO("circle"))+'</span><span class="n">'+(c.index+1)+'</span><span style="flex:1">'+escapeHtml(c.title||("Section "+(c.index+1)))+'</span>';
     d.querySelector(".chk").onclick=(e)=>{e.stopPropagation();toggleChapterDone(c.index);};
     d.onclick=()=>jumpChapter(c.index);
     el.appendChild(d);
@@ -1185,13 +1393,13 @@ async function toggleChapterDone(idx){
   const c=TOC.find(x=>x.index===idx);const nd=!(c&&c.done);
   if(c)c.done=nd;renderTOC();   // optimista: se pinta ya
   try{await api("/api/books/"+S.bookId+"/chapter/"+idx+"/done",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({done:nd})});}
-  catch(e){if(c)c.done=!nd;renderTOC();saveError("el capítulo",e);}  // ...y se deshace si falla
+  catch(e){if(c)c.done=!nd;renderTOC();saveError("the chapter",e);}  // ...y se deshace si falla
 }
 async function markChapterDone(idx){
   const c=TOC.find(x=>x.index===idx);if(!c||c.done)return;
   c.done=true;renderTOC();
   try{await api("/api/books/"+S.bookId+"/chapter/"+idx+"/done",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({done:true})});}
-  catch(e){c.done=false;renderTOC();saveError("el capítulo terminado",e);}
+  catch(e){c.done=false;renderTOC();saveError("the finished chapter",e);}
 }
 function updateBookPct(){
   const total=TOC.length||S.chapterCount||1;const done=TOC.filter(c=>c.done).length;
@@ -1201,7 +1409,7 @@ function updateBookPct(){
 }
 function jumpChapter(idx){
   if(idx===S.chapterIndex)return;
-  stopSpeech();S.isPlaying=false;document.getElementById("playBtn").textContent="▶ Read";
+  stopSpeech();S.isPlaying=false;document.getElementById("playBtn").textContent="Read aloud";
   loadChapter(idx,0).then(saveState);
 }
 /* Botones ‹ › de la cabecera: mueven un capítulo relativo al actual. */
@@ -1221,16 +1429,16 @@ function updateChapNav(){
 }
 async function improveIndex(){
   const b=document.getElementById("btnIdx");
-  if(S.bookId===null){alert("Open a book first.");return;}
-  b.disabled=true;b.textContent="✨ Reading…";
+  if(S.bookId===null){toast("Open a book first.",true);return;}
+  b.disabled=true;b.textContent="Reading…";
   try{const toc=await api("/api/books/"+S.bookId+"/index/improve",{method:"POST"});
     // conserva qué capítulos estaban marcados como completados: la respuesta
     // sólo trae los títulos nuevos.
     const done={};TOC.forEach(c=>{done[c.index]=c.done;});
     TOC=toc.map(c=>({...c,done:c.done!==undefined?c.done:!!done[c.index]}));
     renderTOC();
-  }catch(e){alert("Couldn't improve the index: "+e.message);}
-  b.disabled=false;b.textContent="✨ Improve";
+  }catch(e){toast("Couldn't improve the contents: "+e.message,true);}
+  b.disabled=false;b.textContent="Improve";
 }
 
 async function loadChapter(idx,sentIdx=0){
@@ -1293,12 +1501,12 @@ function setReadMode(m){
 function nextPage(){
   if(S.readMode!=="paged")return;
   if(S.pageIndex+1<S.pages.length){S.sentenceIndex=S.pages[S.pageIndex+1].start;stopSpeech();saveState();S.isPlaying?speakCurrent():render();}
-  else if(S.chapterIndex+1<S.chapterCount){stopSpeech();S.isPlaying=false;document.getElementById("playBtn").textContent="▶ Read";loadChapter(S.chapterIndex+1,0).then(saveState);}
+  else if(S.chapterIndex+1<S.chapterCount){stopSpeech();S.isPlaying=false;document.getElementById("playBtn").textContent="Read aloud";loadChapter(S.chapterIndex+1,0).then(saveState);}
 }
 function prevPage(){
   if(S.readMode!=="paged")return;
   if(S.pageIndex>0){S.sentenceIndex=S.pages[S.pageIndex-1].start;stopSpeech();saveState();S.isPlaying?speakCurrent():render();}
-  else if(S.chapterIndex>0){stopSpeech();S.isPlaying=false;document.getElementById("playBtn").textContent="▶ Read";loadChapter(S.chapterIndex-1,0).then(saveState);}
+  else if(S.chapterIndex>0){stopSpeech();S.isPlaying=false;document.getElementById("playBtn").textContent="Read aloud";loadChapter(S.chapterIndex-1,0).then(saveState);}
 }
 function highlightWord(charIndex){
   const cur=document.querySelector(".s.cur"); if(!cur)return;
@@ -1453,8 +1661,8 @@ function stopSpeech(){/* cancel() lanza en algunos navegadores si no hay nada so
   try{window.speechSynthesis.cancel();}catch(e){}const a=audioEl();if(a){a.pause();a.onended=null;}}
 function togglePlay(){
   if(S.bookId===null||!S.sentences.length)return;
-  if(S.isPlaying){S.isPlaying=false;stopSpeech();document.getElementById("playBtn").textContent="▶ Read";saveState();}
-  else{S.isPlaying=true;document.getElementById("playBtn").textContent="⏸ Pause";speakCurrent();}
+  if(S.isPlaying){S.isPlaying=false;stopSpeech();document.getElementById("playBtn").textContent="Read aloud";saveState();}
+  else{S.isPlaying=true;document.getElementById("playBtn").textContent="Pause";speakCurrent();}
 }
 function speakCurrent(){
   render();const text=S.sentences[S.sentenceIndex];if(!text)return;
@@ -1473,7 +1681,7 @@ function advance(){
   if(S.sentenceIndex>=S.sentences.length){
     markChapterDone(S.chapterIndex);  // capítulo terminado -> check automático
     if(S.chapterIndex+1<S.chapterCount){loadChapter(S.chapterIndex+1,0).then(()=>{saveState();speakCurrent();});return;}
-    S.sentenceIndex=S.sentences.length-1;S.isPlaying=false;document.getElementById("playBtn").textContent="▶ Read";saveState();return;
+    S.sentenceIndex=S.sentences.length-1;S.isPlaying=false;document.getElementById("playBtn").textContent="Read aloud";saveState();return;
   }
   saveState();speakCurrent();
 }
@@ -1506,7 +1714,7 @@ async function addWordManually(){
   let tr="";
   try{const r=await api("/api/llm",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({text:term,kind:"translation"})});tr=r.result;}
-  catch(e){msg.textContent="⚠ AI unavailable — saving without translation. "+(e.message||"");}
+  catch(e){msg.textContent="AI unavailable — saving without translation. "+(e.message||"");}
   try{
     const r=await api("/api/vocab",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({term,translation:tr,lang:"en"})});
@@ -1556,7 +1764,7 @@ async function submitTyped(){
   try{const r=await api("/api/study/check",{method:"POST",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({typed,accepted:validas})});ok=r.correct;
-  }catch(e){v.className="verdict bad";v.textContent="No se pudo comprobar: "+e.message;return;}
+  }catch(e){v.className="verdict bad";v.textContent="Couldn't check it: "+e.message;return;}
   inp.className="typein "+(ok?"ok":"bad");
   inp.disabled=true;
   v.className="verdict "+(ok?"ok":"bad");
@@ -1577,16 +1785,16 @@ async function updateDeckEmpty(){
     m.textContent="You've done "+L.reviews_today+" reviews today (limit "+L.review_limit+"). "+
       L.backlog.due+" are still waiting — they'll come first tomorrow.";
   }else{
-    t.textContent="Deck complete 🎉";
+    t.textContent="Deck complete";
     m.textContent="No cards due today in this deck.";
   }
 }
 /* Panel de topes: se puede ajustar sin tocar código. */
 async function openLimits(){
-  let L=null;try{L=await api("/api/study/limits");}catch(e){toast("No se pudo cargar",true);return;}
+  let L=null;try{L=await api("/api/study/limits");}catch(e){toast("Couldn't load your limits.",true);return;}
   const filas=L.decks.map(d=>"  "+d.name+": "+d.new_limit).join("\n");
-  const v=prompt("Daily review limit (0 = no limit).\n\nToday: "+L.reviews_today+
-    " done · "+L.backlog.due+" waiting\n\nNew cards per deck:\n"+filas, L.review_limit);
+  const v=await uiPrompt("Reviews per day (0 = no limit).\n\nToday: "+L.reviews_today+
+    " done · "+L.backlog.due+" waiting\n\nNew cards per deck:\n"+filas, L.review_limit,{title:"Daily review limit",type:"number"});
   if(v===null)return;
   api("/api/study/limits",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({review_limit:parseInt(v,10)||0})})
@@ -1609,7 +1817,7 @@ async function generateErrorLesson(cat){
     await loadCustomLessons();
     showCustomLesson(r.id);
   }catch(e){m.textContent="✗ "+(e.message||"could not generate");}
-  b.disabled=false;b.textContent="📘 Generate";
+  b.disabled=false;b.textContent="Generate";
 }
 async function loadCustomLessons(){
   const el=document.getElementById("customLessons");if(!el)return;
@@ -1623,10 +1831,10 @@ async function loadCustomLessons(){
       '<div class="muted">'+L.error_count+' mistakes · '+escapeHtml(L.created_at.slice(0,10))+
       '<span style="float:right">open ▸</span></div></div>';
     d.querySelector("div").onclick=()=>showCustomLesson(L.id);
-    const del=document.createElement("button");del.className="btn sm";del.textContent="🗑";
+    const del=document.createElement("button");del.className="btn sm";del.innerHTML=ICO("trash");del.setAttribute("aria-label","Delete lesson");
     del.style.cssText="margin-top:6px;color:var(--danger)";
     del.onclick=async e=>{e.stopPropagation();
-      if(!confirm("Delete this lesson?"))return;
+      if(!(await uiConfirm("It disappears from your lessons. Your mistakes stay in the journal.",{title:"Delete this lesson?",ok:"Delete",danger:true})))return;
       try{await api("/api/lessons/custom/"+L.id,{method:"DELETE"});loadCustomLessons();
         document.getElementById("lessonView2").style.display="none";}
       catch(err){toast("Couldn't delete",true);}};
@@ -1644,19 +1852,19 @@ async function showCustomLesson(id){
   box.innerHTML=
     '<div class="card"><h3>'+esc(L.title||"")+' <span class="tag">'+esc(row.level||"")+'</span></h3>'+
     '<div class="muted" style="margin-bottom:10px">'+esc(L.desc||"")+'</div>'+
-    '<div class="lspot"><b>Por qué te pasa</b><div>'+esc(L.why_it_happens||"")+'</div></div>'+
+    '<div class="lspot"><b>Why this happens to you</b><div>'+esc(L.why_it_happens||"")+'</div></div>'+
     lista(L.explanation,p=>'<p class="lspara">'+esc(p)+'</p>')+
     (L.rule&&L.rule.length?'<div class="lsrule">'+lista(L.rule,r=>'<div>▸ '+esc(r)+'</div>')+'</div>':'')+
     '</div>'+
-    (L.fixes&&L.fixes.length?'<div class="card" style="margin-top:12px"><h3>Tus errores, corregidos</h3>'+
+    (L.fixes&&L.fixes.length?'<div class="card" style="margin-top:12px"><h3>Your mistakes, corrected</h3>'+
       lista(L.fixes,f=>'<div class="vrow" style="display:block">'+
         '<div><span style="color:var(--danger);text-decoration:line-through">'+esc(f.wrong)+
         '</span> → <span style="color:var(--accent);font-weight:600">'+esc(f.right)+'</span></div>'+
         '<div class="muted">'+esc(f.why||"")+'</div></div>')+'</div>':'')+
-    (L.examples&&L.examples.length?'<div class="card" style="margin-top:12px"><h3>Así se dice bien</h3>'+
+    (L.examples&&L.examples.length?'<div class="card" style="margin-top:12px"><h3>The right way to say it</h3>'+
       lista(L.examples,x=>'<div class="vrow" style="display:block"><div>'+esc(x.en)+'</div>'+
         '<div class="muted">'+esc(x.es)+'</div></div>')+'</div>':'')+
-    (L.practice&&L.practice.length?'<div class="card" style="margin-top:12px"><h3>Practica</h3>'+
+    (L.practice&&L.practice.length?'<div class="card" style="margin-top:12px"><h3>Practice</h3>'+
       '<div id="lsPractice"></div></div>':'')+
     (L.watch_out&&L.watch_out.length?'<div class="card" style="margin-top:12px"><h3>Ojo con esto</h3>'+
       lista(L.watch_out,w=>'<div class="vrow" style="display:block">'+esc(w)+'</div>')+'</div>':'')+
@@ -1668,7 +1876,7 @@ async function showCustomLesson(id){
   if(pw)(L.practice||[]).forEach((p,i)=>{
     const d=document.createElement("div");d.className="vrow";d.style.display="block";
     d.innerHTML='<div>'+(i+1)+'. '+esc(p.prompt)+'</div>'+
-      (p.hint?'<div class="muted">💡 '+esc(p.hint)+'</div>':'')+
+      (p.hint?'<div class="muted">Hint: '+esc(p.hint)+'</div>':'')+
       '<div class="muted lsans" style="display:none;color:var(--accent);font-weight:600">'+esc(p.answer)+'</div>';
     const b=document.createElement("button");b.className="btn sm";b.textContent="Show answer";
     b.style.marginTop="6px";
@@ -1752,13 +1960,13 @@ async function showBookDifficulty(bookId){
   if(!d.level)return;
   box.style.display="";
   box.className="booklvl"+(d.gap>=2?" hard":d.gap<=0?" easy":"");
-  box.textContent=(d.gap>=2?"⚠ ":"")+d.level+" · "+d.verdict;
+  box.textContent=d.level+" · "+d.verdict;
 }
 
 /* ---------- Vocabulario (persistente) ---------- */
 async function addVocab(){
   const sel=(window.getSelection().toString().trim())||S.selWord;
-  if(!sel){document.getElementById("study").textContent="Select a word in the text and press ＋ Vocabulary.";return;}
+  if(!sel){document.getElementById("study").textContent="Select a word in the text and press Vocabulary.";return;}
   const example=(sel===S.selWord&&S.selExample)?S.selExample:(S.sentences[S.sentenceIndex]||"");
   const st=document.getElementById("study");st.innerHTML='<div class="term">'+escapeHtml(sel)+'</div><span class="muted">Saving…</span>';mostrarEstudio();
   let translation="";
@@ -1767,7 +1975,7 @@ async function addVocab(){
   try{const r=await api("/api/vocab",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({term:sel,translation,example,lang:S.bookLang||"en",book_id:S.bookId})});
     setDue(r.due); document.getElementById("vocabCount").textContent=r.total;
-    st.innerHTML='<div class="term">'+escapeHtml(sel)+'</div>'+escapeHtml(translation)+'<br><span class="muted">Saved ('+r.total+' words). Review it in 🎴 Flashcards.</span>';
+    st.innerHTML='<div class="term">'+escapeHtml(sel)+'</div>'+escapeHtml(translation)+'<br><span class="muted">Saved ('+r.total+' words). Review it in Flashcards.</span>';
   }catch(e){st.textContent="Error saving: "+e.message;}
 }
 async function exportAnki(){
@@ -1782,28 +1990,39 @@ async function exportAnki(){
 }
 
 /* ---------- Aprender (SRS) ---------- */
-function setDue(n){const b=document.getElementById("dueBadge");if(!b)return;
+function setDue(n){S.vocabDue=n;renderStart();const b=document.getElementById("dueBadge");if(!b)return;
   if(n>0){b.style.display="";b.textContent=n;}else{b.style.display="none";}}
 // contador decorativo: si falla se queda con el valor anterior, sin molestar
 async function refreshDueBadge(){try{const s=await api("/api/vocab/stats");setDue(s.due);document.getElementById("vocabCount").textContent=s.total;}catch(e){}}
 function dailyGoal(){return parseInt(localStorage.getItem("lira_goal")||"20");}
-function setDailyGoal(){const g=prompt("Daily goal — reviews per day:",dailyGoal());if(g&&parseInt(g)>0){localStorage.setItem("lira_goal",String(parseInt(g)));updateStreak();}}
+async function setDailyGoal(){const g=await uiPrompt("How many reviews do you want to do each day? Small and steady beats big and rare.",dailyGoal(),{title:"Daily goal",ok:"Save goal",type:"number"});if(g&&parseInt(g)>0){localStorage.setItem("lira_goal",String(parseInt(g)));updateStreak();}}
 async function updateStreak(){
   try{const s=await api("/api/streak");
+    const box=document.getElementById("streakBox");
     document.getElementById("streakNum").textContent=s.current;
-    const fl=document.getElementById("streakFlame");
-    fl.style.filter=s.today?"none":"grayscale(1)";fl.style.opacity=s.today?"1":".5";
-    const sl=document.getElementById("streakLine");
-    if(sl)sl.textContent="🔥 Streak: "+s.current+" days · "+s.total_reviews+" reviews total";
-    // meta diaria
+    const sc=document.getElementById("streakChip");
+    if(sc){sc.classList.toggle("lit",!!s.today);}
     const goal=dailyGoal(),tr=s.today_reviews||0,pct=Math.min(100,Math.round(tr/goal*100)),met=tr>=goal;
-    const gb=document.getElementById("goalBox");if(gb)gb.textContent="🎯 "+tr+"/"+goal+" today"+(met?" ✓":"");
+    if(sc){document.getElementById("streakChipNum").textContent=s.current+" · "+tr+"/"+goal;
+      sc.setAttribute("aria-label",s.current+" day streak, "+tr+" of "+goal+" reviews today. Open library and sections");}
+    if(box){box.classList.toggle("lit",!!s.today);
+      // the gauge "ignites" once, the moment today's goal is reached
+      if(met&&!box.classList.contains("met")){box.classList.add("met","ignite");setTimeout(()=>box.classList.remove("ignite"),900);}
+      box.classList.toggle("met",met);}
+    const sub=document.getElementById("streakSub");
+    if(sub)sub.textContent=met?"Goal met today":(s.today?"Keep going today":"Review today to keep it");
+    const segs=document.querySelectorAll("#goalSegs i"),on=Math.round(pct/10);
+    segs.forEach((x,i)=>x.classList.toggle("on",i<on));
+    const sg=document.getElementById("goalSegs");if(sg)sg.classList.toggle("met",met);
+    const gn=document.getElementById("goalNums");if(gn)gn.textContent=tr+" / "+goal;
+    const sl=document.getElementById("streakLine");
+    if(sl)sl.textContent="Streak: "+s.current+" days · "+s.total_reviews+" reviews in total";
     const gm=document.getElementById("goalMeter");if(gm)gm.style.width=pct+"%";
-    const gt=document.getElementById("goalText");if(gt)gt.textContent=met?("Goal met! 🎉 "+tr+" reviews today ("+(s.today_min||0)+" min active)"):(tr+" / "+goal+" reviews today · "+(s.today_min||0)+" min active");
+    const gt=document.getElementById("goalText");if(gt)gt.textContent=met?("Goal met: "+tr+" reviews today ("+(s.today_min||0)+" min active)"):(tr+" / "+goal+" reviews today · "+(s.today_min||0)+" min active");
   }catch(e){}  // panel de objetivo: informativo, si falla se deja como estaba
 }
 function openLearn(tab){document.getElementById("learnOverlay").style.display="flex";stopSpeech();S.isPlaying=false;
-  const pb=document.getElementById("playBtn");if(pb)pb.textContent="▶ Read";S.currentModule="flashcards";
+  const pb=document.getElementById("playBtn");if(pb)pb.textContent="Read aloud";S.currentModule="flashcards";
   learnTab(tab||"repaso");loadReview();loadVocabFull();}
 function closeLearn(){document.getElementById("learnOverlay").style.display="none";refreshDueBadge();}
 
@@ -1820,7 +2039,7 @@ async function loadFullStats(range){
   document.getElementById("stActive").textContent=s.active_min;
   document.getElementById("stProcrast").textContent=s.procrastination_min;
   // opportunity banner
-  document.getElementById("oppBox").innerHTML='<div class="oppbanner"><div class="big">🎯</div><div>'+
+  document.getElementById("oppBox").innerHTML='<div class="oppbanner"><div class="big"><svg class="ico" style="width:26px;height:26px;color:var(--cyan)"><use href="#i-target"/></svg></div><div>'+
     '<div style="font-weight:600;font-size:16px">Area of opportunity: '+s.opportunity.name+'</div>'+
     '<div style="opacity:.9;font-size:13.5px">You\'ve spent '+s.opportunity.minutes+' min here recently. Try ~'+s.opportunity.suggest_min+' min to catch up with your other areas.</div></div></div>';
   // time per day chart
@@ -1833,14 +2052,14 @@ async function loadFullStats(range){
   document.getElementById("modChart").innerHTML=mods.map(m=>{const v=s.modules[m]||0;
     return '<div class="modbar"><span class="lbl">'+MOD_NAMES[m]+'</span><span class="track"><i style="width:'+(v/mmax*100)+'%"></i></span><span class="val">'+v+'m</span></div>';}).join("");
   // focus vs idle
-  const foc=[["Focus",s.active_min,"#3f8f6f"],["Idle",s.procrastination_min,"#b8b2a6"]];const ftot=Math.max(1,s.open_min);
+  const foc=[["Focus",s.active_min,"var(--cyan)"],["Idle",s.procrastination_min,"var(--s3)"]];const ftot=Math.max(1,s.open_min);
   document.getElementById("focusStack").innerHTML=foc.map(p=>'<span style="width:'+(p[1]/ftot*100)+'%;background:'+p[2]+'"></span>').join("");
   document.getElementById("focusLegend").innerHTML=foc.map(p=>'<span><span class="dot" style="background:'+p[2]+'"></span>'+p[0]+" ("+p[1]+"m)</span>").join("");
   document.getElementById("focusNote").textContent="Idle = app open but no interaction. "+s.open_min+" min open · "+s.active_min+" min focused.";
   // areas completed
   let a='<div class="areabar"><span class="lbl">Decks learned</span><span class="track"><i style="width:'+(s.deck_total?s.deck_learned/s.deck_total*100:0)+'%"></i></span><span class="val">'+s.deck_learned+"/"+s.deck_total+'</span></div>';
-  (s.reading||[]).forEach(b=>{a+='<div class="areabar"><span class="lbl">📖 '+escapeHtml(b.title.slice(0,16))+'</span><span class="track"><i style="width:'+b.pct+'%"></i></span><span class="val">'+b.pct+'%</span></div>';});
-  a+='<div class="areabar"><span class="lbl">✍️ Writings</span><span class="track"><i style="width:'+Math.min(100,s.writings*10)+'%"></i></span><span class="val">'+s.writings+'</span></div>';
+  (s.reading||[]).forEach(b=>{a+='<div class="areabar"><span class="lbl">'+escapeHtml(b.title.slice(0,16))+'</span><span class="track"><i style="width:'+b.pct+'%"></i></span><span class="val">'+b.pct+'%</span></div>';});
+  a+='<div class="areabar"><span class="lbl">Writings</span><span class="track"><i style="width:'+Math.min(100,s.writings*10)+'%"></i></span><span class="val">'+s.writings+'</span></div>';
   document.getElementById("areasBox").innerHTML=a;
   renderHeatmap(s.heatmap);
 }
@@ -1877,7 +2096,7 @@ function toast(msg,isError){let t=document.getElementById("liraToast");
 /* Un fallo al GUARDAR no puede pasar desapercibido: si se pierde en silencio,
    crees que has estudiado y no se ha registrado nada. */
 function saveError(what,e){
-  toast("⚠ No se pudo guardar "+what+": "+(e&&e.message?e.message:"sin conexión"),true);
+  toast("Couldn't save "+what+": "+(e&&e.message?e.message:"no connection"),true);
 }
 /* Distingue "no tienes nada" de "no se pudo cargar": el estado vacío mentía
    cuando en realidad la petición había fallado. */
@@ -1890,7 +2109,7 @@ function loadFailHtml(what){
 async function refreshAiDot(){
   try{const c=await api("/api/config");
     const d=document.getElementById("aiDot");
-    if(d){d.style.color=c.enabled?"#5fbf6f":"#b46a4a";d.title="AI: "+(c.enabled?"active":"off — click to set up");}
+    if(d){d.classList.toggle("on",!!c.enabled);d.title="AI: "+(c.enabled?"on":"off. Add your key in Settings");d.setAttribute("aria-label",d.title);}
     return c;
   }catch(e){return null;}
 }
@@ -1901,19 +2120,19 @@ async function openSettings(){
   const c=await refreshAiDot();
   const sl=document.getElementById("aiStatusLine");
   if(c&&c.enabled){sl.className="aistatus on";
-    sl.textContent="✓ IA activa"+(c.from_env?" (desde variable de entorno)":" · key "+c.key_masked)+" · modelo "+c.model;}
-  else{sl.className="aistatus off";sl.textContent="✗ IA sin configurar — pega tu API key abajo para activarla.";}
+    sl.textContent="AI is on"+(c.from_env?" (from the server environment)":" · key "+c.key_masked)+" · model "+c.model;}
+  else{sl.className="aistatus off";sl.textContent="AI is off. Paste your API key below to turn it on.";}
 }
 function closeSettings(){document.getElementById("settingsModal").style.display="none";}
 async function saveConfig(){
   const key=document.getElementById("apiKeyInput").value.trim();
-  if(!key){document.getElementById("setMsg").textContent="Pega tu API key primero.";return;}
-  const m=document.getElementById("setMsg");m.textContent="Guardando…";
+  if(!key){document.getElementById("setMsg").textContent="Paste your API key first.";return;}
+  const m=document.getElementById("setMsg");m.textContent="Saving…";
   try{const c=await api("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({gemini_api_key:key})});
-    m.textContent=c.enabled?"✓ Guardada. La IA ya está activa.":"No se pudo activar.";
+    m.textContent=c.enabled?"Saved. The AI is on.":"Couldn't turn it on.";
     document.getElementById("apiKeyInput").value="";
     openSettings();  // refresca estado (enmascarado)
-    toast("IA activada 🤖");
+    toast("AI turned on");
   }catch(e){m.textContent="Error: "+e.message;}
 }
 async function cambiarClave(){
@@ -1921,26 +2140,26 @@ async function cambiarClave(){
   const actual=document.getElementById("claveActual").value;
   const n1=document.getElementById("claveNueva").value;
   const n2=document.getElementById("claveNueva2").value;
-  if(!actual||!n1){m.textContent="Rellena la actual y la nueva.";return;}
-  if(n1!==n2){m.textContent="Las dos nuevas no coinciden.";return;}
-  m.textContent="Cambiando…";
+  if(!actual||!n1){m.textContent="Fill in your current and new password.";return;}
+  if(n1!==n2){m.textContent="The two new passwords don't match.";return;}
+  m.textContent="Changing…";
   try{
     const r=await api("/api/auth/password",{method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({current:actual,new:n1})});
-    m.textContent="✓ "+r.mensaje;
+    m.textContent=r.mensaje;
     ["claveActual","claveNueva","claveNueva2"].forEach(i=>document.getElementById(i).value="");
-    toast("Contraseña cambiada 🔑");
+    toast("Password changed");
   }catch(e){ m.textContent="Error: "+e.message; }
 }
 async function clearConfig(){
   try{await api("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({gemini_api_key:""})});}
-  catch(e){saveError("el borrado de la API key",e);return;}
+  catch(e){saveError("the API key removal",e);return;}
   document.getElementById("apiKeyInput").value="";openSettings();toast("API key eliminada");
 }
-const LV_META={beginner:{icon:"🟢",name:"Beginner",tag:"A1–A2 · empezar a hablar"},
-  mid:{icon:"🟡",name:"Mid",tag:"A2–B1 · afianzar"},
-  advanced:{icon:"🔵",name:"Advanced",tag:"B2–C1 · dominar"}};
+const LV_META={beginner:{icon:"",name:"Beginner",tag:"A1–A2 · start speaking"},
+  mid:{icon:"",name:"Mid",tag:"A2–B1 · build it up"},
+  advanced:{icon:"",name:"Advanced",tag:"B2–C1 · master it"}};
 function openLessons(){closeAllOverlays();document.getElementById("lessonsOverlay").style.display="flex";lessonLevel(S.lessonLevel||"map");}
 function lessonLevel(lv){S.lessonLevel=lv;
   document.querySelectorAll('#lessonTabs .tab').forEach(b=>b.classList.toggle("active",b.dataset.lv===lv));
@@ -1960,7 +2179,7 @@ function lessonCard(l){
 function checkpointCard(c){
   return '<div class="card cpcard'+(c.done?" done":"")+'" onclick="openCheckpoint(\''+c.id+'\')">'+
       '<div style="display:flex;align-items:center;gap:12px">'+
-        '<div class="lcheck'+(c.done?" on":"")+'">'+(c.done?"✓":"🎯")+'</div>'+
+        '<div class="lcheck'+(c.done?" on":"")+'">'+(c.done?"✓":"◎")+'</div>'+
         '<div><div class="ltitle">'+escapeHtml(c.title)+(c.done?" · aprobado":"")+'</div>'+
           '<div class="muted" style="font-size:13.5px">'+escapeHtml(c.desc||"")+'</div></div>'+
       '</div></div>';}
@@ -2000,10 +2219,10 @@ async function loadLessonMap(){
       blocksHtml+'</div>';
   }).join("");
   wrap.innerHTML=
-    '<div class="maphero"><div class="ltitle big">Tu ruta de inglés</div>'+
-      '<div class="muted">Un curso completo de '+total+' lecciones, del principio al nivel avanzado, con el método contrastivo (explicación clara + ejemplos con 🔊). Toca cualquier lección para empezar — no tienes que ir en orden.</div>'+
+    '<div class="maphero"><div class="ltitle big">Your English <em>route</em></div>'+
+      '<div class="muted">A full course of '+total+' lessons, from the start to advanced, with the contrastive method: a clear explanation plus examples you can listen to. Open any lesson. You don\'t have to go in order.</div>'+
       '<div class="mapprog"><div class="mapprogbar" style="width:'+(total?Math.round(done/total*100):0)+'%"></div></div>'+
-      '<div class="muted" style="font-size:13px">'+done+' de '+total+' lecciones completadas</div>'+
+      '<div class="muted num" style="font-size:13px">'+done+' / '+total+' lessons done</div>'+
     '</div>'+
     '<div class="maproad">'+cols+'</div>';
 }
@@ -2015,23 +2234,23 @@ async function openLesson(id){
   const v=document.getElementById("lessonView");v.style.display="";
   const pairs=ls.pairs.map((p,i)=>
     '<div class="lpair">'+
-      '<button class="sayb" onclick="speakText(LCUR.pairs['+i+'][0],\'en\')" title="Listen">🔊</button>'+
+      '<button class="sayb" onclick="speakText(LCUR.pairs['+i+'][0],\'en\')" title="Listen" aria-label="Listen"><svg class="ico sm"><use href="#i-sound"/></svg></button>'+
       '<div class="len">'+escapeHtml(p[0])+'</div>'+
       '<div class="les muted">'+escapeHtml(p[1])+'</div>'+
-      '<button class="deckb" onclick="addLessonToDeck('+i+')" title="Send to deck">＋</button>'+
+      '<button class="deckb" onclick="addLessonToDeck('+i+')" title="Send to deck" aria-label="Send to deck"><svg class="ico sm"><use href="#i-plus"/></svg></button>'+
     '</div>').join("");
   const explanation=(ls.explanation&&ls.explanation.length)?
-    '<div class="lsect"><div class="lsecth">Explicación</div>'+
+    '<div class="lsect"><div class="lsecth">Explanation</div>'+
       ls.explanation.map(p=>'<p class="lexp">'+escapeHtml(p)+'</p>').join("")+'</div>':"";
   const formula=(ls.formula&&ls.formula.length)?
-    '<div class="lformula"><div class="flabel">El patrón</div>'+
+    '<div class="lformula"><div class="flabel">The pattern</div>'+
       ls.formula.map(f=>'<div class="fline">'+escapeHtml(f)+'</div>').join("")+'</div>':"";
   const FCLS=["f-aff","f-neg","f-q"];
   const forms=(ls.forms&&ls.forms.length)?
-    '<div class="lsect"><div class="lsecth">Afirmativo · Negativo · Pregunta</div>'+
+    '<div class="lsect"><div class="lsecth">Affirmative · Negative · Question</div>'+
       ls.forms.map((f,i)=>'<div class="lform '+(FCLS[i]||"")+'">'+
         '<span class="flabelchip">'+escapeHtml(f[0])+'</span>'+
-        '<button class="sayb" onclick="speakText(LCUR.forms['+i+'][1],\'en\')" title="Listen">🔊</button>'+
+        '<button class="sayb" onclick="speakText(LCUR.forms['+i+'][1],\'en\')" title="Listen" aria-label="Listen"><svg class="ico sm"><use href="#i-sound"/></svg></button>'+
         '<span class="fen">'+escapeHtml(f[1])+'</span>'+
         '<span class="fes muted">'+escapeHtml(f[2])+'</span>'+
       '</div>').join("")+'</div>':"";
@@ -2039,9 +2258,9 @@ async function openLesson(id){
     '<div class="lprac" id="lprac'+i+'">'+
       '<div class="pes">'+escapeHtml(p[0])+'</div>'+
       '<div class="pans" id="pans'+i+'" style="display:none">'+
-        '<button class="sayb" onclick="speakText(LCUR.practice['+i+'][1],\'en\')" title="Listen">🔊</button>'+
+        '<button class="sayb" onclick="speakText(LCUR.practice['+i+'][1],\'en\')" title="Listen" aria-label="Listen"><svg class="ico sm"><use href="#i-sound"/></svg></button>'+
         '<span class="pen">'+escapeHtml(p[1])+'</span>'+
-        '<button class="deckb" onclick="addPracToDeck('+i+')" title="Send to deck">＋</button>'+
+        '<button class="deckb" onclick="addPracToDeck('+i+')" title="Send to deck" aria-label="Send to deck"><svg class="ico sm"><use href="#i-plus"/></svg></button>'+
       '</div>'+
       '<button class="revealb" onclick="revealPrac('+i+')">Reveal</button>'+
     '</div>').join("");
@@ -2052,8 +2271,8 @@ async function openLesson(id){
     explanation+
     formula+
     forms+
-    '<div class="lsect"><div class="lsecth">Ejemplos</div>'+pairs+'</div>'+
-    '<div class="lsect"><div class="lsecth">Practica — traduce, luego revela</div>'+practice+'</div>'+
+    '<div class="lsect"><div class="lsecth">Examples</div>'+pairs+'</div>'+
+    '<div class="lsect"><div class="lsecth">Practice: translate it, then reveal</div>'+practice+'</div>'+
     '<div style="text-align:center;margin:24px 0 8px">'+
       '<button class="btn gold" id="doneBtn" onclick="toggleLessonDone(\''+ls.id+'\')">'+
       (ls.done?"✓ Completed — mark as not done":"Mark complete")+'</button></div>';
@@ -2066,7 +2285,7 @@ function addPracToDeck(i){const p=LCUR.practice[i];sendToDeck(p[1],p[0]);}
 async function sendToDeck(en,es){
   try{const r=await api("/api/vocab",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({term:en,translation:es,example:en,lang:"en"})});
-    setDue(r.due);toast("Sent to deck 🎴 ("+r.total+")");}catch(e){toast("Error saving");}
+    setDue(r.due);toast("Sent to deck ("+r.total+")");}catch(e){toast("Error saving");}
 }
 async function toggleLessonDone(id){
   const done=!(LCUR&&LCUR.done);
@@ -2091,8 +2310,8 @@ function cpRender(){
   v.innerHTML=
     '<button class="backb" onclick="lessonLevel(S.lessonLevel)">← Lessons</button>'+
     '<div class="lhero"><div class="ltitle big">'+escapeHtml(CP.title)+'</div>'+
-      '<div class="muted">'+escapeHtml(CP.desc)+' · pregunta '+(CP.pos+1)+' de '+n+'</div></div>'+
-    '<div class="cpq">¿Cómo se dice en inglés?</div>'+
+      '<div class="muted">'+escapeHtml(CP.desc)+' · <span class="num">'+String(CP.pos+1).padStart(2,"0")+' / '+String(n).padStart(2,"0")+'</span></div></div>'+
+    '<div class="cpq">How do you say it in English?</div>'+
     '<div class="cpprompt">"'+escapeHtml(q.prompt)+'"</div>'+
     '<div id="cpopts">'+q.options.map((o,i)=>
       '<button class="cpopt" onclick="cpChoose('+i+')">'+escapeHtml(o)+'</button>').join("")+'</div>'+
@@ -2111,8 +2330,8 @@ function cpChoose(i){
   speakText(q.answer,"en");
   const fb=document.getElementById("cpfb");
   const last=(CP.pos===CP.questions.length-1);
-  fb.innerHTML=(ok?'<span class="cpok">✓ ¡Correcto!</span>':'<span class="cpno">✗ La correcta es: <b>'+escapeHtml(q.answer)+'</b></span>')+
-    '<button class="btn gold" style="margin-left:auto" onclick="cpNext()">'+(last?"Ver resultado":"Siguiente")+'</button>';
+  fb.innerHTML=(ok?'<span class="cpok">Correct</span>':'<span class="cpno">The right answer is <b>'+escapeHtml(q.answer)+'</b></span>')+
+    '<button class="btn gold" style="margin-left:auto" onclick="cpNext()">'+(last?"See result":"Next")+'</button>';
 }
 function cpNext(){
   CP.pos++; CP.chosen=null;
@@ -2123,15 +2342,15 @@ async function cpResult(){
   const v=document.getElementById("lessonView"), n=CP.questions.length, passed=CP.correct>=CP.pass;
   // aprobar un checkpoint es progreso del curso: si no se guarda, hay que decirlo
   if(passed){try{await api("/api/checkpoint/"+CP.id+"/done",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({done:true})});}
-    catch(e){saveError("el checkpoint aprobado",e);}}
+    catch(e){saveError("the passed checkpoint",e);}}
   v.innerHTML=
     '<button class="backb" onclick="lessonLevel(S.lessonLevel)">← Lessons</button>'+
     '<div class="cpresult">'+
-      '<div style="font-size:44px">'+(passed?"🎉":"💪")+'</div>'+
+      '<div class="bigread">'+(passed?"Passed":"Almost")+'</div>'+
       '<div class="ltitle big">'+CP.correct+' / '+n+'</div>'+
-      '<div class="muted" style="margin:6px 0 18px">'+(passed?"¡Aprobado! Repaso completado.":"Casi. Repasa las lecciones y vuelve a intentarlo (necesitas "+CP.pass+"/"+n+").")+'</div>'+
-      '<button class="btn gold" onclick="openCheckpoint(\''+CP.id+'\')">Reintentar</button> '+
-      '<button class="btn" onclick="lessonLevel(S.lessonLevel)">Volver</button>'+
+      '<div class="muted" style="margin:6px 0 18px">'+(passed?"Passed. Review complete.":"Almost. Review the lessons and try again (you need "+CP.pass+"/"+n+").")+'</div>'+
+      '<button class="btn gold" onclick="openCheckpoint(\''+CP.id+'\')">Try again</button> '+
+      '<button class="btn" onclick="lessonLevel(S.lessonLevel)">Back</button>'+
     '</div>';
   v.scrollTop=0;
 }
@@ -2212,7 +2431,7 @@ async function copyText(text,btn){
   catch(e){ // sin permiso de portapapeles: copia por selección temporal
     const ta=document.createElement("textarea");ta.value=text;
     ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);
-    ta.select();try{document.execCommand("copy");done();}catch(_){alert("Couldn't copy.");}
+    ta.select();try{document.execCommand("copy");done();}catch(_){toast("Couldn't copy.",true);}
     document.body.removeChild(ta);
   }
 }
@@ -2225,12 +2444,12 @@ function reuseInEditor(text){
   window.scrollTo({top:0,behavior:"smooth"});
 }
 async function deleteWriting(id,rowEl){
-  if(!confirm("Delete this writing? This also removes its mistakes from the error log."))return;
+  if(!(await uiConfirm("This also removes its mistakes from your errors journal.",{title:"Delete this writing?",ok:"Delete",danger:true})))return;
   try{await api("/api/writings/"+id,{method:"DELETE"});
     if(rowEl)rowEl.remove();
     if(S.writing.id===id){S.writing.id=null;document.getElementById("wResult").style.display="none";}
     if(!document.querySelectorAll("#writingsList .vrow").length)loadWritings();
-  }catch(e){alert("Couldn't delete: "+e.message);}
+  }catch(e){toast("Couldn't delete: "+e.message,true);}
 }
 /* Botones de upgrade: sólo a niveles POR ENCIMA del tuyo, y sólo cuando ya
    sabemos cuál es el tuyo. Sin evaluación no hay upgrade. */
@@ -2314,7 +2533,7 @@ async function saveWritingWord(word){
   // la palabra se guarda igualmente aunque la IA falle, pero hay que avisar:
   // si no, acabas con tarjetas sin traducción sin saber por qué
   try{const res=await api("/api/llm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:word,kind:"translation"})});tr=res.result;}
-  catch(e){toast("Guardada sin traducción: "+(e.message||"la IA no respondió"),true);}
+  catch(e){toast("Saved without a translation: "+(e.message||"the AI didn't respond"),true);}
   try{const r=await api("/api/vocab",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({term:word,translation:tr,example:S.writing.corrected.slice(0,120),lang:"en"})});
     setDue(r.due);st.textContent="Saved “"+word+"” → "+tr+" ("+r.total+" words).";}catch(e){st.textContent="Error: "+e.message;}
 }
@@ -2352,9 +2571,9 @@ async function loadWritings(){
         '<div><b>'+escapeHtml(w.title||"(untitled)")+'</b> <span class="tag">'+escapeHtml(w.level||"not assessed")+'</span>'+up+'</div>'+
         '<div class="muted">'+escapeHtml(w.preview||"")+'… <span style="float:right">click to compare ▾</span></div></div>'+
       '<div class="row-gap wacts" style="margin-top:8px">'+
-        '<button class="btn sm" data-a="copy">⧉ Copy</button>'+
-        '<button class="btn sm" data-a="reuse">✎ Edit again</button>'+
-        '<button class="btn sm" data-a="del" style="margin-left:auto;color:var(--danger)">🗑 Delete</button></div>'+
+        '<button class="btn sm" data-a="copy">Copy</button>'+
+        '<button class="btn sm" data-a="reuse">Edit again</button>'+
+        '<button class="btn sm" data-a="del" style="margin-left:auto;color:var(--danger)">Delete</button></div>'+
       '<div class="wdetail" style="display:none;margin-top:10px"></div>';
     const det=d.querySelector(".wdetail");
     d.querySelector('[data-a="copy"]').onclick=e=>{e.stopPropagation();
@@ -2374,7 +2593,7 @@ async function loadWritings(){
     el.appendChild(d);});
 }
 async function fetchWriting(id){
-  try{return await api("/api/writings/"+id);}catch(e){alert("Error: "+e.message);return null;}
+  try{return await api("/api/writings/"+id);}catch(e){toast("Couldn't open it: "+e.message,true);return null;}
 }
 async function copyWriting(id,btn){
   const f=await fetchWriting(id);if(f)copyText(f.original||"",btn);
@@ -2408,7 +2627,7 @@ function renderWritingDetail(host,w){
   const texts=[w.original,w.corrected||"",w.corrected||w.original,w.upgraded||""];
   host.querySelectorAll(".cmp .col").forEach((c,i)=>{
     const b=document.createElement("button");b.className="btn sm";b.style.marginTop="8px";
-    b.textContent="⧉ Copy";b.onclick=e=>{e.stopPropagation();copyText(texts[i]||"",b);};
+    b.textContent="Copy";b.onclick=e=>{e.stopPropagation();copyText(texts[i]||"",b);};
     c.appendChild(b);
   });
 }
@@ -2460,7 +2679,7 @@ function errorRow(x,summary){
     '<div class="minilesson" style="display:none;margin-top:9px"></div>';
   const acts=d.querySelector(".row-gap"), box=d.querySelector(".minilesson");
   const bx=document.createElement("button");bx.className="btn sm";
-  bx.textContent=x.has_lesson?"📘 Explanation":"📘 Explain this";
+  bx.textContent=x.has_lesson?"Explanation":"Explain this";
   bx.onclick=()=>toggleErrorLesson(x.id,bx,box);
   acts.appendChild(bx);
   const br=document.createElement("button");br.className="btn sm";
@@ -2471,7 +2690,7 @@ function errorRow(x,summary){
     try{await api("/api/writing/errors/"+x.id+"/reviewed",{method:"POST",
       headers:{"Content-Type":"application/json"},body:JSON.stringify({reviewed:nuevo})});
       d.classList.toggle("done",nuevo);br.textContent=nuevo?"✓ Reviewed":"Mark reviewed";
-    }catch(e){toast("No se pudo guardar: "+e.message,true);}
+    }catch(e){toast("Couldn't save: "+e.message,true);}
   };
   acts.appendChild(br);
   return d;
@@ -2488,11 +2707,11 @@ async function toggleErrorLesson(id,btn,box){
     btn.disabled=false;return;}
   const L=r.lesson, esc=escapeHtml;
   box.innerHTML='<div class="lsrule">▸ '+esc(L.rule||"")+'</div>'+
-    '<div class="lspot" style="margin-top:9px"><b>Por qué te pasa</b><div>'+esc(L.why||"")+'</div></div>'+
+    '<div class="lspot" style="margin-top:9px"><b>Why this happens to you</b><div>'+esc(L.why||"")+'</div></div>'+
     '<div style="margin-top:8px">'+(L.examples||[]).map(x=>
       '<div style="margin-bottom:5px">'+esc(x.en)+'<div class="muted">'+esc(x.es)+'</div></div>').join("")+'</div>'+
     '<div class="lsdrill" id="drill'+id+'"></div>'+
-    (L.remember?'<div class="lsremember">💡 '+esc(L.remember)+'</div>':'');
+    (L.remember?'<div class="lsremember">'+esc(L.remember)+'</div>':'');
   const dw=box.querySelector(".lsdrill");
   (L.drill||[]).forEach(p=>{
     const row=document.createElement("div");row.style.marginTop="7px";
@@ -2503,7 +2722,7 @@ async function toggleErrorLesson(id,btn,box){
     b.onclick=()=>{row.querySelector(".lsans").style.display="";b.remove();};
     row.appendChild(b);dw.appendChild(row);
   });
-  box.dataset.loaded="1";btn.disabled=false;btn.textContent="📘 Explanation";
+  box.dataset.loaded="1";btn.disabled=false;btn.textContent="Explanation";
 }
 function catLabel(cat,summary){
   const s=(summary||[]).find(x=>x.category===cat);return s?s.label:cat;
@@ -2616,7 +2835,7 @@ async function updateReviewEmpty(){
     t.textContent="Nothing due right now";
     m.textContent=s.new+" saved words haven't been studied yet.";
   }else{
-    t.textContent="All caught up 🎉";
+    t.textContent="All caught up";
     m.textContent="No words due today. Add more while you read, or come back tomorrow.";
   }
 }
@@ -2683,7 +2902,7 @@ function renderCardFront(c){
       '<div class="muted" style="margin-top:5px">'+escapeHtml(c.cloze.translation||"")+'</div>';
   }else{
     prompt.style.display="";
-    prompt.innerHTML='<b>'+escapeHtml(cardTrans(c)||"(sin traducción)")+'</b>'+
+    prompt.innerHTML='<b>'+escapeHtml(cardTrans(c)||"(no translation)")+'</b>'+
       '<div class="muted" style="margin-top:5px">Write it in English</div>';
   }
   setTimeout(()=>inp.focus(),60);
@@ -2710,7 +2929,7 @@ async function gradeCard(grade){
   // si no se guarda, NO se avanza: perder repasos en silencio te hace creer
   // que has estudiado cuando no se ha registrado nada
   try{await api("/api/vocab/"+c.id+"/grade",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({grade})});}
-  catch(e){saveError("tu repaso",e);return;}
+  catch(e){saveError("your review",e);return;}
   // intervalo 0 = "vuelve hoy": se reencola al final de la sesión. Antes solo
   // pasaba con 'again', así que una palabra nueva nunca se repetía el mismo día.
   const iv=sm2(c.ease,c.interval_days,c.reps,grade)[1];
@@ -2724,13 +2943,13 @@ async function loadVocabFull(){
   catch(e){document.getElementById("vocabFull").innerHTML=loadFailHtml("words");return;}
   const wrap=document.getElementById("vocabFull");
   document.getElementById("vocabCount").textContent=list.length;
-  if(!list.length){wrap.innerHTML='<div class="soon"><div class="big">No words yet</div><div>While reading, select a word and press ＋ Vocabulary.</div></div>';return;}
+  if(!list.length){wrap.innerHTML='<div class="soon"><div class="big">No words yet</div><div>While reading, select a word and press Vocabulary.</div></div>';return;}
   wrap.innerHTML="";
   list.forEach(v=>{
     const d=document.createElement("div");d.className="vrow";
     const due=v.is_due?'<span class="badge">hoy</span>':'';
     d.innerHTML='<span class="w">'+escapeHtml(v.term)+'</span><span class="t">'+escapeHtml(v.translation||"")+'</span>'+due+
-      '<button class="del" title="Eliminar">✕</button>';
+      '<button class="del" title="Delete" aria-label="Delete"><svg class="ico sm"><use href="#i-trash"/></svg></button>';
     d.querySelector(".del").onclick=()=>deleteWord(v.id);
     wrap.appendChild(d);
   });
@@ -2738,10 +2957,10 @@ async function loadVocabFull(){
 async function deleteWord(id){
   // sin aviso, la palabra reaparecía al recargar y parecía cosa de magia
   try{await api("/api/vocab/"+id,{method:"DELETE"});}
-  catch(e){saveError("el borrado de la palabra",e);return;}
+  catch(e){saveError("the word deletion",e);return;}
   loadVocabFull();loadStats();
 }
-const LEVELS=[[0,"Seed 🌱"],[20,"A1 · Beginner"],[75,"A2 · Elementary"],[200,"B1 · Intermediate"],[500,"B2 · Upper"],[1200,"C1 · Advanced"],[3000,"C2 · Mastery"]];
+const LEVELS=[[0,"Seed"],[20,"A1 · Beginner"],[75,"A2 · Elementary"],[200,"B1 · Intermediate"],[500,"B2 · Upper"],[1200,"C1 · Advanced"],[3000,"C2 · Mastery"]];
 async function loadStats(){
   let s;try{s=await api("/api/vocab/stats");}catch(e){return;}
   setDue(s.due);
@@ -2755,7 +2974,7 @@ async function loadStats(){
   document.getElementById("lvlMeter").style.width=(nx?Math.min(100,((s.total-cur)/(nx[0]-cur))*100):100)+"%";
   document.getElementById("lvlNext").textContent=nx?((nx[0]-s.total)+" words to "+nx[1]):"Max level!";
   // barra apilada de dominio
-  const parts=[["New",s.new,"#b8b2a6"],["Learning",s.learning,"#c9a86a"],["Learned",s.learned,"#3f8f6f"]];
+  const parts=[["New",s.new,"var(--blue)"],["Learning",s.learning,"var(--amber)"],["Learned",s.learned,"var(--ok)"]];
   const tot=Math.max(1,s.total);
   document.getElementById("stStack").innerHTML=parts.map(p=>'<span style="width:'+(p[1]/tot*100)+'%;background:'+p[2]+'"></span>').join("");
   document.getElementById("stLegend").innerHTML=parts.map(p=>'<span><span class="dot" style="background:'+p[2]+'"></span>'+p[0]+" ("+p[1]+")</span>").join("");
@@ -2767,17 +2986,20 @@ async function loadStats(){
 }
 
 /* ---------- Decks (Refold) ---------- */
-const DECK_ICON={words:"🔤",phrases:"💬",phrasal:"🔗",verbs:"⚡",irregular:"⚡",connectors:"🔀"};
+const DECK_ICON={words:"Aa",phrases:"“ ”",phrasal:"up",verbs:"Vb",irregular:"Ir",connectors:"&amp;"};
 function toggleDeckOpts(){const p=document.getElementById("deckOpts");p.style.display=p.style.display==="none"?"flex":"none";}
 function noteEnglish(note){if(!note)return "";return note.split("—")[0].trim();}
 function openDecks(){
   document.getElementById("decksOverlay").style.display="flex";stopSpeech();S.isPlaying=false;
-  const pb=document.getElementById("playBtn");if(pb)pb.textContent="▶ Read";
+  const pb=document.getElementById("playBtn");if(pb)pb.textContent="Read aloud";
   loadVoices();deckList();  // misma voz global (Piper) en decks
 }
 function closeDecks(){document.getElementById("decksOverlay").style.display="none";stopSpeech();}
 async function deckList(){
   document.getElementById("deckBack").style.display="none";
+  document.getElementById("deckTitle").textContent="Decks";
+  document.getElementById("decksOverlay").classList.remove("inside");
+  const md=document.getElementById("deckModes");if(md)md.style.display="none";
   document.getElementById("deckReview").style.display="none";
   const home=document.getElementById("deckHome");home.style.display="";
   home.innerHTML='<div class="muted">Loading…</div>';
@@ -2791,43 +3013,116 @@ async function deckList(){
   let decks=[];
   try{decks=await api("/api/decks");}
   catch(e){home.innerHTML=loadFailHtml("decks");return;}
-  if(!decks.length){home.innerHTML='<div class="soon"><div class="big">No decks yet</div><div>Decks are generated on the server.</div></div>';return;}
+  if(!decks.length){home.innerHTML='<div class="soon"><div class="big">No decks yet</div><div>Ready-made decks appear here once they are added. Meanwhile, save words while you read and review them in Flashcards.</div></div>';return;}
   home.innerHTML="";
-  decks.forEach(d=>{
-    const el=document.createElement("div");el.className="deckcard";
-    const NEW_PER_DAY=10;
-    const capped=(d.new_today||0)>=NEW_PER_DAY&&(d.unseen||0)>0;
-    let sub=escapeHtml(d.description||"")+' · '+d.total+' cards'+(d.due?(' · '+d.due+' due'):'');
-    if(d.unseen)sub+=' · '+d.unseen+' never seen';
+  S.deck.list=decks;
+  const tower=document.createElement("div");tower.className="tower";tower.id="tower";
+  const toRev=d=>Math.max(0,(d.due||0)-(d.unseen||0));
+  const allRev=decks.reduce((n,d)=>n+toRev(d),0),allNew=decks.reduce((n,d)=>n+(d.unseen||0),0);
+  tower.innerHTML='<div class="tower-roof"><h2>Your <em>decks</em></h2><span class="num">'+allRev+' to review · '+allNew+' new</span></div>';
+  const NEW_PER_DAY=10;
+  decks.forEach((d,ix)=>{
+    const el=document.createElement("div");el.className="storey";el.dataset.ix=ix;
+    el.tabIndex=0;el.setAttribute("role","button");
+    const rv=toRev(d),nw=d.unseen||0,tot=Math.max(1,d.total||0);
+    el.setAttribute("aria-label",d.name+": "+rv+" to review, "+nw+" new");
+    const capped=(d.new_today||0)>=NEW_PER_DAY&&nw>0;
     // Sin esto, "Review" dejaba de ofrecer tarjetas nuevas y no había forma de
     // saber que era el límite diario y no un fallo.
-    const aviso=capped?'<div class="dcap">Daily new-card limit reached ('+d.new_today+
-      ' today). '+d.unseen+' still unseen.</div>':'';
-    el.innerHTML='<div class="di">'+(DECK_ICON[d.key]||"🃏")+'</div>'+
-      '<div class="dinfo"><div class="dn">'+escapeHtml(d.name)+'</div><div class="dd">'+sub+'</div>'+aviso+'</div>'+
-      '<div style="display:flex;gap:6px;flex:0 0 auto;flex-wrap:wrap;justify-content:flex-end">'+
-      '<button class="btn gold" data-m="smart">Review</button>'+
-      (d.unseen?'<button class="btn sm" data-m="new">＋ New</button>':'')+
-      '<button class="btn sm" data-m="all">All</button></div>';
-    el.querySelector('[data-m="smart"]').onclick=()=>openDeck(d.id,"smart");
-    el.querySelector('[data-m="all"]').onclick=()=>openDeck(d.id,"all");
-    const bn=el.querySelector('[data-m="new"]');if(bn)bn.onclick=()=>openDeck(d.id,"new");
-    home.appendChild(el);
+    const aviso=capped?'<div class="dcap">Daily new-card limit reached ('+d.new_today+' today). '+nw+' still unseen.</div>':'';
+    // 24 windows in proportion: lit = to review today, dim = learned, dark = never seen
+    const W=24;let wl=Math.round(rv/tot*W);if(rv>0&&wl===0)wl=1;
+    let wd=Math.round(nw/tot*W);if(nw>0&&wd===0)wd=1;wd=Math.min(wd,W-wl);
+    const win='<div class="windows" aria-hidden="true">'+'<i class="due"></i>'.repeat(wl)+'<i class="seen"></i>'.repeat(W-wl-wd)+'<i></i>'.repeat(wd)+'</div>';
+    el.innerHTML='<span class="fl-no">'+(DECK_ICON[d.key]||"Aa")+'</span>'+
+      '<div><div class="fl-name">'+escapeHtml(d.name)+'</div>'+
+      '<div class="fl-sub">'+(rv?'<b>'+rv+' to review</b> · ':'')+nw+' new · '+d.total+' cards</div>'+aviso+win+'</div>'+
+      '<svg class="ico fl-go" aria-hidden="true"><use href="#i-right"/></svg>';
+    // the cards are requested at click time, while the camera moves, so a
+    // slow server doesn't leave the zoomed row frozen
+    const go=()=>{const pre=api(deckQueueUrl(d.id,"smart"));pre.catch(()=>{});zoomIntoFloor(el,()=>openDeck(d.id,"smart",pre));};
+    el.onclick=go;
+    el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}};
+    tower.appendChild(el);
   });
+  home.appendChild(tower);
+  zoomOutOfFloor(tower);
 }
-async function openDeck(id,mode){
-  S.deck.id=id;S.deck.pos=0;
-  const url=(mode==="all")?"/api/decks/"+id+"/study"
+/* The camera move, calm version. The chosen row grows a little (max 2.5x)
+   with its name still readable, the others fade; then its first lit window
+   opens into the review card, so the motion lands somewhere. Back zooms out
+   to the same row. Reduced motion: the plain cut. */
+const _reduceMotion=()=>window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+function zoomIntoFloor(floor,then){
+  const tower=floor.closest(".tower");
+  S.deck.fromRect=null;
+  if(!tower||_reduceMotion()){then();return;}
+  const tr=tower.getBoundingClientRect(),fr=floor.getBoundingClientRect();
+  const panel=tower.closest(".fullpanel")||document.body,pr=panel.getBoundingClientRect();
+  const k=Math.max(1.4,Math.min(2.5,(pr.width*.92)/Math.max(1,fr.width),(pr.height*.6)/Math.max(1,fr.height)));
+  tower.style.transformOrigin=(fr.left-tr.left+fr.width/2)+"px "+(fr.top-tr.top+fr.height/2)+"px";
+  tower.style.setProperty("--k",k);
+  S.deck.lastFloor=+floor.dataset.ix;
+  floor.classList.add("target");tower.classList.add("zoom");
+  setTimeout(()=>{
+    const w=floor.querySelector(".windows i.due")||floor.querySelector(".windows i")||floor;
+    S.deck.fromRect=w.getBoundingClientRect();
+    then();
+  },430);
+}
+function zoomOutOfFloor(tower){
+  const ix=S.deck.lastFloor;S.deck.lastFloor=null;
+  if(ix==null||_reduceMotion())return;
+  const floor=tower.querySelector('.storey[data-ix="'+ix+'"]');if(!floor)return;
+  const tr=tower.getBoundingClientRect(),fr=floor.getBoundingClientRect();
+  tower.style.transition="none";
+  tower.style.transformOrigin=(fr.left-tr.left+fr.width/2)+"px "+(fr.top-tr.top+fr.height/2)+"px";
+  tower.style.setProperty("--k",2.2);
+  floor.classList.add("target");tower.classList.add("zoom");
+  void tower.offsetWidth;tower.style.transition="";
+  requestAnimationFrame(()=>{tower.classList.remove("zoom");setTimeout(()=>{floor.classList.remove("target");floor.focus({preventScroll:true});},700);});
+}
+/* The window becomes the card: a lit pane grows from the window's place to
+   the card's place, then hands over to the real card. */
+function openFromWindow(target){
+  const r=S.deck.fromRect;S.deck.fromRect=null;
+  if(!r||!target||_reduceMotion())return;
+  const t=target.getBoundingClientRect();if(!t.width)return;
+  const g=document.createElement("div");g.className="pane";g.setAttribute("aria-hidden","true");
+  Object.assign(g.style,{left:t.left+"px",top:t.top+"px",width:t.width+"px",height:t.height+"px",
+    transform:"translate("+(r.left-t.left)+"px,"+(r.top-t.top)+"px) scale("+(r.width/t.width)+","+(r.height/t.height)+")"});
+  document.body.appendChild(g);
+  target.style.opacity="0";
+  void g.offsetWidth;
+  g.classList.add("open");g.style.transform="none";
+  setTimeout(()=>{target.style.transition="opacity .25s var(--ease)";target.style.opacity="";g.classList.add("gone");},430);
+  setTimeout(()=>{g.remove();target.style.transition="";},760);
+}
+function deckQueueUrl(id,mode){
+  return (mode==="all")?"/api/decks/"+id+"/study"
     :(mode==="new")?"/api/decks/"+id+"/new?limit=10"
-    // sin new_limit: el tope lo decide el mazo (se ajusta en 🎚), no el cliente
+    // sin new_limit: el tope lo decide el mazo (se ajusta en Daily limits), no el cliente
     :"/api/decks/"+id+"/due"+(mode==="ahead"?"?ahead=true":"");
-  try{S.deck.queue=await api(url);}catch(e){S.deck.queue=[];}
+}
+async function openDeck(id,mode,pre){
+  S.deck.id=id;S.deck.pos=0;
+  try{S.deck.queue=await (pre||api(deckQueueUrl(id,mode)));}catch(e){S.deck.queue=[];}
   document.getElementById("deckHome").style.display="none";
-  document.getElementById("deckReview").style.display="";
+  document.getElementById("decksOverlay").classList.add("inside");
+  const dr=document.getElementById("deckReview");dr.classList.toggle("noanim",!!S.deck.fromRect);dr.style.display="";
   document.getElementById("deckBack").style.display="";
+  const dk=(S.deck.list||[]).find(x=>x.id===id);
+  document.getElementById("deckTitle").textContent=dk?dk.name:"Decks";
+  const md=document.getElementById("deckModes");md.style.display="";md.textContent="";
+  for(const [m,lab] of [["smart","Review"],["new","New"],["all","All"]]){
+    const bt=document.createElement("button");bt.type="button";bt.className="tab"+(m===mode?" active":"");
+    bt.textContent=lab;bt.setAttribute("aria-pressed",m===mode?"true":"false");bt.onclick=()=>openDeck(id,m);md.appendChild(bt);
+  }
   if(mode==="ahead"&&!S.deck.queue.length)toast("Nothing left to bring forward.");
   if(mode==="new"&&!S.deck.queue.length)toast("No unseen cards left in this deck.");
   showDeckCard();
+  const vis=[document.getElementById("deckRevCard"),document.getElementById("deckRevEmpty")].find(e=>e&&e.style.display!=="none");
+  openFromWindow(vis);
 }
 function showDeckCard(){
   const q=S.deck.queue,i=S.deck.pos;
@@ -2871,7 +3166,7 @@ async function deckGrade(grade){
   const c=S.deck.queue[S.deck.pos];if(!c)return;
   // igual que en gradeCard: sin guardado confirmado no se pasa de tarjeta
   try{await api("/api/decks/cards/"+c.id+"/grade",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({grade})});}
-  catch(e){saveError("tu repaso",e);return;}
+  catch(e){saveError("your review",e);return;}
   const iv=sm2(c.ease,c.interval_days,c.reps,grade)[1];
   if(iv===0){S.deck.queue.push({...c,reps:(c.reps||0)+(grade==="again"?0:1),
     ease:sm2(c.ease,c.interval_days,c.reps,grade)[0],interval_days:0});}
@@ -2955,13 +3250,45 @@ async function cargarCuenta(){
   // se muestra el NOMBRE de la persona; el username es para teclear, no para leer
   document.getElementById("cuentaNombre").textContent = u.nombre || u.username;
   document.getElementById("cuentaRol").textContent =
-    (u.role === "admin" ? "Administrador" : "Sesión iniciada");
+    (u.role === "admin" ? "Admin" : "Learner");
+  const av=document.getElementById("avatar");
+  if(av) av.textContent=((u.nombre||u.username||"?").trim()[0]||"?").toUpperCase();
   if(u.role === "admin") document.getElementById("enlaceAdmin").hidden = false;
 }
 async function salir(){
   await fetch("/api/auth/logout", {method:"POST"});
   location.href = "/entrar";
 }
+/* ---------- Reading lamp: Night ↔ Paper ----------
+   Pull the cord and the page lights up as warm paper; pull again for night.
+   The choice is a per-device convenience, kept in localStorage. */
+function setPaper(on,anim){
+  document.body.classList.toggle("paper-mode",!!on);
+  try{localStorage.setItem("lira_paper",on?"1":"0");}catch(e){}
+  const l=document.getElementById("lamp");
+  if(l){l.setAttribute("aria-pressed",on?"true":"false");
+    l.title=on?"Pull the cord to switch to night mode":"Pull the cord to turn on the reading lamp";
+    if(anim){l.classList.remove("pulled");void l.offsetWidth;l.classList.add("pulled");}}
+}
+function pullLamp(){setPaper(!document.body.classList.contains("paper-mode"),true);}
+(function(){let v="0";try{v=localStorage.getItem("lira_paper")||"0";}catch(e){}setPaper(v==="1",false);})();
+
+/* Review from the keyboard: Space (or Enter) shows the answer, 1-4 grade.
+   Off while typing, while a dialog is open, or when no card is on screen. */
+document.addEventListener("keydown",e=>{
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  const t=e.target;if(t&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;
+  if(document.querySelector(".dlg-back"))return;
+  const shown=id=>{const x=document.getElementById(id);return x&&x.style.display!=="none"&&x.offsetParent!==null;};
+  const G=["again","hard","good","easy"];
+  let reveal=null,grade=null;
+  if(shown("deckRevCard")){reveal=shown("dReveal")?deckReveal:null;grade=shown("dGrades")?deckGrade:null;}
+  else if(shown("reviewCard")){reveal=shown("rcReveal")?revealCard:null;grade=shown("rcGrades")?gradeCard:null;}
+  else return;
+  if((e.key===" "||e.key==="Enter")&&reveal){if(t&&t.tagName==="BUTTON"&&e.key==="Enter")return;e.preventDefault();reveal();}
+  else if(grade&&/^[1-4]$/.test(e.key)){e.preventDefault();grade(G[+e.key-1]);}
+});
+
 cargarCuenta();
 </script>
 </body>

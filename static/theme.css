@@ -1,0 +1,194 @@
+/* Daily English Habit — night mission-control theme.
+   Shared by every page. Colors live only here, as tokens; pages use var(--…).
+   Two reading surfaces: "night" (default) and "paper" (body.paper-mode), which
+   only changes the book page, never the cockpit around it. */
+
+:root{
+  color-scheme: dark;
+  /* ink-blue cockpit */
+  --bg:#0a111e;           /* deck behind everything */
+  --s1:#0f1829;           /* panels */
+  --s2:#142036;           /* raised / hover */
+  --s3:#1a2843;           /* pressed / selected */
+  --line:#1f2d48;         /* hairlines */
+  --line-2:#2b3c5e;       /* control borders */
+  --ink:#e4ebf5;          /* primary text  (15:1 on --bg) */
+  --ink-2:#a3b3ca;        /* secondary     (8:1)  */
+  --ink-3:#7a8ead;        /* tertiary      (5:1 on --s1) */
+  /* signal colors */
+  --cyan:#3ccfe6;         /* the one accent: active state, primary action */
+  --cyan-ink:#7fe3f3;     /* cyan as text on dark */
+  --cyan-deep:#05242c;    /* text on a cyan fill */
+  --cyan-wash:rgba(60,207,230,.11);
+  --cyan-line:rgba(60,207,230,.38);
+  --amber:#f3b54a;        /* the streak: warm signal, only for the habit */
+  --amber-ink:#ffcf7a;
+  --amber-wash:rgba(243,181,74,.12);
+  --ok:#4fd49a;  --ok-wash:rgba(79,212,154,.12);
+  --bad:#ff7a72; --bad-wash:rgba(255,122,114,.12);
+  --blue:#8fb2ff; --blue-wash:rgba(143,178,255,.13);
+  /* reading page (night) */
+  --page:#0d1626; --page-ink:#d5dfec; --page-line:#1d2a44;
+  --page-hover:rgba(60,207,230,.09); --page-cur:rgba(60,207,230,.16); --page-cur-ink:#f2f8ff;
+  --page-word:#ffe08a; --page-word-ink:#1c1606;
+  /* type */
+  --ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,Roboto,sans-serif;
+  --num:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  --book:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  /* shape and depth */
+  --r-sm:8px; --r:12px; --r-lg:16px;
+  --shadow:0 2px 6px rgba(0,0,0,.28),0 14px 34px rgba(0,0,0,.30);
+  --shadow-pop:0 6px 16px rgba(0,0,0,.36),0 26px 60px rgba(0,0,0,.42);
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+
+/* paper mode: the book page becomes paper; the cockpit stays dark */
+body.paper-mode{
+  --page:#f1efe9; --page-ink:#2a2a2c; --page-line:#dedad0;
+  --page-hover:rgba(10,17,30,.06); --page-cur:rgba(23,128,150,.16); --page-cur-ink:#0d1626;
+  --page-word:#ffd76b; --page-word-ink:#1c1606;
+}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--ui);
+  -webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+::selection{background:rgba(60,207,230,.32);color:#fff}
+
+/* the deck: a faint plotting grid, like the screen of an instrument */
+.deck-grid{
+  background-color:var(--bg);
+  background-image:
+    radial-gradient(1200px 600px at 70% -10%,rgba(60,207,230,.07),transparent 60%),
+    linear-gradient(rgba(127,227,243,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(127,227,243,.035) 1px,transparent 1px);
+  background-size:auto,32px 32px,32px 32px;
+}
+
+/* focus: always visible for keyboard users */
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:4px}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:1px}
+
+/* numbers that are measurements */
+.num{font-family:var(--num);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+
+/* svg icons drawn from the sprite */
+.ico{width:18px;height:18px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px}
+.ico.sm{width:15px;height:15px;vertical-align:-2px}
+
+/* in-page dialog that replaces prompt / alert / confirm */
+.dlg-back{position:fixed;inset:0;z-index:300;display:grid;place-items:center;padding:16px;
+  background:rgba(3,7,14,.62);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+  animation:dlgFade .18s var(--ease)}
+.dlg{width:min(440px,100%);background:var(--s1);border:1px solid var(--line-2);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-pop);padding:20px;animation:dlgRise .26s var(--ease)}
+.dlg h2{margin:0 0 8px;font-size:17px;font-weight:650;letter-spacing:-.01em}
+.dlg p{margin:0 0 14px;color:var(--ink-2);font-size:14.5px;line-height:1.55;white-space:pre-line}
+.dlg input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:var(--r-sm);
+  border:1px solid var(--line-2);background:var(--bg);color:var(--ink);margin-bottom:14px}
+.dlg .acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+@keyframes dlgFade{from{opacity:0}}
+@keyframes dlgRise{from{opacity:0;transform:translateY(10px) scale(.98)}}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
+
+/* ======================================================================
+   Sign-in pages: the lamp scene.
+   Pull the cord and the light changes the whole room: cyan, warm, violet,
+   or lights out. The form takes its accent from the lamp (--lamp).
+   ====================================================================== */
+body.auth{margin:0;min-height:100vh;min-height:100dvh;overflow-x:hidden;
+  --lamp:#3ccfe6; --lamp-ink:#05242c; --lamp-soft:rgba(60,207,230,.16); --lamp-glow:rgba(60,207,230,.34)}
+body.auth[data-lamp="warm"]{--lamp:#ffc45e;--lamp-ink:#2a1a00;--lamp-soft:rgba(255,196,94,.16);--lamp-glow:rgba(255,196,94,.36)}
+body.auth[data-lamp="violet"]{--lamp:#b48cff;--lamp-ink:#1b0b38;--lamp-soft:rgba(180,140,255,.17);--lamp-glow:rgba(180,140,255,.36)}
+body.auth[data-lamp="off"]{--lamp:#a3b3ca;--lamp-ink:#0a111e;--lamp-soft:rgba(163,179,202,.08);--lamp-glow:transparent}
+.room{position:relative;min-height:100vh;min-height:100dvh;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,440px) minmax(0,.35fr);
+  align-items:center;padding:24px clamp(16px,4vw,56px);gap:24px;isolation:isolate}
+.room::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(60% 70% at 30% 62%,var(--lamp-soft),transparent 70%);transition:background .8s var(--ease)}
+.stage{position:relative;height:min(78vh,640px);min-height:380px}
+.big-lamp{position:absolute;left:50%;top:0;transform:translateX(-50%);width:240px;height:100%;border:0;background:none;padding:0;
+  cursor:pointer;-webkit-tap-highlight-color:transparent}
+.big-lamp svg{width:100%;height:100%;overflow:visible}
+.big-lamp .pole{stroke:#27354f;stroke-width:5;stroke-linecap:round}
+.big-lamp .base{fill:#1a2639}
+.big-lamp .shade{fill:#1d2a40;stroke:#2f4064;stroke-width:1.5}
+.big-lamp .bulb{fill:#2a3650;transition:fill .5s,filter .5s}
+body.auth:not([data-lamp="off"]) .big-lamp .bulb{fill:#fff;filter:drop-shadow(0 0 8px var(--lamp)) drop-shadow(0 0 22px var(--lamp))}
+.big-lamp .cord{stroke:#3a4c70;stroke-width:1.6}
+.big-lamp .knob{fill:var(--lamp);transition:fill .5s}
+.big-lamp .pull{transform-box:fill-box}
+.big-lamp.pulled .pull{animation:bigPull .8s cubic-bezier(.3,1.7,.45,1)}
+.big-lamp:focus-visible{outline:none}
+.big-lamp:focus-visible .knob{stroke:#fff;stroke-width:2}
+.cone{position:absolute;left:50%;top:118px;width:560px;height:calc(100% - 150px);transform:translateX(-50%);pointer-events:none;
+  background:linear-gradient(180deg,var(--lamp-glow),transparent 88%);
+  clip-path:polygon(43% 0,57% 0,100% 100%,0 100%);opacity:.9;transition:opacity .6s var(--ease),background .8s var(--ease)}
+body.auth[data-lamp="off"] .cone{opacity:0}
+.floor{position:absolute;left:50%;bottom:6px;width:420px;height:46px;transform:translateX(-50%);border-radius:50%;pointer-events:none;
+  background:radial-gradient(closest-side,var(--lamp-glow),transparent);transition:background .8s}
+.fly{position:absolute;width:4px;height:4px;border-radius:50%;background:var(--lamp);box-shadow:0 0 8px var(--lamp);opacity:0;
+  animation:fly 7s ease-in-out infinite;pointer-events:none}
+body.auth[data-lamp="off"] .fly{display:none}
+.fly:nth-child(1){left:38%;top:55%;animation-delay:0s}.fly:nth-child(2){left:60%;top:48%;animation-delay:1.4s}
+.fly:nth-child(3){left:47%;top:70%;animation-delay:2.6s}.fly:nth-child(4){left:66%;top:64%;animation-delay:3.8s}
+.fly:nth-child(5){left:33%;top:76%;animation-delay:5s}
+@keyframes fly{0%{opacity:0;transform:translate(0,0)}20%{opacity:.9}60%{opacity:.6;transform:translate(14px,-40px)}100%{opacity:0;transform:translate(-6px,-80px)}}
+@keyframes bigPull{0%{transform:translateY(0)}30%{transform:translateY(22px)}100%{transform:translateY(0)}}
+.lamp-hint{position:absolute;left:50%;bottom:-2px;transform:translateX(-50%);font-size:12.5px;color:var(--ink-3);white-space:nowrap}
+.lamp-hint b{color:var(--ink-2);font-weight:600}
+
+.panel{width:100%;max-width:440px;justify-self:center}
+.brandline{display:flex;align-items:center;gap:10px;margin-bottom:22px}
+.brandline .mark{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--bg);border:1px solid var(--line-2);color:var(--lamp);transition:color .6s}
+.brandline .mark svg{width:20px;height:20px}
+.brandline b{font-size:15px;font-weight:650;letter-spacing:-.01em}
+.panel h1{margin:0 0 6px;font-size:clamp(28px,3.4vw,36px);line-height:1.12;letter-spacing:-.025em;font-weight:650}
+.panel h1 em{font-family:var(--book);font-style:italic;font-weight:500;color:var(--lamp);transition:color .6s}
+.panel .lede{margin:0 0 22px;color:var(--ink-2);font-size:15px;line-height:1.55}
+.panel .lede:empty{display:none}
+.sheet{background:rgba(15,24,41,.86);border:1px solid var(--line-2);border-radius:var(--r-lg);padding:22px;
+  box-shadow:var(--shadow-pop),0 0 0 1px var(--lamp-soft);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:box-shadow .6s}
+.sheet label{display:block;font-size:13px;color:var(--ink-2);margin:0 0 6px;font-weight:600}
+.sheet input{width:100%;padding:11px 12px;border:1px solid var(--line-2);border-radius:10px;font:inherit;font-size:16px;background:var(--bg);color:var(--ink)}
+.sheet input:focus{outline:none;border-color:var(--lamp);box-shadow:0 0 0 3px var(--lamp-soft)}
+.sheet .campo{margin-bottom:15px}
+.sheet .ayuda{font-size:12.5px;color:var(--ink-3);margin-top:6px;line-height:1.45}
+.sheet .valor{font-weight:600;color:var(--ink)}
+button.principal{width:100%;min-height:46px;padding:11px;border:0;border-radius:10px;background:var(--lamp);color:var(--lamp-ink);
+  font:inherit;font-weight:650;font-size:15px;cursor:pointer;transition:background .6s,color .6s,transform .1s,filter .15s}
+button.principal:hover{filter:brightness(1.08)}
+button.principal:active{transform:translateY(1px)}
+button.principal:disabled{opacity:.55;cursor:default}
+.aviso{margin-top:14px;padding:10px 12px;border-radius:10px;font-size:14px;display:none;line-height:1.5}
+.aviso.error{background:var(--bad-wash);border:1px solid rgba(255,122,114,.4);color:#ffc1bc;display:block}
+.aviso.ok{background:var(--ok-wash);border:1px solid rgba(79,212,154,.4);color:#bff3da;display:block}
+.aviso a{color:inherit;font-weight:650}
+.pie{color:var(--ink-3);font-size:14px;margin-top:18px;line-height:2}
+.pie a{color:var(--ink);text-decoration-color:var(--lamp);text-underline-offset:3px}
+[hidden]{display:none!important}
+
+@media (max-width:900px){
+  .room{grid-template-columns:1fr;align-content:start;padding-top:calc(8px + env(safe-area-inset-top,0px))}
+  .stage{height:250px;min-height:0;order:0}
+  .big-lamp{width:150px}
+  .cone{top:72px;width:340px;height:calc(100% - 80px)}
+  .floor{width:260px}
+  .lamp-hint{bottom:-4px;font-size:12px}
+  .panel{order:1}
+}
+
+/* dialog buttons: defined here so every page that loads ui.js gets them */
+.dlg-btn{font:inherit;font-size:14px;font-weight:600;min-height:40px;padding:9px 16px;border-radius:10px;cursor:pointer;
+  border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.dlg-btn:hover{background:var(--s2)}
+.dlg-btn.primary{background:var(--cyan);border-color:var(--cyan);color:var(--cyan-deep)}
+.dlg-btn.primary:hover{background:#63dcef}
+.dlg-btn.danger{background:var(--bad);border-color:var(--bad);color:#2a0705}
+.dlg-btn.danger:hover{filter:brightness(1.08)}
+
+/* lights out: the room goes dark, the controls never look disabled */
+body.auth[data-lamp="off"] button.principal{background:var(--ink);color:var(--bg)}
